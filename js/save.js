@@ -143,7 +143,55 @@
       if (g.legacy.cash === undefined || isNaN(g.legacy.cash)) g.legacy.cash = 0;
       if (g.legacy.source === undefined) g.legacy.source = null;
     }
-    if (!g.milestones || typeof g.milestones !== 'object' || Array.isArray(g.milestones)) g.milestones = {};
+    /* v3.2：善缘/报复/多结局/社交/分轨/阻断 */
+    if (!Array.isArray(g.kindnessLog)) g.kindnessLog = [];
+    if (!Array.isArray(g.payoffLog)) g.payoffLog = [];
+    if (!Array.isArray(g.revengeLog)) g.revengeLog = [];
+    if (!Array.isArray(g.outcomeLog)) g.outcomeLog = [];
+    if (!g.eventFamilies || typeof g.eventFamilies !== 'object' || Array.isArray(g.eventFamilies)) g.eventFamilies = {};
+    if (g.blockedTurn === undefined || isNaN(g.blockedTurn)) g.blockedTurn = -99;
+    if (!Array.isArray(g.blockerLog)) g.blockerLog = [];
+    if (g.track === undefined) g.track = null;
+    if (!g.sibling || typeof g.sibling !== 'object') g.sibling = { has: false, role: null, name: null, ageGap: 0 };
+    if (!g.circles || typeof g.circles !== 'object') g.circles = {};
+    LS.CIRCLES.forEach(function (c) {
+      if (!g.circles[c] || isNaN(g.circles[c].rep)) g.circles[c] = { rep: 50 };
+    });
+    if (!g.socialQuota || typeof g.socialQuota !== 'object') {
+      g.socialQuota = { year: g.year, used: 0, max: 1 };
+    }
+    if (g.socialQuota.max === undefined) g.socialQuota.max = 1;
+    if (g.socialQuota.used === undefined) g.socialQuota.used = 0;
+    /* 旧档 NPC：favor 曾是 0-100 亲密度，迁移为 intimacy；人情账归零 */
+    (g.npcs || []).forEach(function (n) {
+      if (n.intimacy === undefined || isNaN(n.intimacy)) {
+        if (Math.abs(Number(n.favor) || 0) > 10) {
+          n.intimacy = LS.clamp(Number(n.favor), 0, 100);
+          n.favor = 0;
+        } else {
+          n.intimacy = LS.clamp(50 + (Number(n.favor) || 0) * 6, 0, 100);
+        }
+      }
+      n.favor = LS.clamp(Number(n.favor) || 0, -5, 5);
+      if (!Array.isArray(n.anchors)) n.anchors = [];
+      if (!n.state) n.state = { job: null, health: n.health === undefined ? 75 : n.health, status: null };
+      if (!n.circle) n.circle = LS.circleOf(n.role);
+      if (n.lastContactYear === undefined) n.lastContactYear = null;
+      if (!n.arcStage) n.arcStage = '相遇';
+      n.relation = LS.relationOf(n);
+    });
+    if (g.milestones) delete g.milestones;
+    /* v3.3：eventLog 为唯一事实源；旧档没有这份日志时明确降级，绝不根据 memories 补造 */
+    if (!Array.isArray(g.eventLog)) {
+      g.eventLog = [];
+      g.eventLogLegacy = true;
+    }
+    if (g.eventSeq === undefined || isNaN(g.eventSeq)) {
+      var maxSeq = 0;
+      g.eventLog.forEach(function (x) { if (Number(x && x.seq) > maxSeq) maxSeq = Number(x.seq); });
+      g.eventSeq = maxSeq;
+    }
+    if (g.eventLog.length === 0 && g.eventLogLegacy === undefined) g.eventLogLegacy = true;
     if (!Array.isArray(g.achievementsV3)) g.achievementsV3 = [];
     if (g.lastSummaryAt === undefined || isNaN(g.lastSummaryAt)) g.lastSummaryAt = -99;
     if (!g.stageStart && LS.stageSnapshot) g.stageStart = LS.stageSnapshot(g);
@@ -252,7 +300,7 @@
       var stamp = new Date();
       var pad = function (n) { return (n < 10 ? '0' : '') + n; };
       a.href = url;
-      a.download = '人生模拟器_' + g.name + '_' + g.year + '_' +
+      a.download = 'lifesim_' + g.year + '_' +
         stamp.getFullYear() + pad(stamp.getMonth() + 1) + pad(stamp.getDate()) +
         pad(stamp.getHours()) + pad(stamp.getMinutes()) + '.json';
       document.body.appendChild(a);

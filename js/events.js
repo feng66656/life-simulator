@@ -54,13 +54,31 @@
       ]
     }),
     ev({
-      id: 'f_vaccine', type: 'forced', stage: '婴幼儿', age: 1, prio: 90,
+      id: 'f_vaccine', type: 'forced', stage: '婴幼儿', age: 1, prio: 90, family: 'vaccine',
       title: '第一针自费疫苗',
       text: '镇上的防疫站排起长队，免费疫苗登记台前挤满了抱孩子的家长。隔壁窗口在推一种自费肺炎疫苗，一针两百多，护士说“有条件就打”。母亲翻了翻钱包，又看了看你。',
       opts: [
-        o('只打免费的，够用就行', { money: { cash: -200 }, at: { health: 1 }, tag: '只打了免费疫苗' }),
-        o('咬牙打自费疫苗', { money: { cash: -2400 }, at: { health: 4 }, npc: { '母亲': { favor: 3 } }, tag: '母亲坚持打了自费疫苗' }, { hint: '一笔额外的支出' }),
-        o('听邻居说疫苗伤身体，先不打', { at: { health: -5 }, set: { anti_vaccine: true }, tag: '信了邻居的话，漏了疫苗' })
+        o('只打免费的，够用就行', { money: { cash: -200 }, at: { health: 1 }, tag: '只打了免费疫苗' }, {
+          hint: '绝大多数孩子打完都没事，极少数会低烧两天', tone: 'safe',
+          outcomes: [
+            { w: 82, text: '打完针，你只是多睡了一下午。', label: '多睡一下午', fx: { at: { health: 1 } } },
+            { w: 18, text: '夜里发起低烧，母亲守到天亮才退。', label: '低烧退下', fx: { at: { health: -2, happiness: -1 }, npc: { '母亲': { health: -1 } } } }
+          ]
+        }),
+        o('咬牙打自费疫苗', { money: { cash: -2400 }, at: { health: 4 }, npc: { '母亲': { favor: 3 } }, tag: '母亲坚持打了自费疫苗' }, {
+          hint: '一笔额外的支出；多数孩子没事，约百分之几会发热', tone: 'safe',
+          outcomes: [
+            { w: 88, text: '自费针打完，你这一年没怎么病过。', label: '一年没病', fx: { at: { health: 4 } } },
+            { w: 12, text: '打完当晚发了烧，第二天就退了，母亲还是心疼那笔钱。', label: '发了一次烧', fx: { at: { health: -1 }, npc: { '母亲': { favor: 1 } } } }
+          ]
+        }),
+        o('听邻居说疫苗伤身体，先不打', { at: { health: -5 }, set: { anti_vaccine: true }, tag: '信了邻居的话，漏了疫苗' }, {
+          hint: '九成孩子没事，但遇上那一次就麻烦了', tone: 'risk',
+          outcomes: [
+            { w: 70, text: '你侥幸没被传染，邻居也渐渐不提这事了。', label: '侥幸没事', fx: { at: { health: -1, happiness: 1 } } },
+            { w: 30, text: '春天幼儿园里传染开，你烧到三十九度。', label: '传染住院', fx: { money: { cash: -4000 }, at: { health: -8, happiness: -3 } } }
+          ]
+        })
       ]
     }),
     ev({
@@ -235,16 +253,37 @@
       title: '高考',
       text: '高考两天，考场外拉起了警戒线。父亲请了假，蹲在树荫下给你扇扇子。最后一科结束，人群像潮水一样涌向校门。分数出来那晚，全家守着电脑刷查询页面。',
       opts: [
-        gamble('冲一冲名校', function (g) { return LS.clamp(0.1 + g.attrs.knowledge / 130 + (LS.BACKGROUNDS[g.background].eduBonus || 0) * 0.8, 0.08, 0.86); },
-          { edu: 5, at: { knowledge: 6, happiness: 12, reputation: 8, stress: 4 }, rep: { school: 8, society: 4 }, set: { top_university: true }, tag: '高考冲进了名校' },
-          { edu: 4, at: { happiness: -8, stress: 5 }, set: { wrong_major: true }, tag: '高考失利，读了专科' },
-          '分数够了，录取通知书寄到家里。', '差了十几分，滑到专科批次。', '高风险，高回报'),
-        gamble('稳妥填志愿，保证有学上', function (g) { return LS.clamp(0.45 + g.attrs.knowledge / 180, 0.35, 0.93); },
-          { edu: 5, at: { knowledge: 3, happiness: 6 }, rep: { school: 3 }, tag: '稳妥上了本科' },
-          { edu: 4, at: { happiness: -4 }, tag: '稳妥起见读了专科' },
-          '稳稳当当，进了本科。', '还是滑到了专科。', '更稳，但上限有限'),
-        o('复读一年，再给自己一次机会', { money: { cash: -10000 }, at: { knowledge: 4, stress: 8, happiness: -4 }, set: { retake: true }, tag: '选择复读一年' }, { hint: '再耗一年，压力不小' }),
-        o('不读了，直接去打工', { edu: 3, money: { cash: 6000 }, at: { finance: 3, health: -3, happiness: -3 }, set: { dropped_out: true }, tag: '高中毕业就进了社会' })
+        o('冲一冲名校', { at: { stress: 3 }, tag: '高考志愿填得激进' }, {
+          hint: '赌一把：多数人会滑档，能冲进去的不到两成', tone: 'risk',
+          outcomes: [
+            { w: 18, text: '分数够了，录取通知书寄到家里。', label: '冲进名校', fx: { edu: 5, at: { knowledge: 6, happiness: 12, reputation: 8, stress: 4 }, rep: { school: 8, society: 4 }, set: { top_university: true }, tag: '高考冲进了名校' } },
+            { w: 52, text: '差了十几分，滑到普通本科。', label: '滑到本科', fx: { edu: 5, at: { happiness: -3, stress: 3 }, set: { wrong_major: true }, tag: '高考冲名校滑档，读了本科' } },
+            { w: 30, text: '滑得太狠，最后去了专科。', label: '滑到专科', fx: { edu: 4, at: { happiness: -8, stress: 5 }, tag: '高考失利，读了专科' } }
+          ]
+        }),
+        o('稳妥填志愿，保证有学上', { at: { stress: 1 }, tag: '高考志愿填得稳' }, {
+          hint: '九成左右能上本科，但上限有限', tone: 'safe',
+          outcomes: [
+            { w: 78, text: '稳稳当当，进了本科。', label: '稳妥上本科', fx: { edu: 5, at: { knowledge: 3, happiness: 6 }, rep: { school: 3 }, tag: '稳妥上了本科' } },
+            { w: 22, text: '那年分数线涨了，还是滑到专科。', label: '滑到专科', fx: { edu: 4, at: { happiness: -4 }, tag: '稳妥起见读了专科' } }
+          ]
+        }),
+        o('复读一年，再给自己一次机会', { money: { cash: -10000 }, at: { knowledge: 4, stress: 8, happiness: -4 }, set: { retake: true }, tag: '选择复读一年' }, {
+          hint: '再耗一年：多数人能提一档，也有原地不动的', tone: 'hard',
+          outcomes: [
+            { w: 55, text: '复读这一年没白费，你考上了本科。', label: '复读提档', fx: { edu: 5, at: { knowledge: 4, happiness: 6 }, rep: { school: 2 } } },
+            { w: 30, text: '成绩只提了一点，还是专科。', label: '提了一点', fx: { edu: 4, at: { happiness: -5, stress: 3 } } },
+            { w: 15, text: '第二年状态更差，比第一次还低。', label: '更差', fx: { edu: 4, at: { happiness: -8, stress: 6 }, npc: { '父亲': { favor: -3 } } } }
+          ]
+        }),
+        o('不读了，直接去打工', { edu: 3, money: { cash: 6000 }, at: { finance: 3, health: -3, happiness: -3 }, set: { dropped_out: true }, tag: '高中毕业就进了社会' }, {
+          hint: '早挣钱，但路窄一些', tone: 'switch',
+          outcomes: [
+            { w: 60, text: '你在县城的店里站了半年柜台，学会了看人脸色。', label: '站柜台', fx: { at: { charm: 2, finance: 1 } } },
+            { w: 27, text: '跟着老乡进了工厂，加班多，钱比在家多。', label: '进厂', fx: { money: { cash: 8000 }, at: { health: -3, finance: 2 }, job: 'gig' } },
+            { w: 13, text: '第一份工作干了两个月就被辞了，在家待了很久。', label: '被辞', fx: { at: { happiness: -4, stress: 3 } } }
+          ]
+        })
       ]
     }),
     ev({
@@ -361,9 +400,30 @@
       title: '要不要买房',
       text: '中介带看了三套房：市区老破小，六十平，总价高但学区好；远郊新房，九十平，通勤一个半小时；还有一套继续租着。销售说“再等就更买不起了”，银行经理在算首付和月供。',
       opts: [
-        o('买市区老破小', { house: { factor: 1, down: 0.3 }, at: { happiness: 3, stress: 8 }, tag: '在市区买了套老破小' }, { hint: '首付和月供都不轻' }),
-        o('买远郊新房', { house: { factor: 0.72, down: 0.28 }, at: { happiness: 5, stress: 6, health: -2 }, flag: { event: 'c_sedentary', delay: 3, mark: 'commute', note: '远郊通勤每天三小时' }, tag: '在远郊买了新房' }, { hint: '通勤时间很长' }),
-        o('继续租房，不背房贷', { money: { cash: 10000 }, at: { happiness: 2, stress: -4 }, set: { rent_for_life: true }, tag: '决定长期租房' })
+        o('买市区老破小', { at: { stress: 8 }, tag: '在市区买了套老破小' }, {
+          hint: '首付和月供都不轻', tone: 'hard',
+          outcomes: [
+            { w: 62, text: '房子小，但学区在，孩子以后上学方便。', label: '买下老破小', fx: { house: { factor: 1, down: 0.3 }, at: { happiness: 3 } } },
+            { w: 24, text: '签完合同才发现房龄比想象中老，维修又添了一笔。', label: '维修加钱', fx: { house: { factor: 1, down: 0.3 }, money: { cash: -30000 }, at: { stress: 4, happiness: 1 } } },
+            { w: 14, text: '房东临时反悔，你把定金要了回来，房子没买成。', label: '房东反悔', fx: { money: { cash: 5000 }, at: { stress: 2, happiness: -2 } } }
+          ]
+        }),
+        o('买远郊新房', { at: { stress: 6, health: -2 }, tag: '在远郊买了新房' }, {
+          hint: '通勤时间很长', tone: 'switch',
+          outcomes: [
+            { w: 68, text: '新房交钥匙那天，你在空客厅里站了很久。', label: '买下新房', fx: { house: { factor: 0.72, down: 0.28 }, flag: { event: 'c_sedentary', delay: 3, mark: 'commute', note: '远郊通勤每天三小时' }, at: { happiness: 5 } } },
+            { w: 22, text: '每天来回三小时，半年后你把车卖了改坐班车。', label: '通勤太远', fx: { house: { factor: 0.72, down: 0.28 }, flag: { event: 'c_sedentary', delay: 3, mark: 'commute', note: '远郊通勤每天三小时' }, money: { cash: -20000 }, at: { stress: 5, health: -3 } } },
+            { w: 10, text: '开发商延期交房，你一边还贷一边继续租房。', label: '延期交房', fx: { house: { factor: 0.72, down: 0.28 }, money: { cash: -20000 }, at: { stress: 6, happiness: -4 } } }
+          ]
+        }),
+        o('继续租房，不背房贷', { money: { cash: 10000 }, at: { happiness: 2, stress: -4 }, set: { rent_for_life: true }, tag: '决定长期租房' }, {
+          hint: '手里留着现金，但房价可能继续涨', tone: 'safe',
+          outcomes: [
+            { w: 55, text: '你把钱留在了手里，租金涨了，但日子还过得去。', label: '继续租房', fx: { at: { happiness: 1 } } },
+            { w: 28, text: '房东年年涨租，你两年搬了三次家。', label: '两年搬三次', fx: { money: { cash: -8000 }, at: { stress: 3, happiness: -2 } } },
+            { w: 17, text: '同事都在讨论房价，你在饭桌上插不上话。', label: '插不上话', fx: { at: { happiness: -2, finance: 1 } } }
+          ]
+        })
       ]
     }),
     ev({
@@ -912,20 +972,37 @@
       title: '找工作',
       text: '招聘软件上的岗位大多已读不回。你把简历里的项目经历改得更具体，又投了十几家。下午有一场群面，等候区坐满了和你年纪差不多的人，没人说话，都在看手机。',
       opts: [
-        gamble('认真准备，冲一冲大公司', function (g) {
-          return LS.clamp(0.16 + g.attrs.knowledge / 190 + g.edu.level * 0.035 + LS.repTotal(g) / 900, 0.08, 0.8);
-        },
-          { job: { id: 'engineer', level: 1 }, at: { stress: 5, finance: 3, happiness: 4 }, tag: '进了大公司做技术' },
-          { job: { id: 'sales', level: 0 }, at: { stress: 3, happiness: -3 }, tag: '大公司没进，先做了销售' },
-          '终面过了，薪资比预期低一点。', '二面之后就没有消息了。', '学历和项目都算数'),
-        gamble('考公考编，再试一次', function (g) {
-          return LS.clamp(0.08 + g.attrs.knowledge / 230 + (g.marks.exam_civil ? 0.08 : 0), 0.05, 0.62);
-        },
-          { job: { id: 'civil', level: 0 }, at: { happiness: 6, stress: -2, reputation: 3 }, rep: { society: 4 }, tag: '考上了编制' },
-          { at: { happiness: -5, stress: 4 }, tag: '又没考上，继续找别的工作' },
-          '公示名单里有你的名字。', '笔试过了，面试还是差一点。', '稳定，但门槛高'),
-        o('先做零工，边干边找', { job: { id: 'gig', level: 0 }, money: { cash: 4000 }, at: { health: -3, stress: 2 }, tag: '先做零工过渡' }),
-        o('托熟人内推', { at: { stress: 2, happiness: 2 }, npc: { '朋友': { favor: -3 }, '同学': { favor: -3 } }, job: { id: 'stateowned', level: 0 }, tag: '托熟人内推进了国企' }, { hint: '会欠下人情' })
+        o('认真准备，冲一冲大公司', { at: { stress: 2 }, tag: '面试大公司时认真准备了' }, {
+          hint: '约两成能进，进不去的多半先做销售', tone: 'risk',
+          outcomes: [
+            { w: 20, text: '终面过了，薪资比预期低一点，但你签了。', label: '进大公司', fx: { job: { id: 'engineer', level: 1 }, at: { stress: 5, finance: 3, happiness: 4 }, tag: '进了大公司做技术' } },
+            { w: 50, text: '二面之后就没有消息，你先接了一份销售的活。', label: '先去销售', fx: { job: { id: 'sales', level: 0 }, at: { stress: 3, happiness: -3 }, tag: '大公司没进，先做了销售' } },
+            { w: 30, text: '连面试机会都没拿到，简历又石沉大海。', label: '石沉大海', fx: { money: { cash: -2000 }, at: { happiness: -3, stress: 2 } } }
+          ]
+        }),
+        o('考公考编，再试一次', { money: { cash: -2000 }, at: { knowledge: 2, stress: 3 }, tag: '失业期间又报了一次考公' }, {
+          hint: '上岸概率一成左右，多数人要考几次', tone: 'hard',
+          outcomes: [
+            { w: 12, text: '公示名单里有你的名字。', label: '考上了', fx: { job: { id: 'civil', level: 0 }, at: { happiness: 6, stress: -2, reputation: 3 }, rep: { society: 4 }, tag: '考上了编制' } },
+            { w: 58, text: '笔试过了，面试还是差一点。', label: '面试差一点', fx: { at: { happiness: -5, stress: 4 }, tag: '又没考上，继续找别的工作' } },
+            { w: 30, text: '这次连笔试都没进，你把书收进了柜子。', label: '笔试没过', fx: { at: { happiness: -6, stress: 3 } } }
+          ]
+        }),
+        o('先做零工，边干边找', { job: { id: 'gig', level: 0 }, money: { cash: 4000 }, at: { health: -3, stress: 2 }, tag: '先做零工过渡' }, {
+          hint: '先有现金流，但很累', tone: 'safe',
+          outcomes: [
+            { w: 58, text: '零工干着干着，你摸到了门道，日子先稳住了。', label: '稳住了', fx: { money: { cash: 3000 }, at: { finance: 2 } } },
+            { w: 30, text: '体力消耗比想象中大，你瘦了十斤。', label: '瘦了十斤', fx: { at: { health: -5, happiness: -2 } } },
+            { w: 12, text: '干了两个月，你在一家小公司拿到了正式岗。', label: '转正', fx: { job: { id: 'sales', level: 0 }, at: { happiness: 3 } } }
+          ]
+        }),
+        o('托熟人内推', { at: { stress: 2, happiness: 2 }, npc: { '朋友': { favor: -3 }, '同学': { favor: -3 } }, tag: '托熟人找过工作' }, {
+          hint: '会欠下人情', tone: 'switch',
+          outcomes: [
+            { w: 68, text: '同学帮着递了简历，你进了国企。', label: '内推进国企', fx: { job: { id: 'stateowned', level: 0 }, at: { happiness: 2 } } },
+            { w: 32, text: '内推只是走个流程，岗位早定了人。', label: '内推没成', fx: { at: { happiness: -3, stress: 2 }, npc: { '同学': { favor: -2 } } } }
+          ]
+        })
       ]
     }),
     ev({
@@ -1370,7 +1447,14 @@
       title: '小卖部的抽奖',
       text: '小卖部进了一批卡片，五毛钱抽一张，集齐七张能换一个遥控车。你已经抽了十几张，差最后一张。老板说最后一张不好出，要看运气。',
       opts: [
-        o('再抽十张', { money: { cash: -50 }, at: { happiness: 2, finance: -1 }, gamble: { p: 0.35, win: { at: { happiness: 6 }, tag: '集齐卡片换了遥控车' }, lose: { at: { happiness: -2 }, tag: '抽奖花光了零花钱' }, winText: '终于集齐了，你抱着遥控车回家。', loseText: '还是差一张，钱花完了。' } }),
+        o('再抽十张', { money: { cash: -50 }, at: { happiness: 2, finance: -1 } }, {
+          hint: '十张里能凑齐的概率大约三成', tone: 'risk',
+          outcomes: [
+            { w: 35, text: '终于集齐了，你抱着遥控车回家。', label: '集齐换车', fx: { at: { happiness: 6 }, tag: '集齐卡片换了遥控车' } },
+            { w: 45, text: '还是差一张，钱花完了。', label: '还是差一张', fx: { at: { happiness: -2 }, tag: '抽奖花光了零花钱' } },
+            { w: 20, text: '最后一张没抽到，倒是抽中了一包辣条，分给了同桌。', label: '一包辣条', fx: { at: { happiness: 1, charm: 1 }, npc: { '同学': { favor: 2 } } } }
+          ]
+        }),
         o('收手，把卡片收起来', { at: { finance: 2, happiness: -1 }, tag: '小时候学会及时收手' })
       ]
     }),
@@ -2402,14 +2486,13 @@
       o('送到附近的派出所', { rep: { society: 2 }, at: { happiness: 3 }, tag: '捡到钱后交给了派出所' }, { tone: 'safe' }),
       o('等半小时，没人来就先收着', { money: { cash: 800 }, at: { happiness: 1 }, tag: '捡到的钱自己留下了' }, { tone: 'switch' }),
       {
-        label: '顺手买张彩票试试运气', hint: '小概率中奖', tone: 'risk',
-        gamble: {
-          p: 0.18,
-          winText: '彩票中了两千块。你把钱收进钱包，心情好了一整天。',
-          loseText: '什么也没中。两百块换了一张废纸，你笑自己无聊。',
-          win: { money: { cash: 2000 }, at: { happiness: 3 }, tag: '捡到钱那天顺手买彩票中了小奖' },
-          lose: { money: { cash: -200 }, at: { happiness: -1 } }
-        }
+        label: '顺手买张彩票试试运气', hint: '中奖概率约百万分之一量级，绝大多数人血本无归', tone: 'risk',
+        fx: { money: { cash: -200 }, at: { happiness: 1 } },
+        outcomes: [
+          { w: 2, text: '你中了五万块，彩票站老板反复核对了几遍。', label: '中五万', fx: { money: { cash: 50000 }, at: { happiness: 8 }, tag: '捡钱那天买彩票中了五万' } },
+          { w: 18, text: '只中了五块，刚好够再买一张。', label: '中五块', fx: { money: { cash: 5 }, at: { happiness: 1 } } },
+          { w: 80, text: '什么也没中。两百块换了一张废纸，你笑自己无聊。', label: '什么都没中', fx: { at: { happiness: -1 } } }
+        ]
       }
     ]
   });

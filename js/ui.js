@@ -338,9 +338,24 @@
     return { cls: 'bad', word: '低落' };
   }
 
-  function attrBarChip(label, val, lowCls) {
+  /* v3.2 低值预警三档：<40 浅红 / <25 深红 / <10 深红加粗；压力反向 */
+  function warnLevel(v, invert) {
+    v = Number(v) || 0;
+    if (invert) {
+      if (v >= 85) return 'warn-lv3';
+      if (v >= 75) return 'warn-lv2';
+      if (v >= 60) return 'warn-lv1';
+      return '';
+    }
+    if (v < 10) return 'warn-lv3';
+    if (v < 25) return 'warn-lv2';
+    if (v < 40) return 'warn-lv1';
+    return '';
+  }
+
+  function attrBarChip(label, val, extraCls) {
     var v = Math.round(LS.clamp(Number(val) || 0, 0, 100));
-    return '<div class="sb-chip attr-chip ' + (lowCls || '') + '">' +
+    return '<div class="sb-chip attr-chip ' + (extraCls || '') + '">' +
       '<div class="attr-top"><span class="lbl">' + esc(label) + '</span><span class="val">' + v + '</span></div>' +
       '<div class="attr-bar"><i style="width:' + v + '%"></i></div>' +
       '<div class="attr-stars">' + starsOf(v) + '</div></div>';
@@ -350,16 +365,17 @@
     var a = game.attrs;
     var hap = moodOf(a.happiness, 'happy');
     var pres = moodOf(a.stress, 'stress');
+    var healthExtra = warnLevel(a.health) + (a.health < 35 ? ' low' : '');
     return [
       attrBarChip('学识', a.knowledge),
-      attrBarChip('健康', a.health, a.health < 35 ? 'low' : ''),
+      attrBarChip('健康', a.health, healthExtra),
       attrBarChip('财力', a.finance),
       attrBarChip('魅力', a.charm),
-      '<div class="sb-chip mood-chip"><div class="attr-top"><span class="lbl">幸福感</span>' +
+      '<div class="sb-chip mood-chip ' + warnLevel(a.happiness) + '"><div class="attr-top"><span class="lbl">幸福感</span>' +
         '<span class="mood-line"><i class="mood-dot ' + hap.cls + '"></i>' + hap.word + '</span></div>' +
         '<div class="attr-bar"><i style="width:' + Math.round(LS.clamp(a.happiness, 0, 100)) + '%"></i></div></div>',
       attrBarChip('声望', LS.repTotal(game)),
-      '<div class="sb-chip mood-chip"><div class="attr-top"><span class="lbl">压力</span>' +
+      '<div class="sb-chip mood-chip ' + warnLevel(a.stress, true) + '"><div class="attr-top"><span class="lbl">压力</span>' +
         '<span class="mood-line"><i class="mood-dot ' + pres.cls + '"></i>' + pres.word + '</span></div></div>'
     ].join('');
   }
@@ -405,6 +421,34 @@
     setCornerHidden(true);
   }
 
+  /* ---------------- v3.2 阻断弹窗控制：一回合最多一个遮罩 ---------------- */
+  function blockerTaken() {
+    if (!game) return false;
+    var list = game.blockerLog || [];
+    for (var i = list.length - 1; i >= 0; i--) {
+      if (list[i] && list[i].turn === game.turn) return true;
+    }
+    return false;
+  }
+  function markBlocker(kind) {
+    if (!game) return;
+    game.blockerLog = game.blockerLog || [];
+    game.blockerLog.push({
+      turn: game.turn, year: game.year, age: game.age, kind: kind
+    });
+    if (game.blockerLog.length > 200) game.blockerLog.shift();
+    game.blockedTurn = game.turn;
+  }
+  /* 事件文本模板：events_v32b.js 提供 LS.renderTemplate，缺失时安全降级 */
+  function tpl(str) {
+    var s = (str === undefined || str === null) ? '' : String(str);
+    if (!game || !LS.renderTemplate) return s;
+    try {
+      var out = LS.renderTemplate(s, game);
+      return (out === undefined || out === null) ? s : String(out);
+    } catch (e) { return s; }
+  }
+
   /* 结果分发：总结卡 → 阶段过场 → 播报 → 事件渲染，最后兜底 */
   function handleResult(r) {
     if (!r || !r.ok) {
@@ -412,8 +456,12 @@
       return;
     }
     if (r.dead) { renderEnd(); return; }
-    if (r.paused === 'summary') { showStageSummary(r.summary || game.stageSummary); return; }
-    if (r.paused === 'stage') { showStageOverlay(r.stage || game.pendingStage); return; }
+    if (r.paused === 'summary') {
+      if (game.pendingStage) { showStageOverlay(game.pendingStage, false, r.summary || game.stageSummary); return; }
+      showStageSummary(r.summary || game.stageSummary);
+      return;
+    }
+    if (r.paused === 'stage') { showStageOverlay(r.stage || game.pendingStage, false, r.summary || game.stageSummary); return; }
     if (r.paused === 'broadcast') { showBroadcast(r.broadcast); return; }
     if (r.event) { renderGame(); return; }
 
@@ -421,7 +469,11 @@
     if (!game.death.dead) {
       var e2 = LS.engine.nextEvent(game);
       if (e2) { renderGame(); return; }
-      if (game.pendingSummary) { showStageSummary(game.stageSummary); return; }
+      if (game.pendingSummary) {
+        if (game.pendingStage) { showStageOverlay(game.pendingStage, false, game.stageSummary); return; }
+        showStageSummary(game.stageSummary);
+        return;
+      }
       if (game.pendingStage) { showStageOverlay(game.pendingStage); return; }
     }
     renderGame();
@@ -436,46 +488,49 @@
     if ($('annotationBar')) $('annotationBar').hidden = true;
   }
 
-  /* 前情回顾：该阶段之前的 3 行记忆（截断到 42 字） */
+  /* 前情回顾：只从 eventLog 取该阶段之前的 3 条真实结果 */
   function recapLines(mark) {
     if (!game) return [];
     var cut = mark ? mark.age : (game.age || 0);
     var out = [];
-    var list = (game.memories || []).filter(function (x) { return Number(x.age) < cut; });
+    var list = (game.eventLog || []).filter(function (x) { return Number(x.age) < cut; });
     list = list.slice(-3);
     for (var i = 0; i < list.length; i++) {
-      var t = String(list[i].text || '').replace(/^【[^】]*】/, '');
+      var t = String(list[i].resultText || list[i].title || '').replace(/^【[^】]*】/, '');
       if (!t) continue;
       out.push({ age: list[i].age, text: t.length > 42 ? t.slice(0, 42) + '…' : t });
     }
     return out;
   }
 
-  /* 该阶段之前的关键抉择：优先岔路，最多 4 条 */
+  /* 该阶段之前的命运岔路：只从 eventLog 取，最多 4 条 */
   function keyChoicesBefore(mark) {
     if (!game) return [];
     var cut = mark ? mark.age : 999;
-    var list = (game.choiceLog || []).filter(function (c) { return Number(c.age) < cut; });
-    var cross = list.filter(function (c) { return c.tier === 'crossroad'; });
-    var use = (cross.length ? cross : list).slice(-4);
-    return use;
+    return (game.eventLog || []).filter(function (x) {
+      return x.tier === 'crossroad' && x.choiceId && Number(x.age) < cut;
+    }).map(function (x) {
+      return { key: x.choiceId, id: x.eventId, age: x.age, year: x.year, title: x.title, label: x.choiceLabel };
+    }).slice(-4);
   }
 
-  /* 点击前情中的关键抉择：弹出当时的选择与后续回响 */
+  /* 点击前情中的关键抉择：只展示 eventLog 里真实存在的选择与回响 */
   function openChoiceRecap(c) {
     if (!c) return;
     var key = c.key || (c.id + '@' + c.age);
-    var echo = null, wait = null;
-    (game.echoLog || []).forEach(function (x) { if (!echo && x.choiceId === key) echo = x; });
-    (game.pending || []).forEach(function (p) { if (!wait && p.choiceId === key) wait = p; });
+    var src = null, echo = null;
+    (game.eventLog || []).forEach(function (x) {
+      if (!src && x.choiceId === key) src = x;
+      if (!echo && x.tier === 'echo' && x.echoOf === key) echo = x;
+    });
     var result = '';
-    if (echo) {
-      result = '后来有了回响：' + echo.year + ' 年 · ' + echo.age + ' 岁，' + (echo.eventTitle || '一件相关的事') +
-        '（' + (echo.delay || 1) + ' 年后落地）';
-    } else if (wait) {
-      result = '这一步已经埋下伏笔：预计 ' + wait.dueAge + ' 岁兑现。' + (wait.note ? '（' + wait.note + '）' : '');
+    if (src && src.resultText) {
+      result = '当时的结果：' + src.resultText;
     } else {
-      result = '当时的结果已经散在往后的日子里，还没有单独的回响记录。';
+      result = '这一世没有留下记录。';
+    }
+    if (echo) {
+      result += ' 后来（' + echo.year + ' 年 · ' + echo.age + ' 岁）有了回响：' + (echo.title || '一件相关的事') + '。';
     }
     openModal('那一次选择',
       '<div class="recap-modal">' +
@@ -514,11 +569,56 @@
     return fallbackPersonArt(gender, key);
   }
 
-  function showStageOverlay(key, debug) {
+  /* 同回合已有遮罩时，静默消化未确认的过场/总结，避免连环弹窗 */
+  function clearStaleBlockers() {
+    if (!game) return;
+    if (game.pendingStage) {
+      game.stageSeen = game.stageSeen || {};
+      game.stageSeen[game.pendingStage] = true;
+      game.pendingStage = null;
+    }
+    game.pendingSummary = false;
+    LS.save.autoSave(game);
+    renderGame();
+  }
+
+  /* 阶段过场内嵌阶段总结：一次遮罩完成过场 + 汇总 */
+  function stageSummaryInline(s) {
+    if (!s) return '';
+    var lines = (s.lines || []).slice(0, 3).map(function (t) {
+      return '<p class="summary-line">' + esc(t) + '</p>';
+    }).join('');
+    var changes = (s.changes || []).map(function (c) {
+      return '<div class="summary-chg"><span class="chg-label">' + esc(c.label || '') + '</span>' +
+        deltaHtml(c.kind, c.delta) + '</div>';
+    }).join('');
+    var impacts = (s.impacts || []).slice(0, 2).map(function (x) {
+      return '<div class="impact-row"><div class="impact-head"><span class="impact-label">' +
+        esc(x.label || x.type || '影响') + '</span></div>' +
+        '<div class="impact-note">' + esc(x.note || '') + '</div></div>';
+    }).join('');
+    return '<div class="stage-summary-inline">' +
+      '<div class="recap-sub">这一段的结果</div>' +
+      (lines || '<div class="recap-empty">这一段没有留下可叙述的事。</div>') +
+      '<div class="recap-sub">关键变化</div><div class="summary-changes">' +
+      (changes || '<div class="recap-empty">没有明显的数值变化。</div>') + '</div>' +
+      (impacts ? '<div class="recap-sub">留下的影响</div><div class="summary-impacts">' + impacts + '</div>' : '') +
+      '</div>';
+  }
+
+  function showStageOverlay(key, debug, summary) {
     var m = LS.stageMark(key);
     if (!m) { closeOverlay(); if (!debug) renderGame(); return; }
+    var sum = summary || (game && game.pendingSummary ? game.stageSummary : null);
+    /* v3.2 单回合只允许一个遮罩：本回合已有遮罩则静默消化 */
+    if (game && !debug) {
+      if (blockerTaken()) { clearStaleBlockers(); return; }
+      markBlocker('stage');
+    } else if (game) {
+      markBlocker('stage');
+    }
     pauseStorySurface();
-    var art = safePersonArt(game.gender, m.art || key);
+    var art = LS.artPortrait(game.gender, m.art || key, '', game.seed) || safePersonArt(game.gender, m.art || key);
     var lines = recapLines(m);
     var choices = keyChoicesBefore(m);
     var recapHtml =
@@ -545,6 +645,7 @@
       '<h2 class="stage-title">' + esc(m.title) + '</h2>' +
       '<p class="stage-desc">' + esc(m.desc) + '</p>' +
       recapHtml +
+      stageSummaryInline(sum) +
       '<button type="button" class="btn primary stage-continue" id="btnStageContinue">继续人生</button>' +
       '</div></div></div></div>');
     var chipsInCard = overlayHost().querySelectorAll('[data-ci]');
@@ -581,6 +682,15 @@
   /* 阶段总结卡：跨阶段时暂停，确认后继续 */
   function showStageSummary(s) {
     if (!s) { renderGame(); return; }
+    if (game) {
+      if (blockerTaken()) {
+        game.pendingSummary = false;
+        LS.save.autoSave(game);
+        renderGame();
+        return;
+      }
+      markBlocker('summary');
+    }
     pauseStorySurface();
     var rng = LS.stageRange(s.fromStage) || [0, s.atAge || 0];
     var a = rng[0];
@@ -622,9 +732,11 @@
   function showCrossGate(e, key) {
     game.crossSeen = game.crossSeen || {};
     game.crossSeen[key] = true;
+    markBlocker('cross');
     LS.save.autoSave(game);
     pauseStorySurface();
-    var art = LS.artHas(e.art) ? LS.artEvent(e.art) : LS.artEvent('jobfair');
+    var artKey = sceneKeyOf(e);
+    var art = artKey ? (LS.artScene(artKey) || LS.artEvent(artKey)) : '';
     openOverlay('cross-overlay',
       '<div class="cross-mask"><div class="cross-card">' +
       '<div class="cross-kicker"><span class="tier-icon">⑂</span> 命运岔路</div>' +
@@ -641,7 +753,17 @@
 
   function showBroadcast(b, debug) {
     if (!b) return;
-    var art = (LS.artHas && LS.artHas(b.art)) ? '<div class="bc-art">' + LS.artEvent(b.art) + '</div>' : '';
+    /* v3.2 单回合只允许一个遮罩：已有遮罩则跳过播报，直接推进 */
+    if (game && !debug) {
+      if (blockerTaken()) {
+        var rs = LS.engine.continueAfter(game);
+        LS.save.autoSave(game);
+        handleResult(rs);
+        return;
+      }
+      markBlocker('broadcast');
+    }
+    var art = (LS.artHas && LS.artHas(b.art)) ? '<div class="bc-art">' + (LS.artScene(b.art) || LS.artEvent(b.art)) + '</div>' : '';
     var chg = b.changes
       ? '<div class="bc-changes"><span class="bc-chg-label">实际变化</span>' + changeTone(b.changes) + '</div>'
       : '<div class="bc-changes muted">本回合没有产生可记录的数值变动。</div>';
@@ -696,21 +818,526 @@
     return null;
   }
 
+  /* ---------- v3.1 正文强调：首句加重、数值与关键词高亮 ---------- */
+  var HILITE_KEYS = /(父亲|母亲|父母|家人|伴侣|妻|夫|孩子|儿子|女儿|子女|婚姻|结婚|离婚|生子|房贷|买房|房子|存款|工资|债|失业|辞职|入职|升职|创业|生意|公司|单位|同事|上司|领导|贵人|朋友|健康|生病|手术|住院|毕业|升学|考试|退休|搬家|老家|城市)/g;
+  var NUM_RE = /([+\-＋－]\s*\d+(?:\.\d+)?\s*(?:%|万|元|岁|年|个月|天|次|小时|分|倍)?)|(\d+(?:\.\d+)?\s*(?:%|万|元|岁|年|个月|天|次|小时|分|倍))/g;
+
+  function markKeys(txt) {
+    if (!txt) return '';
+    var out = '', last = 0, m;
+    HILITE_KEYS.lastIndex = 0;
+    while ((m = HILITE_KEYS.exec(txt))) {
+      out += esc(txt.slice(last, m.index)) + '<em class="hl-key">' + esc(m[0]) + '</em>';
+      last = HILITE_KEYS.lastIndex;
+    }
+    return out + esc(txt.slice(last));
+  }
+
+  function emphasisHtml(raw) {
+    var t = String(raw || '');
+    if (!t) return '';
+    var sentences = t.match(/[^。！？\n]+[。！？\n]?/g) || [t];
+    var out = '';
+    for (var i = 0; i < sentences.length; i++) {
+      var s = sentences[i], body = '', last = 0, m;
+      NUM_RE.lastIndex = 0;
+      while ((m = NUM_RE.exec(s))) {
+        body += markKeys(s.slice(last, m.index));
+        var num = (m[1] || m[2] || '').trim();
+        var dir = '';
+        if (/^[+\-＋－]/.test(num)) dir = (num.charAt(0) === '-' || num.charAt(0) === '－') ? ' down' : ' up';
+        body += '<em class="hl-num' + dir + '">' + esc(num) + '</em>';
+        last = NUM_RE.lastIndex;
+      }
+      body += markKeys(s.slice(last));
+      out += i === 0 ? '<span class="lead">' + body + '</span>' : body;
+    }
+    return out;
+  }
+
+  /* ---------- v3.1 旧日记片段：引用当年原文，缺原文时明确降级 ---------- */
+  function shortQuote(raw) {
+    var s = String(raw || '').replace(/\s+/g, ' ').trim();
+    var m = s.match(/^.{0,72}?(?:[。！？；]|$)/);
+    var q = (m ? m[0] : s).replace(/[。！？；]$/, '');
+    return s.length > q.length ? q + '…' : q;
+  }
+
   function sourceHtml(e) {
     var info = game.echoInfo;
     if (!info) {
-      return '<b>此前</b> · 源自更早的境况：长期的生活方式或未被处理的压力累积到了这一步。';
+      return '<div class="diary-clip diary-flat"><div class="diary-head">旧页 · 来路不明</div>' +
+        '<div class="diary-scene">长期的生活方式与未处理的压力，到了不得不结算的时候。</div></div>';
     }
     var years = info.years || 1;
-    var when = (game.year - years) + ' 年 · ' + (info.fromAge || 0) + ' 岁';
+    var fromYear = game.year - years;
+    var fromAge = info.fromAge == null ? Math.max(0, game.age - years) : info.fromAge;
     if (info.kind === 'risk') {
-      return '<b>长期隐患</b> · ' + esc(LS.RISK_LABEL[info.riskKey] || '健康透支') + '，已累积约 ' + years + ' 年（始于 ' + when + '）。';
+      return '<div class="diary-clip diary-risk">' +
+        '<div class="diary-head">旧页 · 健康账本 · 始于 ' + fromYear + ' 年 · ' + fromAge + ' 岁</div>' +
+        '<div class="diary-scene">「' + esc(LS.RISK_LABEL[info.riskKey] || '健康透支') + '」已累积约 ' + years + ' 年，今天到了兑现的时候。</div></div>';
     }
-    var what = info.choiceLabel
-      ? '当时你选择了「' + info.choiceLabel + '」'
-      : (info.oneLiner || '当时做了一个影响很久的决定');
-    return '<b>' + years + ' 年前</b> · ' + esc(when) + '：' + esc(what) +
-      (info.sourceTitle ? '（' + esc(info.sourceTitle) + '）' : '');
+    var head = '<div class="diary-head">旧页 · ' + fromYear + ' 年 · ' + fromAge + ' 岁' +
+      (info.sourceTitle ? ' · ' + esc(info.sourceTitle) : '') + '</div>';
+    var scene = info.sourceText
+      ? '<div class="diary-scene">「' + esc(shortQuote(info.sourceText)) + '」</div>'
+      : '<div class="diary-missing">旧存档没有留下当年的原句，只记得那个选择。</div>';
+    var choice = info.choiceLabel
+      ? '<div class="diary-choice">当时你选了「<b>' + esc(info.choiceLabel) + '</b>」</div>'
+      : '';
+    return '<div class="diary-clip">' + head + scene + choice + '</div>';
+  }
+
+  /* ---------- v3.1 人生档案条 ---------- */
+  var UNIT_BY_JOB = {
+    civil: '机关单位', engineer: '技术公司', doctor: '医院', teacher: '学校',
+    stateowned: '国有企业', sales: '销售公司', freelance: '自由职业',
+    startup: '自己的公司', gig: '劳务市场'
+  };
+
+  function archiveData(g) {
+    if (!g) return null;
+    var home = '租房';
+    if (g.house && g.house.owned) home = (g.house.mortgage > 0 && !g.house.mortgagePaid) ? '按揭房' : '自有';
+    else if (g.age < 22) home = '老小区';
+
+    var jobTxt = '待业';
+    if (g.job && g.job.id) {
+      jobTxt = (g.job.title || LS.jobName(g.job.id)) + ' · ' + (UNIT_BY_JOB[g.job.id] || LS.jobName(g.job.id));
+    }
+
+    var married = g.family && g.family.marriage && g.family.marriage.status === '已婚';
+    var kids = (g.family && g.family.childrenIds) ? g.family.childrenIds.length : 0;
+    var fam = married ? '已婚' : (g.age < 22 ? '未婚 · 与父母同住' : '未婚');
+    if (kids > 0) fam += ' · ' + kids + ' 个子女';
+    var dad = LS.getNpc && LS.getNpc(g, '父亲');
+    var mom = LS.getNpc && LS.getNpc(g, '母亲');
+    var pa = [];
+    if (dad) pa.push(dad.alive === false ? '父已故' : '父健在');
+    if (mom) pa.push(mom.alive === false ? '母已故' : '母健在');
+    if (pa.length) fam += ' · ' + pa.join(' / ');
+
+    return {
+      city: g.birthplace || '—',
+      home: home,
+      job: jobTxt,
+      family: fam
+    };
+  }
+
+  function paintArchive() {
+    var el = $('lifeArchive');
+    if (!el || !game) return;
+    var d = archiveData(game);
+    if (!d) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML =
+      '<span class="la-label">人生档案</span>' +
+      '<span class="la-item la-city"><i>城市</i>' + esc(d.city) + '</span>' +
+      '<span class="la-item la-home"><i>住所</i>' + esc(d.home) + '</span>' +
+      '<span class="la-item la-job"><i>职业</i>' + esc(d.job) + '</span>' +
+      '<span class="la-item la-family"><i>家庭</i>' + esc(d.family) + '</span>';
+  }
+
+  /* ---------------- v3.2 社交行动条 ---------------- */
+  var socialTargetId = null;
+  var relOpenCircles = null;
+
+  function npcStageKey(n) {
+    var a = Number(n && n.age);
+    if (!isFinite(a)) a = 30;
+    if (a <= 3) return 'infant';
+    if (a <= 12) return 'child';
+    if (a <= 18) return 'teen';
+    if (a <= 30) return 'youth';
+    if (a <= 55) return 'midlife';
+    if (a <= 75) return 'elder';
+    return 'late';
+  }
+
+  function avatarHtml(n) {
+    var art = '';
+    try { art = (LS.artPortrait && n) ? LS.artPortrait(n.gender || '其他', npcStageKey(n), '', game && game.seed) : ''; } catch (e) { art = ''; }
+    if (art) return '<span class="npc-avatar">' + art + '</span>';
+    var ch = String((n && (n.name || n.role)) || '?').charAt(0);
+    return '<span class="npc-avatar letter">' + esc(ch) + '</span>';
+  }
+
+  function socialTarget() {
+    if (!game || !game.npcs) return null;
+    var list = game.npcs.filter(function (n) { return n && n.alive; });
+    if (!list.length) return null;
+    if (socialTargetId) {
+      for (var i = 0; i < list.length; i++) if (list[i].id === socialTargetId) return list[i];
+    }
+    list.sort(function (a, b) {
+      var ia = Number(a.intimacy) || 0, ib = Number(b.intimacy) || 0;
+      if (ia !== ib) return ib - ia;
+      var la = Number(a.lastContactYear), lb = Number(b.lastContactYear);
+      if (isNaN(la)) la = -99;
+      if (isNaN(lb)) lb = -99;
+      return lb - la;
+    });
+    return list[0];
+  }
+
+  function socialApi() {
+    /* 实际实现在 social.js 里挂到 LS.SOCIAL；兼容 LS.social 别名 */
+    return LS.social || LS.SOCIAL || null;
+  }
+
+  function paintSocialBar() {
+    var el = $('socialBar');
+    if (!el || !game) return;
+    var api = socialApi();
+    var q = (api && api.quota) ? api.quota(game) : { used: 0, max: 1, left: 1 };
+    var npc = socialTarget();
+    var over = q.left <= 0;
+    var acts = (LS.SOCIAL && LS.SOCIAL.ACTIONS) || {};
+    var keys = ['陪', '送礼', '帮忙', '借钱', '介绍'].filter(function (k) { return !!acts[k]; });
+    var btns = keys.map(function (k) {
+      return '<button type="button" class="mini-act' + (over ? ' over' : '') + '" data-sa="' + esc(k) + '">' +
+        esc(acts[k].label || k) + '</button>';
+    }).join('');
+    el.innerHTML =
+      '<div class="social-head">' +
+      '<span class="social-chip"><i>社交名额</i> 已用 ' + q.used + ' / ' + q.max + '</span>' +
+      (npc
+        ? '<span class="social-target">对象：' + esc(npc.name) + '（' + esc(npc.relation || LS.relationOf(npc)) + '）</span>'
+        : '<span class="social-target muted">暂时没有可走动的人</span>') +
+      '<button type="button" class="mini-act pick" id="btnSocialTarget">换人</button>' +
+      '</div>' +
+      '<div class="social-actions">' + btns + '</div>' +
+      (over ? '<div class="social-tip">今年已用尽，硬做要付出时间/金钱/健康的代价。</div>' : '');
+    var pick = $('btnSocialTarget');
+    if (pick) pick.addEventListener('click', openSocialTargetPicker);
+    var btnsEl = el.querySelectorAll('[data-sa]');
+    for (var i = 0; i < btnsEl.length; i++) {
+      (function (b) {
+        b.addEventListener('click', function () { doSocialAct(b.dataset.sa); });
+      })(btnsEl[i]);
+    }
+  }
+
+  function doSocialAct(key) {
+    if (!game || game.death.dead) return;
+    var npc = socialTarget();
+    if (!npc) { showToast('身边暂时没有可以走动的人。'); return; }
+    var api = socialApi();
+    if (!api || !api.act) { showToast('社交系统未载入。'); return; }
+    /* 兼容旧存档：npcArc 条目可能只带 stage 而没有 nodes，社交动作会写锚点 */
+    game.npcArc = game.npcArc || {};
+    game.npcArc[npc.id] = game.npcArc[npc.id] || { nodes: [] };
+    if (!game.npcArc[npc.id].nodes) game.npcArc[npc.id].nodes = [];
+    var r = api.act(game, npc.id, key);
+    if (!r || !r.ok) { showToast((r && r.msg) || '社交没有成功。'); return; }
+    LS.save.autoSave(game);
+    showToast(r.msg);
+    renderGame();
+  }
+
+  function openSocialTargetPicker() {
+    if (!game) return;
+    var list = (game.npcs || []).filter(function (n) { return n && n.alive; });
+    list.sort(function (a, b) { return (Number(b.intimacy) || 0) - (Number(a.intimacy) || 0); });
+    var cur = socialTarget();
+    if (!list.length) {
+      openModal('选择社交对象', '<div class="empty-note">身边暂时没有可以走动的人。</div>');
+      return;
+    }
+    openModal('选择社交对象',
+      '<div class="target-list">' + list.map(function (n) {
+        var on = cur && cur.id === n.id;
+        var rel = n.relation || LS.relationOf(n);
+        return '<button type="button" class="target-row' + (on ? ' on' : '') + '" data-tid="' + esc(n.id) + '">' +
+          avatarHtml(n) +
+          '<span class="target-name">' + esc(n.name) + '</span>' +
+          '<span class="target-rel">' + esc(rel) + '</span>' +
+          '<span class="target-int">' + Math.round(LS.clamp(Number(n.intimacy) || 0, 0, 100)) + '</span></button>';
+      }).join('') + '</div>');
+    var rows = $('modalBody').querySelectorAll('[data-tid]');
+    for (var i = 0; i < rows.length; i++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          socialTargetId = b.dataset.tid;
+          closeModal();
+          paintSocialBar();
+        });
+      })(rows[i]);
+    }
+  }
+
+  /* ---------------- v3.2 人物卡关系面板 ---------------- */
+  var REL_CLS = {
+    '陌生': 'rel-stage-0', '相识': 'rel-stage-1', '熟络': 'rel-stage-2', '亲近': 'rel-stage-3',
+    '至亲': 'rel-stage-4', '疏远': 'rel-stage-5', '决裂': 'rel-stage-6'
+  };
+  var REL_DEFAULT_OPEN = 2;
+
+  function npcRelationOf(n) {
+    return n.relation || (LS.relationOf ? LS.relationOf(n) : '陌生');
+  }
+  function relStageCls(n) {
+    return REL_CLS[npcRelationOf(n)] || 'rel-stage-0';
+  }
+  function favorText(f) {
+    f = Number(f) || 0;
+    if (f > 0) return { cls: 'favor-pos', text: '他欠你' };
+    if (f < 0) return { cls: 'favor-neg', text: '你欠他' };
+    return { cls: 'favor-zero', text: '人情两清' };
+  }
+  function lastAnchorOf(n) {
+    var a = (n.anchors || [])[n.anchors.length - 1];
+    if (a && a.text) return a;
+    var arc = (game && game.npcArc && game.npcArc[n.id] && game.npcArc[n.id].nodes) || [];
+    return arc.length ? arc[arc.length - 1] : null;
+  }
+
+  function relRow(n) {
+    var rel = npcRelationOf(n);
+    var fv = favorText(n.favor);
+    var intimacy = Math.round(LS.clamp(Number(n.intimacy) || 0, 0, 100));
+    var a = lastAnchorOf(n);
+    var anchor = a ? String(a.text) : '还没有留下值得记住的事。';
+    if (anchor.length > 34) anchor = anchor.slice(0, 34) + '…';
+    return '<button type="button" class="rel-row ' + relStageCls(n) + '" data-nid="' + esc(n.id) + '">' +
+      avatarHtml(n) +
+      '<span class="rel-main">' +
+      '<span class="rel-name">' + esc(n.name || n.role) + '<i class="rel-role">' + esc(n.role || '') + '</i></span>' +
+      '<span class="rel-line"><span class="rel-stage">' + esc(rel) + '</span>' +
+      '<span class="rel-favor ' + fv.cls + '">' + fv.text + '</span>' +
+      '<span class="rel-int">' + intimacy + '</span></span>' +
+      '<span class="rel-bar"><i style="width:' + intimacy + '%"></i></span>' +
+      '<span class="rel-anchor">' + esc(anchor) + '</span>' +
+      '</span></button>';
+  }
+
+  function openRelationModal() {
+    if (!game) return;
+    var alive = (game.npcs || []).filter(function (n) { return n && n.alive; });
+    if (!alive.length) {
+      openModal('人物关系', '<div class="empty-note">身边暂时没有还在联系的人。</div>');
+      return;
+    }
+    if (!relOpenCircles) {
+      relOpenCircles = {};
+      for (var d = 0; d < Math.min(REL_DEFAULT_OPEN, LS.CIRCLES.length); d++) relOpenCircles[LS.CIRCLES[d]] = true;
+    }
+    var cap = window.innerHeight <= 800 ? 4 : 5;
+    var shown = 0;
+    var html = '';
+    for (var gi = 0; gi < LS.CIRCLES.length; gi++) {
+      var circle = LS.CIRCLES[gi];
+      var list = alive.filter(function (n) { return (n.circle || LS.circleOf(n.role)) === circle; });
+      list.sort(function (a, b) { return (Number(b.intimacy) || 0) - (Number(a.intimacy) || 0); });
+      var open = !!relOpenCircles[circle];
+      var rowsHtml = '';
+      var more = 0;
+      if (open) {
+        for (var i = 0; i < list.length; i++) {
+          if (shown >= cap) { more++; continue; }
+          shown++;
+          rowsHtml += relRow(list[i]);
+        }
+      } else {
+        more = list.length;
+      }
+      html += '<div class="rel-group' + (open ? ' open' : '') + '">' +
+        '<button type="button" class="rel-group-head" data-gcircle="' + esc(circle) + '">' +
+        '<span class="rel-group-name">' + esc(circle) + '</span>' +
+        '<span class="rel-group-rep">声望 ' + Math.round(LS.circleRep(game, circle)) + '</span>' +
+        '<span class="rel-group-count">' + list.length + ' 人</span>' +
+        '<span class="rel-group-arrow">' + (open ? '▾' : '▸') + '</span></button>' +
+        '<div class="rel-group-body">' +
+        (open
+          ? (rowsHtml || '<div class="recap-empty">这个圈子里还没有人。</div>') +
+            (more ? '<div class="rel-more">还有 ' + more + ' 人</div>' : '')
+          : (more ? '<div class="rel-more">还有 ' + more + ' 人</div>' : '')) +
+        '</div></div>';
+    }
+    openModal('人物关系 · ' + alive.length + ' 人', '<div class="rel-list">' + html + '</div>');
+    var body = $('modalBody');
+    var rows = body.querySelectorAll('[data-nid]');
+    for (var r = 0; r < rows.length; r++) {
+      (function (btn) {
+        btn.addEventListener('click', function () { openNpcHistory(btn.dataset.nid); });
+      })(rows[r]);
+    }
+    var heads = body.querySelectorAll('[data-gcircle]');
+    for (var h = 0; h < heads.length; h++) {
+      (function (btn) {
+        btn.addEventListener('click', function () {
+          var c = btn.dataset.gcircle;
+          relOpenCircles[c] = !relOpenCircles[c];
+          openRelationModal();
+        });
+      })(heads[h]);
+    }
+  }
+
+  function openNpcHistory(npcId) {
+    if (!game) return;
+    var n = null;
+    for (var i = 0; i < (game.npcs || []).length; i++) {
+      if (game.npcs[i].id === npcId) { n = game.npcs[i]; break; }
+    }
+    if (!n) return;
+    var nodes = [];
+    var arc = (game.npcArc && game.npcArc[n.id] && game.npcArc[n.id].nodes) || [];
+    for (var j = 0; j < arc.length; j++) {
+      if (arc[j] && arc[j].text) nodes.push({ year: arc[j].year, kind: arc[j].kind, text: arc[j].text });
+    }
+    for (var k = 0; k < (n.anchors || []).length; k++) {
+      var a = n.anchors[k];
+      if (a && a.text) nodes.push({ year: a.year, kind: a.kind, text: a.text });
+    }
+    var merged = [], seen = {};
+    nodes.sort(function (x, y) { return (Number(x.year) || 0) - (Number(y.year) || 0); });
+    for (var m = 0; m < nodes.length; m++) {
+      var key = String(nodes[m].year) + '|' + String(nodes[m].text);
+      if (seen[key]) continue;
+      seen[key] = true;
+      merged.push(nodes[m]);
+    }
+    var rel = npcRelationOf(n);
+    var fv = favorText(n.favor);
+    var timeline = merged.length
+      ? '<div class="rel-timeline">' + merged.map(function (x) {
+        return '<div class="rel-tl-item"><div class="rel-tl-year">' + esc(x.year) + ' 年</div>' +
+          '<div class="rel-tl-text">' + esc(x.text) + '</div></div>';
+      }).join('') + '</div>'
+      : '<div class="empty-note">还没有留下可追溯的记录。</div>';
+    openModal(n.name + ' · 关系履历',
+      '<div class="npc-his-head">' + avatarHtml(n) +
+      '<span class="npc-his-info"><b>' + esc(n.name) + '</b>' +
+      '<span class="rel-stage ' + relStageCls(n) + '">' + esc(rel) + '</span>' +
+      '<span class="rel-favor ' + fv.cls + '">' + fv.text + '</span>' +
+      '<span class="rel-int">亲密度 ' + Math.round(LS.clamp(Number(n.intimacy) || 0, 0, 100)) + '</span></span></div>' +
+      '<button type="button" class="btn tiny" id="btnBackRelation">返回人物卡</button>' +
+      timeline);
+    var back = $('btnBackRelation');
+    if (back) back.addEventListener('click', openRelationModal);
+  }
+
+  /* 结局页“还在你身边的人”：按锚点写一句评价，不显示数字 */
+  function endSurvivorsHtml() {
+    var SURV_LINE = {
+      '至亲': '一直站在你这边，从没走远。',
+      '亲近': '这些年常来常往，说话不用绕弯。',
+      '熟络': '偶尔见面，还能说上几句真话。',
+      '相识': '见面点头，各自过各自的日子。',
+      '疏远': '后来慢慢就不联系了。',
+      '决裂': '到底没能和解。',
+      '陌生': '只是彼此认得。'
+    };
+    var list = (game.npcs || []).filter(function (n) {
+      return n && n.alive && (Number(n.intimacy) || 0) >= 45;
+    });
+    list.sort(function (a, b) { return (Number(b.intimacy) || 0) - (Number(a.intimacy) || 0); });
+    list = list.slice(0, 8);
+    if (!list.length) return '<div class="empty-note">最后，身边没有留下什么人。</div>';
+    return list.map(function (n) {
+      var rel = npcRelationOf(n);
+      var a = lastAnchorOf(n);
+      var quote = a && a.text
+        ? String(a.text).replace(/[0-9０-９]/g, '').replace(/^\s*年/, '').replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '')
+        : '';
+      if (!quote) quote = SURV_LINE[rel] || '你们之间，只剩下一些旧事可说。';
+      return '<div class="survivor-row"><span class="sv-name">' + esc(n.name || n.role) + '</span>' +
+        '<span class="sv-role">' + esc(n.role || '') + '</span>' +
+        '<span class="sv-stage">' + esc(rel) + '</span>' +
+        '<span class="sv-quote">' + esc(quote) + '</span></div>';
+    }).join('');
+  }
+
+  /* ---------- v3.1 在场者头像与关系温度 ---------- */
+  function relationTier(n) {
+    var f = Number(n.favor);
+    if (isNaN(f)) f = 50;
+    if (f >= 75) return { cls: 'kinship', label: '至亲' };
+    if (f >= 50) return { cls: 'close', label: '亲密' };
+    if (f >= 25) return { cls: 'known', label: '相识' };
+    return { cls: 'stranger', label: '陌生' };
+  }
+
+  function castOf(e) {
+    if (!game) return [];
+    var text = [e && e.title, e && e.text].join(' ') + ' ' +
+      ((e && (e.options || e.opts)) || []).map(function (o) { return o.label || ''; }).join(' ');
+    var out = [];
+    (game.npcs || []).forEach(function (n) {
+      if (n.role !== '父亲' && n.role !== '母亲' && n.role !== '配偶' && n.role !== '子女') return;
+      if (n.role === '子女' && out.filter(function (x) { return x.npc.role === '子女'; }).length >= 1) return;
+      var key = n.role;
+      var hit = false;
+      if (n.role === '父亲') hit = /父|爸/.test(text);
+      else if (n.role === '母亲') hit = /母|妈/.test(text);
+      else if (n.role === '配偶') hit = /配偶|伴侣|妻|夫|老婆|老公|爱人|婚/.test(text);
+      else hit = /孩子|儿子|女儿|子女|娃|上学|出生/.test(text) || (n.name && text.indexOf(n.name) >= 0);
+      out.push({ npc: n, present: hit });
+    });
+    if (!out.length) return out;
+    var jobMention = /同事|公司|单位|会议|项目|加班|办公/.test(text);
+    if (game.job && game.job.id && jobMention) {
+      out.push({
+        npc: { name: /上司|领导|老板|主管/.test(text) ? '上司' : '同事', role: '同事', gender: '其他', age: game.age, favor: 50, alive: true },
+        present: true, extra: true
+      });
+    }
+    out.sort(function (a, b) { return (b.present ? 1 : 0) - (a.present ? 1 : 0); });
+    var cap = (window.innerHeight <= 740) ? 4 : 5;
+    return out.slice(0, cap);
+  }
+
+  function paintCast(e) {
+    var el = $('evCast');
+    if (!el) return;
+    var list = castOf(e);
+    if (!list.length) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    el.innerHTML = '<div class="cast-title">在场者</div>' + list.map(function (c) {
+      var n = c.npc;
+      var stage = LS.stageOf ? LS.stageOf(n.age) : 'midlife';
+      var art = LS.artPortrait(n.gender || '其他', stage, '', game && game.seed);
+      if (!art) art = LS.artPortrait(n.gender || '其他', 'youth', '', game && game.seed);
+      var tier = relationTier(n);
+      var short = n.role === '父亲' ? '父' : n.role === '母亲' ? '母' : n.role === '配偶' ? '伴侣' : n.role === '子女' ? '孩子' : (n.name || n.role);
+      var dead = n.alive === false;
+      var life = '';
+      if (dead && n.deathYear && n.age) {
+        life = '<span class="cast-life">' + (n.deathYear - Math.round(n.age)) + '–' + n.deathYear + '</span>';
+      }
+      var cls = 'cast-item rel-' + tier.cls + (c.present ? ' present' : ' absent') + (dead ? ' dead' : '');
+      return '<div class="' + cls + '" title="' + esc(short + ' · ' + tier.label) + '">' +
+        '<div class="cast-avatar">' + art + '</div>' +
+        '<div class="cast-name">' + esc(short) + '</div>' +
+        '<div class="cast-rel">' + (dead ? '已故' : tier.label) + '</div>' + life + '</div>';
+    }).join('');
+  }
+
+  /* 事件 → 场景插图：优先显式 art 键，其次按标题/正文语义匹配 */
+  function sceneKeyOf(e) {
+    if (e && e.art && LS.artHas(e.art)) return e.art;
+    /* v3.3：固定映射表优先，保证同一事件永远配同一张图 */
+    if (LS.sceneKeyForEvent) {
+      var mapped = LS.sceneKeyForEvent(e);
+      if (mapped && LS.artHas(mapped)) return mapped;
+    }
+    var t = ((e && e.id) || '') + ' ' + ((e && e.title) || '') + ' ' + ((e && e.text) || '');
+    if (/结婚|婚礼|求婚|领证|嫁|娶/.test(t)) return 'wedding';
+    if (/生子|怀孕|产房|要孩子|生孩子|二胎|出生/.test(t)) return 'nursery';
+    if (/买房|首付|房贷|有了自己的房/.test(t)) return 'house';
+    if (/搬家|搬走|退租|离开这座/.test(t)) return 'emptyHome';
+    if (/手术|住院|重病|癌症|病危|生病|体检/.test(t)) return 'clinic';
+    if (/去世|离世|葬礼|丧|临终|走了/.test(t)) return 'grave';
+    if (/创业|开店|生意|自己当老板/.test(t)) return 'money';
+    if (/失业|裁员|被裁|下岗|辞退/.test(t)) return 'emptyDesk';
+    if (/入职|升职|录用|Offer|offer|上班|跳槽/.test(t)) return 'office';
+    if (/毕业|高考|考研|升学|录取|大学/.test(t)) return 'exam';
+    if (/求职|面试|招聘|找工作/.test(t)) return 'jobfair';
+    if (/钱|债|存款|工资|收入|奖金/.test(t)) return 'money';
+    if (/特长|天赋|爱好|梦想|灵感/.test(t)) return 'spark';
+    return '';
   }
 
   /* 平淡年合并提示：事件正文上方一行弱化文字 */
@@ -724,7 +1351,8 @@
       el = document.createElement('div');
       el.id = 'quietNote';
       el.className = 'quiet-note';
-      panel.insertBefore(el, text);
+      var host = text.parentNode || panel;
+      host.insertBefore(el, text);
     }
     if (note) {
       var t = String(note)
@@ -751,9 +1379,9 @@
     et.innerHTML = '<span class="tier-icon">' + esc(t.icon) + '</span>' + esc(t.label);
     et.className = 'event-type ' + t.cls;
     $('turnNo').textContent = '第 ' + game.turn + ' 回合 · ' + LS.stageLabel(game.stage);
-    $('eventTitle').textContent = e.title;
+    $('eventTitle').textContent = tpl(e.title);
     $('eventTitle').className = 'tier-title ' + t.cls;
-    $('storyText').textContent = e.text;
+    $('storyText').innerHTML = emphasisHtml(tpl(e.text));
     paintQuietNote(e);
     var sp = $('storyPanel');
     sp.className = 'story ' + t.cls;
@@ -770,17 +1398,18 @@
       $('lastOutcome').innerHTML = '';
     }
 
-    /* 插图：日常不配；因果回响按需；命运岔路必配 */
-    var showArt = e.tier === 'echo' || e.tier === 'crossroad';
-    var artKey = e.art || (e.tier === 'crossroad' ? 'jobfair' : (e.tier === 'echo' ? 'clinic' : ''));
-    if (showArt && artKey && LS.artHas(artKey)) {
+    /* 插图：按事件语义匹配场景（结婚/生子/失业/买房/重病/毕业等），无匹配则不显示 */
+    var artKey = sceneKeyOf(e);
+    if (artKey && LS.artHas(artKey)) {
       $('evArt').hidden = false;
-      $('evArt').innerHTML = LS.artEvent(artKey);
+      $('evArt').innerHTML = LS.artScene(artKey) || LS.artEvent(artKey);
       $('evArt').className = 'ev-art ' + t.cls;
     } else {
       $('evArt').hidden = true;
       $('evArt').innerHTML = '';
     }
+    paintCast(e);
+    paintArchive();
 
     /* 溯源条：只有因果回响必须有 */
     var sb = $('sourceBar');
@@ -822,8 +1451,11 @@
       b.className = 'opt-btn opt-in' + toneCls;
       b.style.animationDelay = (i * 70) + 'ms';
       var rk = opt.risk && RISK_META[opt.risk];
+      var hardWarn = (Number(game.attrs.happiness) < 40 && LS.isHardOpt && LS.isHardOpt(opt))
+        ? '<span class="opt-warn">心情低落，这类事更难撑下来</span>' : '';
       b.innerHTML = (rk ? '<span class="risk-badge ' + rk.cls + '">' + rk.text + '</span>' : '') +
-        esc(opt.label) + (opt.hint ? '<span class="opt-cost">' + esc(opt.hint) + '</span>' : '') + '<span class="opt-arrow">›</span>';
+        esc(tpl(opt.label)) + (opt.hint ? '<span class="opt-cost">' + esc(tpl(opt.hint)) + '</span>' : '') +
+        hardWarn + '<span class="opt-arrow">›</span>';
       b.addEventListener('click', function () { onChoose(i); });
       opts.appendChild(b);
     });
@@ -841,9 +1473,15 @@
     $('sbStage').textContent = stageBarText();
     $('sbAttrs').innerHTML = chips();
     paintSbMoney();
+    paintArchive();
+    paintSocialBar();
 
-    /* 未确认的阶段总结优先于阶段过场 */
-    if (game.pendingSummary) { showStageSummary(game.stageSummary); return; }
+    /* 未确认的阶段总结与阶段过场合并为一次遮罩 */
+    if (game.pendingSummary) {
+      if (game.pendingStage) { showStageOverlay(game.pendingStage, false, game.stageSummary); return; }
+      showStageSummary(game.stageSummary);
+      return;
+    }
 
     /* 未确认的阶段过场优先，暂停一切事件推进 */
     if (game.pendingStage) { showStageOverlay(game.pendingStage); return; }
@@ -862,6 +1500,8 @@
       $('options').className = 'options';
       $('sourceBar').hidden = true;
       $('evArt').hidden = true;
+      $('evCast').hidden = true;
+      $('evCast').innerHTML = '';
       $('annotationBar').hidden = true;
       $('storyPanel').className = 'story tier-daily';
       paintQuietNote(null);
@@ -873,9 +1513,16 @@
       var key = game.crossGate || (e.id + '@' + game.age);
       game.crossGate = key;
       if (!(game.crossSeen || {})[key]) {
-        paintEvent(e);           /* 先让标题/标签与过场内容一致，再清空选项并遮罩 */
-        showCrossGate(e, key);
-        return;
+        /* v3.2：18 岁前或本回合已有遮罩时，不弹遮罩，降级为普通岔路 */
+        var gateOff = (game.age <= 18) || (game.blockedTurn === game.turn) || blockerTaken();
+        if (gateOff) {
+          game.crossSeen = game.crossSeen || {};
+          game.crossSeen[key] = true;
+        } else {
+          paintEvent(e);           /* 先让标题/标签与过场内容一致，再清空选项并遮罩 */
+          showCrossGate(e, key);
+          return;
+        }
       }
     }
 
@@ -991,82 +1638,60 @@
   }
 
   function memoirTimeline() {
-    var items = [];
-    (game.memories || []).forEach(function (m) {
-      var tier = m.kind === 'echo' ? 'echo' : (m.kind === 'causal' ? 'echo' : (m.kind === 'crossroad' ? 'crossroad' : 'daily'));
-      items.push({ age: m.age, year: m.year, tier: tier, text: m.text });
-    });
-    (game.choiceLog || []).forEach(function (c) {
-      if (c.tier === 'crossroad') {
-        items.push({ age: c.age, year: c.year, tier: 'crossroad', text: '命运岔路：' + c.title + '。你选择了「' + c.label + '」。' });
-      }
-    });
-    (game.echoLog || []).forEach(function (x) {
-      items.push({
-        age: x.age, year: x.year, tier: 'echo',
-        text: '因果回响：' + x.eventTitle + '（源自 ' + (x.delay || 1) + ' 年前' +
-          (x.choiceLabel ? '的选择「' + x.choiceLabel + '」' : '的长期境况') + '）。'
-      });
-    });
-    var seen = {};
-    items = items.filter(function (it) {
-      var k = it.age + '|' + it.text;
-      if (seen[k]) return false;
-      seen[k] = true;
-      return true;
-    });
-    items.sort(function (a, b) { return a.age - b.age || a.year - b.year; });
-    if (!items.length) return '<div class="empty-note">还没有值得记下的事。</div>';
+    /* v3.3：只读 eventLog，唯一事实源；不做去重、排序、补全 */
+    var items = LS.memoirEntries(game);
+    if (items.length && items[0].legacy) {
+      return '<div class="empty-note">这一世没有留下记录。</div>';
+    }
+    if (!items.length) return '<div class="empty-note">这一世没有留下记录。</div>';
     return '<div class="timeline">' + items.map(function (m) {
       var badge = m.tier === 'echo' ? '<span class="tl-badge echo">因果回响</span>'
         : (m.tier === 'crossroad' ? '<span class="tl-badge cross">命运岔路</span>' : '');
-      return '<div class="tl-item ' + (m.tier === 'daily' ? '' : 'tl-' + m.tier) + '">' +
+      return '<div class="tl-item ' + (m.tier === 'daily' ? '' : 'tl-' + m.tier) + '"' +
+        ' data-eid="' + esc(m.eventId || '') + '" data-cid="' + esc(m.choiceId || '') + '">' +
         '<div class="tl-year">' + m.year + ' 年 · ' + m.age + ' 岁' + badge + '</div>' +
         '<div class="tl-text">' + esc(m.text) + '</div></div>';
     }).join('') + '</div>';
   }
 
   function memoirChain() {
-    var choices = (game.choiceLog || []).filter(function (c) { return c.tier === 'crossroad'; });
-    var echoes = game.echoLog || [];
-    var pending = game.pending || [];
-    if (!choices.length && !echoes.length) {
-      return '<div class="empty-note">还没有可串联的因果链。做出命运岔路的选择后，这里会自动把后续回响接起来。</div>';
+    /* v3.3：因果链只从 eventLog 取；回响必须能指回一条真实 choiceId，否则降级 */
+    var log = (game && game.eventLog) || [];
+    var hasChoice = {};
+    log.forEach(function (x) { if (x.choiceId) hasChoice[x.choiceId] = true; });
+    var choices = log.filter(function (x) { return x.tier === 'crossroad' && x.choiceId; });
+    var echoes = log.filter(function (x) {
+      return x.tier === 'echo' && x.echoOf && hasChoice[x.echoOf];
+    });
+    var degraded = log.filter(function (x) {
+      return x.tier === 'echo' && !(x.echoOf && hasChoice[x.echoOf]);
+    });
+    if (!choices.length && !echoes.length && !degraded.length) {
+      return '<div class="empty-note">这一世还没有可串联的因果链。</div>';
     }
-    choices.sort(function (a, b) { return a.age - b.age; });
-    var used = {};
     var blocks = choices.map(function (c) {
-      var key = c.key || (c.id + '@' + c.age);
-      var kids = echoes.filter(function (x) { if (x.choiceId === key) { used[x.eventId + '@' + x.age] = true; return true; } return false; });
-      var waits = pending.filter(function (p) { return p.choiceId === key; });
+      var kids = echoes.filter(function (x) { return x.echoOf === c.choiceId; });
       var nodes = '';
       kids.forEach(function (x) {
-        nodes += '<div class="chain-link"></div><div class="chain-node chain-echo">' +
-          '<span class="chain-badge">因果回响</span><b>' + x.age + ' 岁 · ' + esc(x.eventTitle) + '</b>' +
-          '<span class="chain-meta">' + (x.delay || 1) + ' 年后落地 · ' + x.year + ' 年</span></div>';
+        nodes += '<div class="chain-link"></div><div class="chain-node chain-echo" data-eid="' + esc(x.eventId) + '" data-cid="' + esc(x.choiceId || '') + '">' +
+          '<span class="chain-badge">因果回响</span><b>' + x.age + ' 岁 · ' + esc(x.title) + '</b>' +
+          '<span class="chain-meta">' + x.year + ' 年 · 源选择「' + esc(c.choiceLabel || '') + '」</span></div>';
       });
-      waits.forEach(function (p) {
-        nodes += '<div class="chain-link dotted"></div><div class="chain-node chain-wait">' +
-          '<span class="chain-badge wait">伏笔</span><b>预计 ' + p.dueAge + ' 岁兑现</b>' +
-          '<span class="chain-meta">' + esc(p.note || '已埋下，尚未触发') + '</span></div>';
-      });
-      if (!nodes) nodes = '<div class="chain-link"></div><div class="chain-empty">这条岔路在这段人生里还没有形成明确的回响。</div>';
-      return '<div class="chain-block"><div class="chain-node chain-choice">' +
+      if (!nodes) nodes = '<div class="chain-link"></div><div class="chain-empty">这条岔路在这一世还没有形成回响。</div>';
+      return '<div class="chain-block"><div class="chain-node chain-choice" data-eid="' + esc(c.eventId) + '" data-cid="' + esc(c.choiceId) + '">' +
         '<span class="chain-badge cross">命运岔路</span><b>' + c.age + ' 岁 · ' + esc(c.title) + '</b>' +
-        '<span class="chain-meta">你选择了「' + esc(c.label) + '」</span></div>' + nodes + '</div>';
+        '<span class="chain-meta">你选择了「' + esc(c.choiceLabel) + '」</span></div>' + nodes + '</div>';
     }).join('');
-
-    var others = echoes.filter(function (x) { return !used[x.eventId + '@' + x.age]; });
-    var otherHtml = others.length
-      ? '<div class="chain-block"><div class="chain-node chain-choice"><span class="chain-badge echo">其他回响</span><b>无明确岔路来源的因果回响</b></div>' +
-      others.map(function (x) {
-        return '<div class="chain-link"></div><div class="chain-node chain-echo">' +
-          '<span class="chain-badge">因果回响</span><b>' + x.age + ' 岁 · ' + esc(x.eventTitle) + '</b>' +
-          '<span class="chain-meta">源自 ' + (x.delay || 1) + ' 年前' + (x.choiceLabel ? '「' + esc(x.choiceLabel) + '」' : '的长期境况') + ' · ' + x.year + ' 年</span></div>';
+    var degradedHtml = degraded.length
+      ? '<div class="chain-block"><div class="chain-node chain-choice"><span class="chain-badge echo">无法指回源选择</span><b>这一世没有留下记录</b></div>' +
+      degraded.map(function (x) {
+        return '<div class="chain-link dotted"></div><div class="chain-node chain-wait" data-eid="' + esc(x.eventId) + '" data-cid="">' +
+          '<span class="chain-badge wait">降级</span><b>' + x.age + ' 岁 · 这一世没有留下记录</b>' +
+          '<span class="chain-meta">' + x.year + ' 年 · 无法指回源选择，不生成回响文案</span></div>';
       }).join('') + '</div>'
       : '';
-    return '<div class="chain-legend">每一段链条都来自真实的 choiceId 与年份匹配，不是文案拼接。</div>' +
-      blocks + otherHtml;
+    return '<div class="chain-legend">每一段链条都来自 eventLog 中真实存在的 choiceId；指不回的条目只显示“这一世没有留下记录”。</div>' +
+      blocks + degradedHtml;
   }
 
   function openMemoir(tab) {
@@ -1181,22 +1806,14 @@
       renderEnd();
       return;
     }
-    if (game.pendingSummary) {
+    if (game.pendingSummary || game.pendingStage) {
       $('sbTime').textContent = game.year + ' 年';
       $('sbAge').textContent = game.age + ' 岁';
       $('sbStage').textContent = stageBarText();
       $('sbAttrs').innerHTML = chips();
       paintSbMoney();
-      showStageSummary(game.stageSummary);
-      return;
-    }
-    if (game.pendingStage) {
-      $('sbTime').textContent = game.year + ' 年';
-      $('sbAge').textContent = game.age + ' 岁';
-      $('sbStage').textContent = stageBarText();
-      $('sbAttrs').innerHTML = chips();
-      paintSbMoney();
-      showStageOverlay(game.pendingStage);
+      if (game.pendingStage) showStageOverlay(game.pendingStage, false, game.stageSummary);
+      else showStageSummary(game.stageSummary);
       return;
     }
     var b = takePending();
@@ -1214,7 +1831,7 @@
     LS.save.autoSave(game);
   }
 
-  /* 轻量 toast：跳过平淡年等操作后的短提示 */
+  /* 轻量 toast：社交动作等操作后的短提示 */
   function showToast(text) {
     if (!text) return;
     var t = $('toast');
@@ -1232,28 +1849,13 @@
     showToast._timer = setTimeout(function () { t.classList.remove('show'); }, 2800);
   }
 
-  /* 右下角常驻：跳过平淡年（纯点击，最多 8 年） */
-  function skipQuietYears() {
-    if (!game || game.death.dead) return;
-    var h = overlayHost();
-    if (h && !h.hidden) return;
-    var r = LS.engine.skipQuiet(game);
-    if (r && r.years > 0) {
-      LS.save.autoSave(game);
-      if (r.note) showToast(r.note);
-      renderGame();
-    } else {
-      showToast('这一年没有可以跳过的平淡日子。');
-    }
-  }
-
   function bindGame() {
     $('btnDetail').addEventListener('click', openDetail);
+    var relBtn = $('btnRelation');
+    if (relBtn) relBtn.addEventListener('click', openRelationModal);
     $('btnSave').addEventListener('click', function () { openSaveModal('save'); });
     $('btnLoad').addEventListener('click', function () { openSaveModal('load'); });
     $('btnMemoir').addEventListener('click', function () { openMemoir('time'); });
-    var skip = $('btnSkipQuiet');
-    if (skip) skip.addEventListener('click', skipQuietYears);
     $('importFile').addEventListener('change', function (e) {
       var f = e.target.files && e.target.files[0];
       if (!f) return;
@@ -1509,6 +2111,102 @@
     }
   }
 
+  /* v3.1 人生履历卡：1080×1350，紧凑可截图分享 */
+  function exportResumeCard() {
+    var s = game && game.summary;
+    if (!s) {
+      openModal('还不能导出', '<p class="empty-note">人生结束后才能生成履历卡。</p>');
+      return;
+    }
+    try {
+      var c = document.createElement('canvas');
+      c.width = 1080;
+      c.height = 1350;
+      var ctx = c.getContext('2d');
+      var paper = '#f3efe6', ink = '#26282c', ink2 = '#5f6470', accent = '#9c4a34', ochre = '#a8894f';
+
+      ctx.fillStyle = paper;
+      ctx.fillRect(0, 0, 1080, 1350);
+      ctx.strokeStyle = '#ded6c6';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(52, 52, 976, 1246);
+
+      ctx.fillStyle = ochre;
+      ctx.fillRect(52, 52, 976, 10);
+
+      ctx.fillStyle = ink2;
+      ctx.font = '20px "Songti SC", "SimSun", serif';
+      ctx.fillText('LIFE RECORD · 人生履历卡', 92, 118);
+
+      ctx.fillStyle = ink;
+      ctx.font = '900 64px "Songti SC", "SimSun", serif';
+      ctx.fillText(String(s.name), 92, 200);
+
+      ctx.fillStyle = ink2;
+      ctx.font = '26px "Songti SC", "SimSun", serif';
+      ctx.fillText(s.birthYear + ' — ' + s.deathYear + '　·　' + s.age + ' 岁　·　' + String(s.reason || ''), 92, 246);
+
+      ctx.strokeStyle = '#ded6c6';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(92, 278);
+      ctx.lineTo(988, 278);
+      ctx.stroke();
+
+      drawCanvasRadar(ctx, s.radar, 320, 600, 185);
+
+      ctx.fillStyle = ink;
+      ctx.font = '26px "Songti SC", "SimSun", serif';
+      ctx.fillText('三个关键抉择', 620, 400);
+      var log = (game.choiceLog || []).slice();
+      var picks = log.filter(function (x) { return x.tier === 'crossroad'; });
+      if (picks.length < 3) picks = picks.concat(log.filter(function (x) { return x.tier !== 'crossroad'; }));
+      picks = picks.slice(0, 3);
+      var y = 452;
+      for (var i = 0; i < picks.length; i++) {
+        ctx.fillStyle = accent;
+        ctx.font = '22px "Songti SC", "SimSun", serif';
+        ctx.fillText((picks[i].age != null ? picks[i].age + ' 岁' : '') + ' · ' + String(picks[i].title || ''), 620, y);
+        ctx.fillStyle = ink;
+        ctx.font = '24px "Songti SC", "SimSun", serif';
+        var lab = wrapCanvasLines(ctx, '「' + String(picks[i].label || '') + '」', 350).slice(0, 2);
+        for (var j = 0; j < lab.length; j++) ctx.fillText(lab[j], 620, y + 38 + j * 34);
+        y += 38 + lab.length * 34 + 24;
+      }
+      if (!picks.length) {
+        ctx.fillStyle = ink2;
+        ctx.font = '24px "Songti SC", "SimSun", serif';
+        ctx.fillText('这一生没有留下明确的关键抉择。', 620, 452);
+      }
+
+      ctx.strokeStyle = '#c9bfae';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(92, 1010, 896, 190);
+      ctx.fillStyle = accent;
+      ctx.font = '24px "Songti SC", "SimSun", serif';
+      ctx.fillText('墓志铭', 116, 1052);
+      ctx.fillStyle = ink;
+      ctx.font = '30px "Songti SC", "SimSun", serif';
+      var ep = wrapCanvasLines(ctx, s.epitaph || s.evaluation || '', 840).slice(0, 4);
+      for (var k = 0; k < ep.length; k++) ctx.fillText(ep[k], 116, 1100 + k * 42);
+
+      ctx.fillStyle = ink2;
+      ctx.font = '20px "Songti SC", "SimSun", serif';
+      ctx.fillText('随机种子 ' + s.seed + ' · 本地离线生成，不联网', 92, 1256);
+
+      var url = c.toDataURL('image/png');
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = '人生履历卡_' + String(s.name).replace(/[\\/:*?"<>|]/g, '') + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('履历卡已生成，请查看下载目录。');
+    } catch (err) {
+      openModal('导出失败', '<p class="empty-note">当前浏览器无法生成图片：' + esc(String(err && err.message || err)) + '</p>');
+    }
+  }
+
   /* 成就与图鉴：全部成就 + 已收集结局/彩蛋 */
   function openCodex() {
     var store = LS.achRead() || {};
@@ -1570,12 +2268,14 @@
       ? '<div class="tag-row">' + tags.map(function (t) { return '<span class="tag-chip">' + esc(t) + '</span>'; }).join('') + '</div>'
       : '<div class="empty-note">这一生没有留下明确的标签。</div>';
     var survivors = s.survivors || [];
-    var survHtml = survivors.length
-      ? survivors.map(function (p) {
-        return '<div class="survivor-row"><span class="sv-name">' + esc(p.name || '——') + '</span>' +
-          '<span class="sv-role">' + esc(p.role || '') + '</span><span class="sv-stage">' + esc(p.stage || '') + '</span></div>';
-      }).join('')
-      : '<div class="empty-note">最后，身边没有留下什么人。</div>';
+    var survHtml = game
+      ? endSurvivorsHtml()
+      : (survivors.length
+        ? survivors.map(function (p) {
+          return '<div class="survivor-row"><span class="sv-name">' + esc(p.name || '——') + '</span>' +
+            '<span class="sv-role">' + esc(p.role || '') + '</span><span class="sv-stage">' + esc(p.stage || '') + '</span></div>';
+        }).join('')
+        : '<div class="empty-note">最后，身边没有留下什么人。</div>');
     var legacy = s.legacyOut || {};
     var legacyHtml = (Number(legacy.reputation) || Number(legacy.cash))
       ? '<div class="legacy-note">传承 · 这一世留下：声望 +' + esc(legacy.reputation || 0) + ' · 现金 +' + esc(LS.fmtMoney(legacy.cash || 0)) +
@@ -1633,6 +2333,7 @@
 
       '<div class="end-actions">' +
       '<button class="btn share-btn" id="btnShareCard">导出分享卡</button>' +
+      '<button class="btn" id="btnResumeCard">人生履历卡</button>' +
       '<button class="btn" id="btnCodex">成就图鉴</button>' +
       '<button class="btn" id="btnEndLoad">读取存档</button>' +
       '<button class="btn primary" id="btnEndNew">开启新人生</button>' +
@@ -1651,6 +2352,7 @@
     });
     $('btnEndExit').addEventListener('click', function () { $('exitScreen').hidden = false; });
     $('btnShareCard').addEventListener('click', exportShareCard);
+    $('btnResumeCard').addEventListener('click', exportResumeCard);
     $('btnCodex').addEventListener('click', openCodex);
     $('btnEndMemoirTime').addEventListener('click', function () { openMemoir('time'); });
     $('btnEndMemoirChain').addEventListener('click', function () { openMemoir('chain'); });
@@ -1760,14 +2462,18 @@
       render: renderGame,
       renderEnd: renderEnd,
       openDetail: openDetail,
+      openRelationModal: openRelationModal,
       openMemoir: openMemoir,
       handleResult: handleResult,
       showStage: showStageOverlay,
       showSummary: showStageSummary,
       showBroadcast: showBroadcast,
+      showCrossGate: showCrossGate,
       radarSvg: radarSvg,
       exportShareCard: exportShareCard,
+      exportResumeCard: exportResumeCard,
       openCodex: openCodex,
+      __testSceneKey: sceneKeyOf,
       applyLoaded: applyLoaded,
       closeOverlay: closeOverlay,
       previewEvent: function (id, echoInfo) {

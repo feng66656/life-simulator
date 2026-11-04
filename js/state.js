@@ -5,7 +5,7 @@
   'use strict';
   var LS = window.LS = window.LS || {};
 
-  LS.VERSION = '3.0.0';
+  LS.VERSION = '3.3.0';
   LS.START_YEAR = 2005;
   LS.FREE_POINTS = 30;
   LS.SAVE_PREFIX = 'lifesim_v1_';
@@ -175,20 +175,47 @@
     return null;
   };
 
-  /* ---------------- NPC 关系阶段（带迟滞的双向变化） ---------------- */
-  LS.RELATION_STAGES = ['陌生', '熟悉', '亲密', '疏离', '决裂'];
-  LS.relationStageOf = function (favor, prev) {
-    var f = Number(favor);
-    if (isNaN(f)) f = 50;
-    var p = (prev && LS.RELATION_STAGES.indexOf(prev) >= 0) ? prev : '陌生';
-    if (f >= 80) return '亲密';
-    if (f >= 60) {
-      /* 疏离/决裂要回升到 65 才重新算熟悉，避免在 60 附近来回跳 */
-      if ((p === '疏离' || p === '决裂') && f < 65) return p;
-      return '熟悉';
-    }
-    if (f >= 35) return '疏离';
-    return '决裂';
+  /* ---------------- NPC 关系档位（亲密度 + 人情账 + 锚点） ---------------- */
+  LS.RELATION_STAGES = ['陌生', '相识', '熟络', '亲近', '至亲', '疏远', '决裂'];
+  LS.CIRCLES = ['亲属圈', '同学圈', '发小圈', '同事圈', '行业圈', '兴趣圈'];
+  LS.circleOf = function (role) {
+    var r = String(role || '');
+    if (/父|母|爸|妈|哥|姐|弟|妹|子|女|配偶|爱人|妻|夫|舅|姨|叔|伯/.test(r)) return '亲属圈';
+    if (/上司|老板|同事|下属/.test(r)) return '同事圈';
+    if (/发小/.test(r)) return '发小圈';
+    if (/同学/.test(r)) return '同学圈';
+    if (/客户|合作|同行|导师|恩人|仇人/.test(r)) return '行业圈';
+    if (/朋友|球友|牌友|书友|邻居/.test(r)) return '兴趣圈';
+    return '兴趣圈';
+  };
+  /* 档位：决裂/疏远优先；否则由亲密度决定，人情账只做微调 */
+  LS.relationOf = function (npcOrIntimacy, favor, prev) {
+    var n = (npcOrIntimacy && typeof npcOrIntimacy === 'object') ? npcOrIntimacy : null;
+    var v = n ? Number(n.intimacy) : Number(npcOrIntimacy);
+    var f = n ? Number(n.favor) : Number(favor);
+    if (isNaN(v)) v = 50;
+    if (isNaN(f)) f = 0;
+    var p = (n && n.relation) || prev || '陌生';
+    var betray = !!(n && n.anchors && n.anchors.some(function (a) { return a && /背叛|决裂|举报|坑/.test(a.kind || ''); }));
+    if (betray || v <= 8 || f <= -5) return '决裂';
+    if (v < 30 || f <= -3) return '疏远';
+    if (v >= 88) return '至亲';
+    if (v >= 74) return '亲近';
+    if (v >= 58) return '熟络';
+    if (v >= 38) return '相识';
+    if (p === '至亲' && v >= 70) return '至亲';
+    return '陌生';
+  };
+  LS.relationStageOf = function (value, prev) {
+    /* 兼容旧调用：旧代码传 0-100 的 favor 值 */
+    return LS.relationOf(Number(value), 0, prev);
+  };
+  LS.circleRep = function (g, circle, delta) {
+    if (!g) return 50;
+    g.circles = g.circles || {};
+    var c = g.circles[circle] || (g.circles[circle] = { rep: 50 });
+    if (delta !== undefined) c.rep = LS.clamp((Number(c.rep) || 50) + Number(delta || 0), 0, 100);
+    return LS.clamp(Number(c.rep) || 50, 0, 100);
   };
 
   /* 隐性健康隐患 */
@@ -381,6 +408,47 @@
       name: '零工', minEdu: 1, base: 46000, growth: 1.02,
       stress: 3.2, healthDrain: 0.90, repCap: { industry: 30, society: 25 },
       path: ['日结零工', '固定临时工', '小包工头', '劳务队头', '小老板'], rep: { school: 0.02, industry: 0.2, society: 0.15 }
+    },
+    /* v3.2：路径分化新增岗位 */
+    researcher: {
+      name: '科研人员', minEdu: 5, base: 102000, growth: 1.035,
+      stress: 3.0, healthDrain: 0.55, repCap: { industry: 92, society: 50 },
+      path: ['科研助理', '助理研究员', '副研究员', '研究员', '首席科学家'], rep: { school: 0.6, industry: 0.9, society: 0.3 }
+    },
+    designer: {
+      name: '设计师', minEdu: 3, base: 74000, growth: 1.045,
+      stress: 2.8, healthDrain: 0.65, repCap: { industry: 78, society: 45 },
+      path: ['设计助理', '设计师', '资深设计师', '设计主管', '创意总监'], rep: { school: 0.2, industry: 0.7, society: 0.3 }
+    },
+    media: {
+      name: '传媒从业者', minEdu: 3, base: 70000, growth: 1.04,
+      stress: 3.2, healthDrain: 0.60, repCap: { industry: 70, society: 62 },
+      path: ['实习编辑', '记者/编辑', '资深编辑', '主编', '内容总监'], rep: { school: 0.3, industry: 0.65, society: 0.5 }
+    },
+    legal: {
+      name: '法务', minEdu: 4, base: 92000, growth: 1.035,
+      stress: 3.4, healthDrain: 0.55, repCap: { industry: 80, society: 65 },
+      path: ['法务助理', '法务专员', '法务经理', '法务总监', '首席法务'], rep: { school: 0.4, industry: 0.75, society: 0.55 }
+    },
+    admin: {
+      name: '行政', minEdu: 3, base: 66000, growth: 1.028,
+      stress: 2.0, healthDrain: 0.35, repCap: { industry: 55, society: 58 },
+      path: ['行政专员', '行政主管', '办公室主任', '行政经理', '行政总监'], rep: { school: 0.2, industry: 0.45, society: 0.55 }
+    },
+    coach: {
+      name: '教练', minEdu: 2, base: 62000, growth: 1.03,
+      stress: 2.2, healthDrain: 0.45, repCap: { industry: 55, society: 50 },
+      path: ['助教', '青训教练', '主教练', '训练主管', '体育总监'], rep: { school: 0.1, industry: 0.5, society: 0.4 }
+    },
+    soldier: {
+      name: '军人', minEdu: 2, base: 68000, growth: 1.025,
+      stress: 3.0, healthDrain: 0.50, repCap: { industry: 45, society: 70 },
+      path: ['战士', '班长', '排长', '连长', '营长'], rep: { school: 0.1, industry: 0.3, society: 0.75 }
+    },
+    security: {
+      name: '安保', minEdu: 1, base: 48000, growth: 1.02,
+      stress: 2.6, healthDrain: 0.60, repCap: { industry: 30, society: 30 },
+      path: ['保安', '安保班长', '安保主管', '安保经理', '安保顾问'], rep: { school: 0.02, industry: 0.25, society: 0.2 }
     }
   };
   LS.jobName = function (id) { return id && LS.JOBS[id] ? LS.JOBS[id].name : '无固定职业'; };
@@ -556,6 +624,10 @@
       flags: {},
       marks: {},
       memories: [],
+      /* v3.3：唯一事实源——实际发生过的事件流水（回忆录只读这份） */
+      eventLog: [],
+      eventSeq: 0,
+      eventLogLegacy: false,
       fired: [],
       history: [],
       stats: {
@@ -596,22 +668,59 @@
       epoch: { name: '平稳年代', mods: {}, until: null },
       npcArc: {},
       npcInitiated: [],
+      kindnessLog: [],
+      payoffLog: [],
+      revengeLog: [],
+      outcomeLog: [],
+      eventFamilies: {},
+      blockedTurn: -99,
+      blockerLog: [],
+      track: null,
+      sibling: { has: false, role: null, name: null, ageGap: 0 },
+      circles: {
+        '亲属圈': { rep: 50 }, '同学圈': { rep: 50 }, '发小圈': { rep: 50 },
+        '同事圈': { rep: 50 }, '行业圈': { rep: 50 }, '兴趣圈': { rep: 50 }
+      },
+      socialQuota: { year: LS.START_YEAR, used: 0, max: 1 },
       legacy: { reputation: 0, cash: 0, source: null },
-      milestones: {},
       achievementsV3: [],
       lastSummaryAt: -99
     };
 
     g.npcs.push(LS.makeNPC('父亲', {
       id: 'father', age: fatherAge, health: LS.clamp(68 + bg.parentHealth, 30, 95),
-      favor: bg.fatherFavor, note: '家里的顶梁柱', gender: '男'
+      intimacy: bg.fatherFavor, note: '家里的顶梁柱', gender: '男',
+      anchors: [{ year: LS.START_YEAR, kind: 'birth', text: '你出生那天，他在医院走廊守了一夜' }]
     }));
     g.npcs.push(LS.makeNPC('母亲', {
       id: 'mother', age: motherAge, health: LS.clamp(72 + bg.parentHealth, 30, 96),
-      favor: bg.motherFavor, note: '操持家务的人', gender: '女'
+      intimacy: bg.motherFavor, note: '操持家务的人', gender: '女',
+      anchors: [{ year: LS.START_YEAR, kind: 'birth', text: '你出生那天，她把你抱在怀里' }]
     }));
 
-    LS.addMemory(g, '出生在' + g.birthplace + '的一个' + g.background + '家庭。父亲 ' + fatherAge + ' 岁，母亲 ' + motherAge + ' 岁。', 'birth');
+    /* 兄弟姐妹：贫困/农村更容易有；开局只生成哥哥/姐姐，弟弟/妹妹由童年事件加入 */
+    var sibChance = ({ '贫困': 0.52, '普通工薪': 0.36, '中产': 0.28, '富裕': 0.40 })[g.background] || 0.36;
+    if (LS.chance(sibChance)) {
+      var sibRole = LS.chance(0.5) ? '哥哥' : '姐姐';
+      var sibAge = LS.randInt(2, 6);
+      var sibGender = sibRole === '哥哥' ? '男' : '女';
+      var sibName = LS.randomName(sibGender);
+      g.sibling = { has: true, role: sibRole, name: sibName, ageGap: sibAge, id: 'sibling' };
+      g.npcs.push(LS.makeNPC(sibRole, {
+        id: 'sibling', name: sibName, age: sibAge, gender: sibGender,
+        intimacy: 58, circle: '亲属圈', note: '和你一起长大的' + sibRole,
+        anchors: [{ year: LS.START_YEAR + sibAge, kind: 'birth', text: sibRole + '比你大 ' + sibAge + ' 岁' }]
+      }));
+    }
+    g.socialQuota.max = 1 + (g.attrs.charm >= 60 ? 1 : 0);
+
+    var birthText = '出生在' + g.birthplace + '的一个' + g.background + '家庭。父亲 ' + fatherAge + ' 岁，母亲 ' + motherAge + ' 岁。';
+    LS.addMemory(g, birthText, 'birth');
+    LS.pushEventLog(g, {
+      turn: g.turn, age: g.age, year: g.year, stage: g.stage,
+      tier: 'sys', eventId: 'sys_birth', title: '出生', source: 'sys',
+      resultText: birthText
+    });
     LS.snapshot(g);
     g.stageStart = LS.stageSnapshot(g);
     g.rngState = LS.RNG.state;
@@ -622,21 +731,57 @@
   LS.NPC_LIFESPAN = function () { return 66 + LS.randInt(0, 24); };
   LS.makeNPC = function (role, opt) {
     opt = opt || {};
-    return {
+    var circle = opt.circle || LS.circleOf(role);
+    var intimacy = opt.intimacy !== undefined ? Number(opt.intimacy)
+      : (opt.favor !== undefined ? Number(opt.favor) : 50);
+    /* 旧调用把 favor 当 0-100 亲密度；新调用用 intimacy + favor(人情账) */
+    var ledger = (opt.intimacy !== undefined && opt.favor !== undefined) ? Number(opt.favor) : 0;
+    if (isNaN(intimacy)) intimacy = 50;
+    if (isNaN(ledger)) ledger = 0;
+    intimacy = LS.clamp(intimacy, 0, 100);
+    ledger = LS.clamp(ledger, -5, 5);
+    var npc = {
       id: opt.id || ('npc_' + role + '_' + Math.floor(Math.random() * 100000)),
       role: role,
       name: opt.name || role,
       gender: opt.gender || '男',
-      age: opt.age || 30,
+      age: opt.age === undefined ? 30 : opt.age,
       health: opt.health === undefined ? 75 : opt.health,
-      favor: opt.favor === undefined ? 50 : opt.favor,
+      circle: circle,
+      intimacy: intimacy,
+      favor: ledger,
+      relation: opt.relation || LS.relationOf(intimacy, ledger),
+      anchors: opt.anchors || [],
+      state: opt.state || { job: opt.job || null, health: opt.health === undefined ? 75 : opt.health, status: opt.status || null },
       alive: opt.alive === undefined ? true : opt.alive,
       note: opt.note || '',
       deathYear: null,
       lifespan: opt.lifespan || LS.NPC_LIFESPAN(),
       isChild: !!opt.isChild,
-      isSpouse: !!opt.isSpouse
+      isSpouse: !!opt.isSpouse,
+      lastContactYear: opt.lastContactYear === undefined ? null : opt.lastContactYear,
+      arcStage: opt.arcStage || '相遇'
     };
+    return npc;
+  };
+  /* 记忆锚点：1-3 条，超出时挤掉最旧的一条 */
+  LS.addAnchor = function (g, npc, kind, text, dIntimacy, dFavor) {
+    if (!npc) return null;
+    npc.anchors = npc.anchors || [];
+    var rec = { year: (g && g.year) || LS.START_YEAR, kind: kind || 'meet', text: String(text || '') };
+    npc.anchors.push(rec);
+    if (npc.anchors.length > 3) npc.anchors.shift();
+    if (dIntimacy) npc.intimacy = LS.clamp((Number(npc.intimacy) || 0) + Number(dIntimacy), 0, 100);
+    if (dFavor) npc.favor = LS.clamp((Number(npc.favor) || 0) + Number(dFavor), -5, 5);
+    npc.relation = LS.relationOf(npc);
+    if (g) {
+      g.npcArc = g.npcArc || {};
+      var arc = g.npcArc[npc.id] || { nodes: [] };
+      if (!arc.nodes) arc.nodes = [];
+      arc.nodes.push({ year: rec.year, age: g.age, kind: rec.kind, text: rec.text });
+      g.npcArc[npc.id] = arc;
+    }
+    return rec;
   };
 
   LS.getNpc = function (g, key) {
@@ -673,6 +818,81 @@
       text: body,
       kind: kind || 'choice'
     });
+  };
+
+  /* v3.3：eventLog 是“实际发生”的唯一事实源，只允许引擎在事件触发/结算时写入 */
+  LS.pushEventLog = function (g, entry) {
+    if (!g) return 0;
+    var e = entry || {};
+    g.eventLog = g.eventLog || [];
+    g.eventSeq = Number(g.eventSeq) || 0;
+    g.eventSeq += 1;
+    var rec = {
+      seq: g.eventSeq,
+      turn: Number(e.turn === undefined ? g.turn : e.turn),
+      age: Number(e.age === undefined ? g.age : e.age),
+      year: Number(e.year === undefined ? g.year : e.year),
+      stage: e.stage || g.stage || '',
+      tier: e.tier || 'daily',
+      eventId: e.eventId || ('sys_' + g.eventSeq),
+      title: e.title || '',
+      source: e.source || 'sys',
+      auto: !!e.auto,
+      choiceId: e.choiceId || null,
+      choiceIndex: e.choiceIndex === undefined ? null : e.choiceIndex,
+      choiceLabel: e.choiceLabel || '',
+      outcomeLabel: e.outcomeLabel || '',
+      resultText: e.resultText || '',
+      declared: e.declared || [],
+      changes: e.changes || '',
+      echoOf: e.echoOf || null
+    };
+    g.eventLog.push(rec);
+    if (g.eventLog.length > 1000) g.eventLog.shift();
+    return rec.seq;
+  };
+
+  LS.eventLogEntry = function (g, seq) {
+    if (!g || !g.eventLog || !seq) return null;
+    for (var i = g.eventLog.length - 1; i >= 0; i--) {
+      if (g.eventLog[i].seq === seq) return g.eventLog[i];
+    }
+    return null;
+  };
+
+  /* v3.3：回忆录唯一读取入口——禁止读 memories/choiceLog/echoLog，禁止补全 */
+  LS.memoirEntries = function (g) {
+    var out = [];
+    if (!g) return out;
+    var log = g.eventLog || [];
+    if (!log.length) {
+      if (g.eventLogLegacy) out.push({ legacy: true, text: '这一世没有留下记录' });
+      return out;
+    }
+    var hasChoice = {};
+    log.forEach(function (x) { if (x.choiceId) hasChoice[x.choiceId] = true; });
+    log.forEach(function (x) {
+      var tier = x.tier || 'daily';
+      var text;
+      var linked = false;
+      if (tier === 'sys') {
+        text = x.resultText || x.title;
+      } else if (tier === 'echo') {
+        linked = !!(x.echoOf && hasChoice[x.echoOf]);
+        text = linked ? ('因果回响：' + (x.title || '') + (x.resultText ? '。' + x.resultText : '')) : '这一世没有留下记录（无法指回源选择）';
+        if (!linked) tier = 'legacy';
+      } else if (tier === 'crossroad') {
+        text = '命运岔路：' + (x.title || '') + (x.choiceLabel ? '。你选择了「' + x.choiceLabel + '」' : '') + (x.resultText ? '。' + x.resultText : '');
+      } else {
+        text = (x.title ? x.title + '：' : '') + (x.resultText || (x.auto ? '日子照旧。' : ''));
+      }
+      out.push({
+        seq: x.seq, eventId: x.eventId, choiceId: x.choiceId || null,
+        age: x.age, year: x.year, tier: tier, title: x.title || '',
+        text: text, echoOf: x.echoOf || null, legacy: false
+      });
+    });
+    return out;
   };
 
   LS.snapshot = function (g) {
@@ -724,7 +944,7 @@
       debt: num(m.debt),
       tags: tags,
       npcs: ((g && g.npcs) || []).map(function (n) {
-        return { id: n.id, role: n.role, alive: !!n.alive, favor: num(n.favor) };
+        return { id: n.id, role: n.role, alive: !!n.alive, intimacy: num(n.intimacy), favor: num(n.favor), relation: n.relation, circle: n.circle };
       })
     };
   };
@@ -747,7 +967,7 @@
       id: 'love', name: '一生挚爱', desc: '婚姻持续 30 年以上，配偶好感 ≥ 80',
       cond: function (g) {
         var n = g.family.marriage.spouseId ? LS.getNpc(g, g.family.marriage.spouseId) : null;
-        return g.stats.marriedYears >= 30 && n && n.favor >= 80;
+        return g.stats.marriedYears >= 30 && n && (n.intimacy >= 80 || n.relation === '至亲');
       }
     },
     {
@@ -755,7 +975,7 @@
       cond: function (g) {
         var spouse = g.family.marriage.spouseId ? LS.getNpc(g, g.family.marriage.spouseId) : null;
         var hasFriend = g.npcs.some(function (n) {
-          return n.alive && (n.role === '朋友' || n.role === '同学' || n.role === '同事') && n.favor >= 60;
+          return n.alive && (n.role === '朋友' || n.role === '同学' || n.role === '同事') && n.intimacy >= 60;
         });
         return (!spouse || !spouse.alive) && g.family.childrenIds.length === 0 && !hasFriend;
       }
@@ -808,7 +1028,7 @@
         var n = 0;
         for (var i = 0; i < g.npcs.length; i++) {
           var x = g.npcs[i];
-          if (x && x.alive && x.favor >= 65) n++;
+          if (x && x.alive && x.intimacy >= 65) n++;
         }
         return n >= 2;
       }

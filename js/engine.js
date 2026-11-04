@@ -181,13 +181,24 @@
       var n = getNpcLoose(g, role);
       if (!n) continue;
       var fx = map[role] || {};
-      if (fx.favor) {
-        var f = fx.favor;
-        if (f > 0) f *= talentMul(g, 'favor');
-        n.favor = LS.clamp(n.favor + f, 0, 100);
+      if (fx.intimacy) {
+        n.intimacy = LS.clamp((Number(n.intimacy) || 0) + Number(fx.intimacy), 0, 100);
       }
-      if (fx.health) n.health = LS.clamp(n.health + fx.health, 0, 100);
+      if (fx.favor) {
+        var f = Number(fx.favor) || 0;
+        /* 兼容旧事件：|favor|>5 视为 0-100 亲密度增量 */
+        if (Math.abs(f) > 5) n.intimacy = LS.clamp((Number(n.intimacy) || 0) + f, 0, 100);
+        else n.favor = LS.clamp((Number(n.favor) || 0) + f, -5, 5);
+      }
+      if (fx.health) n.health = LS.clamp((Number(n.health) || 0) + fx.health, 0, 100);
       if (fx.alive === false) n.alive = false;
+      if (fx.state) n.state = { job: fx.state.job || n.state.job, health: fx.state.health === undefined ? n.state.health : fx.state.health, status: fx.state.status || null };
+      if (fx.anchor) {
+        LS.addAnchor(g, n, fx.anchor.kind || 'event', fx.anchor.text || '', 0, 0);
+      } else if (fx.favor || fx.intimacy) {
+        n.lastContactYear = g.year;
+      }
+      n.relation = LS.relationOf(n);
     }
   }
 
@@ -215,9 +226,7 @@
     promote:     { title: '升职', prio: 66, art: 'office', tone: 'gold', text: '职位上调，薪资随之提高，责任与加班也会一起增加。' },
     retire:      { title: '退休', prio: 64, art: 'home', tone: 'purple', text: '你办完了退休手续。工资停止，养老金开始，生活节奏整体慢了下来。' },
     big_gain:    { title: '获得大额财富', prio: 70, art: 'money', tone: 'gold', text: '一笔大额收入到账，家庭财务状况明显改善。' },
-    big_loss:    { title: '失去大额财富', prio: 80, art: 'money', tone: 'red', text: '一笔大额支出或损失发生，家庭财务明显收紧。' },
-    milestone80: { title: '天赋觉醒 · 80', prio: 90, art: 'spark', tone: 'good', text: '有一项能力走到了很少人到达的位置。你自己未必察觉，但周围的人已经改口，遇事先想到你。' },
-    milestone90: { title: '天赋觉醒 · 90', prio: 94, art: 'spark', tone: 'good', text: '这项能力已经越过了绝大多数人的上限。它带来机会，也带来别人难以理解的要求与孤独。' }
+    big_loss:    { title: '失去大额财富', prio: 80, art: 'money', tone: 'red', text: '一笔大额支出或损失发生，家庭财务明显收紧。' }
   };
   LS.BC_META = BC_META;
 
@@ -306,6 +315,14 @@
     g.flags = g.flags || {};
     g.flags.unemployed = false;
     g.flags.needJob = false;
+    /* v3.2：入职后出现上司，进入同事圈 */
+    var boss = LS.ensureNpc(g, '上司', {
+      id: 'boss', name: LS.randomName('男'), age: g.age + LS.randInt(6, 14),
+      gender: LS.chance(0.35) ? '女' : '男', intimacy: 46, circle: '同事圈',
+      state: { job: LS.JOBS[id].name + '主管', health: 80, status: null },
+      anchors: [{ year: g.year, kind: 'meet', text: '你入职' + LS.JOBS[id].name + '，成了他的下属' }]
+    });
+    boss.state.job = LS.JOBS[id].name + '主管';
     bcPush(g, 'job_found', null, {
       changes: '岗位：' + LS.JOBS[id].name + ' · ' + g.job.title + ' · 年薪 ' + LS.fmtMoney(g.job.salary) +
         '；标签：加班' + (g.job.tags ? g.job.tags.overtime : '—') + ' · 健康消耗' + (g.job.tags ? g.job.tags.health : '—')
@@ -505,11 +522,76 @@
           choiceId: ctx ? ctx.key : '',
           choiceAge: ctx ? ctx.age : null,
           choiceTitle: ctx ? ctx.title : '',
-          choiceLabel: ctx ? ctx.label : ''
+          choiceLabel: ctx ? ctx.label : '',
+          choiceScene: ctx ? (ctx.scene || '') : ''
         });
       });
     }
     if (fx.edu !== undefined) eduSet(g, fx.edu);
+    /* v3.2：路径分化 */
+    if (fx.track) {
+      g.track = fx.track;
+      g.trackSince = g.year;
+      g.trackLevel = (g.trackLevel || 0) + (fx.trackLevel || 1);
+      LS.addMemory(g, '你选择了' + (LS.TRACK_LABELS[fx.track] || fx.track) + '这条路。', 'track');
+    }
+    /* v3.2：善缘 / 亏欠（写入可追溯记录） */
+    if (fx.kindness) {
+      var klist = Array.isArray(fx.kindness) ? fx.kindness : [fx.kindness];
+      klist.forEach(function (k) {
+        var kn = getNpcLoose(g, k.role || k.id || '');
+        if (kn && LS.social) LS.social.kindness(g, kn, k.kind || 'help', k.text || '', k);
+      });
+    }
+    if (fx.wrong) {
+      var wlist = Array.isArray(fx.wrong) ? fx.wrong : [fx.wrong];
+      wlist.forEach(function (w) {
+        var wn = getNpcLoose(g, w.role || w.id || '');
+        if (wn && LS.social) LS.social.wrong(g, wn, w.kind || 'offend', w.text || '', w);
+      });
+    }
+    /* v3.2 echo：善缘兑现 / 报复落地，只标记原记录，避免同一笔账反复触发 */
+    if (fx.payoff) {
+      var pSpec = fx.payoff;
+      var pId = typeof pSpec === 'string' ? pSpec : (pSpec && pSpec.id);
+      var pRec = null;
+      (g.kindnessLog || []).forEach(function (r) {
+        if (!pRec && r && !r.resolved && r.id === pId) pRec = r;
+      });
+      if (pRec && LS.social && LS.social.markPayoff) {
+        g.payoffLog = g.payoffLog || [];
+        LS.social.markPayoff(g, pRec, g.lastEventId || '', (pSpec && pSpec.type) || 'payoff', (pSpec && pSpec.text) || '');
+      }
+    }
+    if (fx.revengeDone) {
+      var rSpec = fx.revengeDone;
+      var rId = typeof rSpec === 'string' ? rSpec : (rSpec && rSpec.id);
+      var rRec = null;
+      (g.revengeLog || []).forEach(function (r) {
+        if (!rRec && r && !r.resolved && r.id === rId) rRec = r;
+      });
+      if (rRec && LS.social && LS.social.markRevenge) {
+        g.revengeLog = g.revengeLog || [];
+        LS.social.markRevenge(g, rRec, g.lastEventId || '', (rSpec && rSpec.type) || 'revenge', (rSpec && rSpec.text) || '');
+      }
+    }
+    if (fx.ensureNpc) {
+      var en = fx.ensureNpc;
+      var elist = Array.isArray(en) ? en : [en];
+      elist.forEach(function (spec) {
+        LS.ensureNpc(g, spec.role || '朋友', spec);
+        if (spec.anchor) {
+          var nn = LS.getNpc(g, spec.id || spec.role);
+          if (nn) LS.addAnchor(g, nn, 'meet', spec.anchor, 0, 0);
+        }
+      });
+    }
+    if (fx.trackNpc) {
+      for (var tr in fx.trackNpc) {
+        var tn = getNpcLoose(g, tr);
+        if (tn && LS.social) LS.social.arc(g, tn, fx.trackNpc[tr]);
+      }
+    }
     if (fx.eduUp) eduSet(g, g.edu.level + 1);
     if (fx.job) setJob(g, fx.job);
     if (fx.quitJob) clearJob(g, '主动离开');
@@ -969,7 +1051,10 @@
     if (strategy === 'up') s -= 0.14;
     if (strategy === 'low') s += 0.20;
     if (strategy === 'referral') s += 0.15;
-    /* v3：时代背景影响求职概率 */
+    /* v3.2：心情太低，面试更难撑住 */
+    var hap = num0(g.attrs.happiness);
+    if (hap < 40) s -= (hap < 25 ? 0.15 : 0.08);
+    /* v3.2：时代背景影响求职概率 */
     if (g.epoch && g.epoch.mods && num0(g.epoch.mods.hunt)) s *= num0(g.epoch.mods.hunt);
     return LS.clamp(s, 0.12, 0.9);
   }
@@ -981,7 +1066,8 @@
       low: ['gig', 'sales', 'freelance', 'stateowned'],
       referral: ['stateowned', 'engineer', 'sales', 'teacher']
     };
-    var list = (map[strategy] || map.safe).filter(function (id) {
+    var base = (g.track && TRACK_POOLS[g.track] && TRACK_POOLS[g.track][strategy]) || map[strategy] || map.safe;
+    var list = base.filter(function (id) {
       var jd = LS.JOBS[id];
       return jd && (jd.minEdu || 0) <= g.edu.level;
     });
@@ -1045,16 +1131,17 @@
 
   function buildJobHuntEvent(g) {
     var tries = g.job.huntTries || 0;
-    var major = g.attrs.knowledge >= 60 ? '理工 / 研究型'
-      : (g.attrs.finance >= 55 ? '商科 / 管理型'
-        : (g.attrs.charm >= 55 ? '文史 / 沟通型' : '通用型'));
+    var major = g.track && LS.TRACK_LABELS[g.track] ? LS.TRACK_LABELS[g.track]
+      : (g.attrs.knowledge >= 60 ? '理工 / 研究型'
+        : (g.attrs.finance >= 55 ? '商科 / 管理型'
+          : (g.attrs.charm >= 55 ? '文史 / 沟通型' : '通用型')));
     var pct = function (p) { return Math.round(p * 100) + '%'; };
     var pSafe = huntChance(g, 'safe'), pUp = huntChance(g, 'up'), pLow = huntChance(g, 'low');
     var pRef = huntChance(g, 'referral');
     var chips =
       '手里的筹码：学历 ' + LS.eduName(g.edu.level) +
       ' · 学识 ' + g.attrs.knowledge +
-      ' · 专业倾向 ' + major +
+      ' · 方向 ' + major +
       ' · 声望 ' + LS.repTotal(g) +
       ' · 人脉 ' + (g.flags && g.flags.referralUsed ? '已消耗一次内推' : '尚可动用') +
       ' · 证书 ' + (g.marks.has_cert ? '有' : '无') +
@@ -1063,16 +1150,22 @@
       ? '毕业之后，工作不会自己找上门。招聘软件上挂着上百个岗位，真正愿意给你面试机会的却不多。你的学历、学识、声望与过往经历，共同决定了能碰到哪一档门槛。'
       : '又是一年。存款在减少，简历上的空档越来越显眼。招聘市场没有变好，你只能调整策略，再赌一次。') +
       '\n\n' + chips;
+    /* v3.2：选项文案按当前路径的实际岗位池生成，避免四条路线共用同一套选项 */
+    var poolLabel = function (strategy, n) {
+      var ids = huntPool(g, strategy);
+      var names = ids.slice(0, n).map(function (id) { return LS.JOBS[id] ? LS.JOBS[id].name : id; });
+      return names.join('、') + (ids.length > n ? ' 等' : '');
+    };
     var opts = [
-      { label: '稳妥求职：国企、事业单位与本地稳定岗位', hint: '成功率约 ' + pct(pSafe) + ' · 薪资中等 · 加班少', tone: 'safe',
+      { label: '稳妥求职：' + poolLabel('safe', 3), hint: '成功率约 ' + pct(pSafe) + ' · 薪资中等 · 加班少', tone: 'safe',
         apply: function (g2) { return resolveHunt(g2, 'safe'); } },
-      { label: '向上冲：大厂与高薪岗位', hint: '成功率约 ' + pct(pUp) + ' · 起薪高 · 加班与健康消耗大', tone: 'risk',
+      { label: '向上冲：' + poolLabel('up', 3), hint: '成功率约 ' + pct(pUp) + ' · 起薪高 · 加班与健康消耗大', tone: 'risk',
         apply: function (g2) { return resolveHunt(g2, 'up'); } },
-      { label: '先降预期：先有收入，再谈发展', hint: '成功率约 ' + pct(pLow) + ' · 薪资偏低 · 幸福感 -3', tone: 'switch',
+      { label: '先降预期：' + poolLabel('low', 2), hint: '成功率约 ' + pct(pLow) + ' · 薪资偏低 · 幸福感 -3', tone: 'switch',
         apply: function (g2) { return resolveHunt(g2, 'low'); } }
     ];
     if (LS.repTotal(g) >= 40) {
-      opts.push({ label: '托熟人内推', hint: '成功率约 ' + pct(pRef) + ' · 消耗人脉（社会声望 -5）', tone: 'switch',
+      opts.push({ label: '托熟人内推：' + poolLabel('referral', 2), hint: '成功率约 ' + pct(pRef) + ' · 消耗人脉（社会声望 -5）', tone: 'switch',
         apply: function (g2) { return resolveHunt(g2, 'referral'); } });
     }
     return {
@@ -1126,6 +1219,7 @@
     if (!e) return true;
     if (e.repeatable) return false;
     if (layerOf(e) === 'chain') return false;
+    if (e.family && g.eventFamilies && g.eventFamilies[e.family]) return true;
     return (g.eventSeen || []).indexOf(e.id) >= 0;
   }
 
@@ -1288,22 +1382,7 @@
     return out;
   }
 
-  /* UI 直接调用：从当前状态推进到下一个关键节点前，最多 8 年 */
-  function skipQuiet(g) {
-    if (!g || g.death.dead || g.current) return { years: 0, note: (g && g.quietNote) || '' };
-    var years = 0;
-    while (years < 8 && !g.death.dead) {
-      if (hasKeyEvent(g, g.age)) break;
-      var nextAge = g.age + 1;
-      if (g.turn >= MAX_TURNS || nextAge >= 110) break;
-      if (LS.stageOf(nextAge) !== g.stage) break;
-      if (!quietStep(g)) break;
-      years++;
-    }
-    var note = '';
-    if (years > 0) note = makeQuietNote(g, years);
-    return { years: years, note: note };
-  }
+  /* UI 直接调用：从当前状态推进到下一个关键节点前（v3.2 已删除“跳过平淡年”） */
 
   function selectEvent(g) {
     var E = LS.EVENTS;
@@ -1365,6 +1444,8 @@
           sourceTitle: chosen.item.choiceTitle || '',
           choiceLabel: chosen.item.choiceLabel || '',
           choiceId: chosen.item.choiceId || '',
+          parentChoiceId: chosen.item.choiceId || '',
+          sourceText: chosen.item.choiceScene || '',
           note: chosen.item.note || '',
           riskKey: chosen.item.riskKey || (chosen.ev && chosen.ev.riskKey) || '',
           oneLiner: (chosen.item.choiceLabel ? '当时你选择了「' + chosen.item.choiceLabel + '」' : (chosen.item.note || '此前的选择'))
@@ -1385,6 +1466,40 @@
         });
         if (g.echoLog.length > 120) g.echoLog = g.echoLog.slice(-120);
         return chosen.ev;
+      }
+    }
+
+    /* 2b. 善缘兑现 / 报复返场（10-20 年后，按人情账概率） */
+    if (LS.social) {
+      var dueK = LS.social.dueKindness(g);
+      if (dueK.length) {
+        var kev = LS.buildEchoEvent ? LS.buildEchoEvent(g, dueK[0], 'kind') : null;
+        if (kev) {
+          kev._echoParent = kev._echoParent || (dueK[0].choiceId || '');
+          if (!g.echoInfo) {
+            g.echoInfo = {
+              kind: 'echo', fromAge: dueK[0].age, years: Math.max(1, g.age - dueK[0].age),
+              sourceTitle: dueK[0].text || '', choiceLabel: '', parentChoiceId: dueK[0].choiceId || '',
+              oneLiner: '当年帮过的人'
+            };
+          }
+          return kev;
+        }
+      }
+      var dueR = LS.social.dueRevenge(g);
+      if (dueR.length) {
+        var rev = LS.buildEchoEvent ? LS.buildEchoEvent(g, dueR[0], 'revenge') : null;
+        if (rev) {
+          rev._echoParent = rev._echoParent || (dueR[0].choiceId || '');
+          if (!g.echoInfo) {
+            g.echoInfo = {
+              kind: 'echo', fromAge: dueR[0].age, years: Math.max(1, g.age - dueR[0].age),
+              sourceTitle: dueR[0].text || '', choiceLabel: '', parentChoiceId: dueR[0].choiceId || '',
+              oneLiner: '当年得罪过的人'
+            };
+          }
+          return rev;
+        }
       }
     }
 
@@ -1422,12 +1537,13 @@
               sourceTitle: org ? org.title : '长期的生活习惯',
               choiceLabel: org ? org.label : '',
               choiceId: '',
+              parentChoiceId: '',
               riskKey: rk,
               note: LS.RISK_LABEL[rk] || '',
               oneLiner: (LS.RISK_LABEL[rk] || '长期隐患')
             };
           } else if (picked.tier === 'echo' && !g.echoInfo) {
-            g.echoInfo = { kind: 'echo', fromAge: Math.max(0, g.age - 1), years: 1, sourceTitle: '', choiceLabel: '', oneLiner: '此前的经历' };
+            g.echoInfo = { kind: 'echo', fromAge: Math.max(0, g.age - 1), years: 1, sourceTitle: '', choiceLabel: '', parentChoiceId: '', oneLiner: '此前的经历' };
           }
           if (picked.tier === 'echo') {
             g.echoLog = g.echoLog || [];
@@ -1464,6 +1580,23 @@
     if (era.length && LS.chance(0.55)) {
       var ePick = pickWeighted(era, g);
       if (ePick) return ePick;
+    }
+
+    /* 3d. NPC 主动事件层：借钱/求助/邀约/翻脸，不一定每年发生（放在分支层之前，避免被高优先级剧情长期挤占） */
+    var npcPool = [];
+    for (var ni = 0; ni < E.length; ni++) {
+      var ne = E[ni];
+      if (layerOf(ne) !== 'npc') continue;
+      if (ne.stage && ne.stage !== g.stage) continue;
+      if (!condOk(g, ne)) continue;
+      if (isFired(g, ne)) continue;
+      if (isPendingFuture(g, ne.id)) continue;
+      if (seenBefore(g, ne)) continue;
+      npcPool.push(ne);
+    }
+    if (npcPool.length && LS.chance(0.36)) {
+      var nPick = pickWeighted(npcPool, g);
+      if (nPick) return nPick;
     }
 
     /* 3c. 分支剧情层：条件满足时按权重插入，替代当年的随机事件而非额外增加回合 */
@@ -1833,12 +1966,16 @@
       if (!n.alive) continue;
       /* v3：NPC 关系弧线，关系降级时留档（不改变原有死亡播报） */
       var arcOld = (g.npcArc[n.id] || {}).stage || null;
-      var arcNow = LS.relationStageOf(n.favor, arcOld);
-      if (arcOld && arcOld !== arcNow && (arcOld === '亲密' || arcOld === '熟悉') &&
-          (arcNow === '疏离' || arcNow === '决裂')) {
+      var arcNow = LS.relationStageOf(n.intimacy, arcOld);
+      if (arcOld && arcOld !== arcNow && (arcOld === '亲近' || arcOld === '熟络') &&
+          (arcNow === '疏远' || arcNow === '决裂')) {
         LS.addMemory(g, '这一年，你和' + n.name + '（' + n.role + '）的关系淡成了' + arcNow + '。', 'rel');
       }
-      g.npcArc[n.id] = { stage: arcNow, lastAge: g.age };
+      var arcRec = g.npcArc[n.id] || { nodes: [] };
+      if (!arcRec.nodes) arcRec.nodes = [];
+      arcRec.stage = arcNow;
+      arcRec.lastAge = g.age;
+      g.npcArc[n.id] = arcRec;
       n.age += 1;
       var decline = n.age > 70 ? 3.4 : n.age > 55 ? 2.0 : 0.9;
       if (n.isChild && n.age < 18) decline = 0;
@@ -1853,7 +1990,7 @@
         n.health = 0;
         n.alive = false;
         n.deathYear = g.year;
-        g.npcArc[n.id] = { stage: arcNow, lastAge: g.age, dead: true };
+        g.npcArc[n.id] = { stage: arcNow, lastAge: g.age, dead: true, nodes: (g.npcArc[n.id] || {}).nodes || [] };
         var drop = 0;
         if (n.role === '父亲' || n.role === '母亲') drop = 16;
         else if (n.role === '配偶') drop = 20;
@@ -2240,9 +2377,17 @@
     return 0;
   }
 
+  /* v3.3：回响的父选择必须能指回一条真实 choiceId；指不回就不写 */
+  function echoParentOf(g, e) {
+    if (!e || e.tier !== 'echo') return null;
+    var pid = e._echoParent || e.echoParent || (g.echoInfo && g.echoInfo.parentChoiceId) || '';
+    return pid || null;
+  }
+
   function nextEvent(g) {
     if (g.death.dead) return null;
     g.current = null;
+    g.echoInfo = null;
     g.currentId = null;
     g.quietNote = '';
 
@@ -2271,6 +2416,11 @@
         g.current = e;
         g.currentId = e.id;
         g.currentTier = e.tier || 'daily';
+        g.currentLogSeq = LS.pushEventLog(g, {
+          turn: g.turn, age: g.age, year: g.year, stage: g.stage, tier: e.tier || 'daily',
+          eventId: e.id, title: e.title, source: layerOf(e), auto: true,
+          echoOf: echoParentOf(g, e)
+        });
         g._auto = true;
         var ar = choose(g, pickDefaultIndex(e));
         g._auto = false;
@@ -2303,7 +2453,7 @@
 
     /* v3：去重记录（每日/随机/支线）与冷却统计 */
     var layer = layerOf(e);
-    if (layer === 'random' || layer === 'branch' || layer === 'era') {
+    if (layer === 'random' || layer === 'branch' || layer === 'era' || layer === 'npc' || layer === 'echo') {
       if (!g.eventSeen) g.eventSeen = [];
       if (g.eventSeen.indexOf(e.id) < 0) g.eventSeen.push(e.id);
       if (g.eventSeen.length > 240) g.eventSeen = g.eventSeen.slice(-240);
@@ -2313,6 +2463,21 @@
     g.eventCD[e.id] = { lastAge: g.age, runs: num0(oldCd.runs) + 1 };
 
     g.lastEventId = e.id;
+    /* v3.3：唯一事实源 eventLog（自动结算与手动事件都写；回忆录只读它） */
+    g.currentLogSeq = LS.pushEventLog(g, {
+      turn: g.turn, age: g.age, year: g.year, stage: g.stage, tier: e.tier || 'daily',
+      eventId: e.id, title: e.title, source: layer, auto: false,
+      echoOf: echoParentOf(g, e)
+    });
+    /* v3.2：事件流水保留用于统计，但不再作为回忆录来源 */
+    g.eventRunLog = g.eventRunLog || [];
+    g.eventRunLog.push({ turn: g.turn, age: g.age, year: g.year, stage: g.stage, eventId: e.id, title: e.title, layer: layer, family: e.family || '' });
+    if (g.eventRunLog.length > 300) g.eventRunLog.shift();
+    if (e.family) {
+      g.eventFamilies = g.eventFamilies || {};
+      g.eventFamilies[e.family] = true;
+    }
+    if (layer === 'npc') g.npcInitiated.push({ id: e.id, npcId: e.npcId || '', age: g.age, year: g.year });
     return e;
     }
   }
@@ -2326,6 +2491,8 @@
     var baseBefore = { attrs: JSON.parse(JSON.stringify(g.attrs)), rep: LS.repTotal(g) };
     var report = {};
     var text = '';
+    var declared = [];
+    var outcomeLabel = '';
     var ev = g.current;
     var ctx = {
       key: (ev.id || 'ev') + '@' + g.age,
@@ -2335,7 +2502,8 @@
       title: ev.title,
       label: opt.label,
       tier: ev.tier || 'daily',
-      tags: opt.tags || []
+      tags: opt.tags || [],
+      scene: ev.text || ''
     };
     g._ctxChoice = ctx;
     g.crossSeen = g.crossSeen || {};
@@ -2346,31 +2514,69 @@
       var applied = opt.apply(g, report);
       if (applied) text = applied;
     }
+    if (!text && opt.outcomes && opt.outcomes.length) {
+      var total = 0;
+      var hap = num0(g.attrs.happiness);
+      var hard = isHardOpt(opt);
+      var weights = opt.outcomes.map(function (o, i) {
+        var w = Math.max(0, Number(o.w) || 0);
+        if (hard && hap < 40 && i === 0) w = w * (hap < 25 ? 0.70 : 0.85);
+        total += w;
+        return w;
+      });
+      declared = opt.outcomes.map(function (o) { return o.text || o.label || ''; });
+      var roll = LS.rand() * total;
+      var pick = 0;
+      for (var oi = 0; oi < weights.length; oi++) {
+        roll -= weights[oi];
+        if (roll <= 0) { pick = oi; break; }
+      }
+      var oc = opt.outcomes[pick];
+      applyFx(g, oc.fx, report);
+      text = oc.text || oc.label || '';
+      outcomeLabel = oc.label || '';
+      ctx.outcome = oc.label || '';
+      g.outcomeLog.push({
+        year: g.year, age: g.age, eventId: ctx.id, eventTitle: ev.title, opt: opt.label, choiceId: ctx.key,
+        outcome: oc.label, idx: pick, weights: weights, declared: declared, resultText: text
+      });
+      if (g.outcomeLog.length > 200) g.outcomeLog.shift();
+    }
     if (!text && opt.gamble) {
       var pv = typeof opt.gamble.p === 'function' ? opt.gamble.p(g) : opt.gamble.p;
-      var win = LS.chance(LS.clamp((isFinite(pv) ? pv : 0.5) + luckOf(g) * 0.12, 0.03, 0.97));
+      var pAdj = LS.clamp((isFinite(pv) ? pv : 0.5) + luckOf(g) * 0.12, 0.03, 0.97);
+      if (isHardOpt(opt) && num0(g.attrs.happiness) < 40) {
+        pAdj = LS.clamp(pAdj - (num0(g.attrs.happiness) < 25 ? 0.18 : 0.10), 0.03, 0.97);
+        ctx.hapPenalty = true;
+      }
+      declared = [opt.gamble.winText || '', opt.gamble.loseText || ''];
+      var win = LS.chance(pAdj);
       if (win) {
         applyFx(g, opt.gamble.win, report);
         text = opt.gamble.winText || '';
+        outcomeLabel = '成功';
       } else {
         applyFx(g, opt.gamble.lose, report);
         text = opt.gamble.loseText || '';
+        outcomeLabel = '失败';
       }
+      g.outcomeLog.push({
+        year: g.year, age: g.age, eventId: ctx.id, eventTitle: ev.title, opt: opt.label, choiceId: ctx.key,
+        outcome: outcomeLabel, p: pAdj, declared: declared, resultText: text
+      });
+      if (g.outcomeLog.length > 200) g.outcomeLog.shift();
     }
     g._ctxChoice = null;
 
     clampAttrs(g);
     moneyRound(g);
-
-    /* v3：决策点计数——同一年同一事件只计一次，避免重复点击灌水 */
     var decKey = (ctx.id || '') + '@' + g.age + '#' + g.turn;
     if (!g._auto && (!g._decCounted || g._decCounted !== decKey)) {
       g.decisionCount = num0(g.decisionCount) + 1;
       g._decCounted = decKey;
     }
-    checkMilestones(g);
 
-    /* v2：记录真实选择，供因果链视图使用（带延迟回响的选项也要留源，含自动结算的日常事件） */
+    /* v2：记录真实选择，供因果链逻辑使用（回忆录不再读它） */
     if (ctx.tier === 'crossroad' || (ctx.tags.length) || (opt.fx && opt.fx.flag)) {
       g.choiceLog = g.choiceLog || [];
       g.choiceLog.push(ctx);
@@ -2379,8 +2585,24 @@
 
     var changes = describeChanges(g, baseBefore);
     var outcome = text ? text + (changes ? '（' + changes + '）' : '') : (changes ? changes : '日子照旧。');
-    g.lastOutcome = { text: outcome, title: ev.title, year: g.year, age: g.age, tier: ev.tier || 'daily' };
-    /* 回忆录只收录选项自带的记忆标签，避免每个日常选择都灌进去 */
+
+    /* v3.3：回填唯一事实源；lastOutcome 只记录玩家手动选择，自动结算不得覆盖 */
+    var logEntry = LS.eventLogEntry(g, g.currentLogSeq);
+    if (logEntry) {
+      logEntry.choiceId = ctx.key;
+      logEntry.choiceIndex = index;
+      logEntry.choiceLabel = opt.label || '';
+      logEntry.outcomeLabel = outcomeLabel;
+      logEntry.resultText = text || '';
+      logEntry.declared = declared.slice();
+      logEntry.changes = changes;
+    }
+    if (!g._auto) {
+      g.lastOutcome = {
+        text: outcome, title: ev.title, year: g.year, age: g.age, tier: ev.tier || 'daily',
+        eventId: ev.id, choiceId: ctx.key, logSeq: g.currentLogSeq, choiceLabel: opt.label
+      };
+    }
 
     g.current = null;
     g.currentId = null;
@@ -2394,28 +2616,48 @@
     return { ok: true, outcome: outcome, changes: changes, dead: false };
   }
 
-  var MILESTONE_ITEMS = [
-    { key: 'knowledge', label: '学识' }, { key: 'health', label: '健康' },
-    { key: 'finance', label: '财力' }, { key: 'charm', label: '魅力' },
-    { key: 'happiness', label: '幸福感' }, { key: 'reputation', label: '声望' }
-  ];
+  /* v3.2：困难/毅力类选项（低心情时更难成） */
+  function isHardOpt(opt) {
+    if (!opt) return false;
+    if (opt.hard) return true;
+    if (opt.tags && opt.tags.indexOf('hard') >= 0) return true;
+    var s = (opt.label || '') + ' ' + (opt.hint || '');
+    return /毅力|咬牙|硬撑|熬夜|坚持|拼|赌|风险|创业|考试|面试|借/.test(s);
+  }
+  LS.isHardOpt = isHardOpt;
 
-  function checkMilestones(g) {
-    g.milestones = g.milestones || {};
-    for (var i = 0; i < MILESTONE_ITEMS.length; i++) {
-      var m = MILESTONE_ITEMS[i];
-      var v = m.key === 'reputation' ? LS.repTotal(g) : num0(g.attrs[m.key]);
-      var bars = [80, 90];
-      for (var j = 0; j < bars.length; j++) {
-        var bar = bars[j];
-        var mk = m.key + '_' + bar;
-        if (v < bar || g.milestones[mk]) continue;
-        g.milestones[mk] = true;
-        bcPush(g, bar === 90 ? 'milestone90' : 'milestone80', null, {
-          title: '天赋觉醒 · ' + m.label + ' ' + bar,
-          changes: m.label + ' 跨过 ' + bar
-        });
-      }
+  /* v3.2：路径分化职业池 */
+  var TRACK_POOLS = {
+    science: { safe: ['civil', 'stateowned', 'researcher'], up: ['engineer', 'researcher', 'doctor', 'startup'], low: ['gig', 'stateowned', 'sales'], referral: ['stateowned', 'engineer', 'researcher'] },
+    arts:    { safe: ['teacher', 'admin', 'stateowned'], up: ['media', 'legal', 'startup', 'sales'], low: ['gig', 'admin', 'sales'], referral: ['teacher', 'stateowned', 'media'] },
+    art:     { safe: ['designer', 'freelance', 'teacher'], up: ['designer', 'freelance', 'startup'], low: ['gig', 'freelance', 'designer'], referral: ['designer', 'freelance', 'teacher'] },
+    sports:  { safe: ['coach', 'security', 'stateowned'], up: ['coach', 'soldier', 'startup'], low: ['gig', 'security', 'sales'], referral: ['coach', 'stateowned', 'soldier'] }
+  };
+  LS.TRACK_POOLS = TRACK_POOLS;
+  LS.TRACK_LABELS = {
+    science: '理科（工程/科研/技术）', arts: '文科（传媒/法务/行政/教育）',
+    art: '艺术（设计/艺术圈/自由职业）', sports: '体育（体校/参军/教练/安保）'
+  };
+
+  /* v3.2：关键社交角色在对应年龄自动入场，保证 NPC 主动事件有目标 */
+  function ensureSocialNpcs(g) {
+    if (!g || !g.npcs || !LS.addNpc) return;
+    if (g.age >= 6 && !LS.getNpc(g, '发小')) {
+      var fn = LS.randomName('男');
+      LS.addNpc(g, '发小', {
+        id: 'faxiao', name: fn, age: g.age + LS.randInt(-1, 1),
+        intimacy: 64, circle: '发小圈', note: '从小在一条巷子里长大',
+        anchors: [{ year: g.year, kind: 'meet', text: '你们在巷口一起玩到天黑' }]
+      });
+      LS.addMemory(g, '你认识了发小' + fn + '。', 'rel');
+    }
+    if (g.age >= 7 && !LS.getNpc(g, '同学')) {
+      var cn = LS.randomName(LS.chance(0.5) ? '男' : '女');
+      LS.addNpc(g, '同学', {
+        id: 'classmate', name: cn, age: g.age + LS.randInt(-1, 1),
+        intimacy: 54, circle: '同学圈', note: '小学同班',
+        anchors: [{ year: g.year, kind: 'meet', text: '你们成了同桌' }]
+      });
     }
   }
 
@@ -2435,8 +2677,15 @@
     tickEconomy(g);
     tickHealth(g);
     tickNpcs(g);
+    ensureSocialNpcs(g);
     clampAttrs(g);
     LS.snapshot(g);
+
+    /* v3.2：年度社交——配额重置、亲密度自然衰减 */
+    if (LS.social) {
+      LS.social.beginYear(g);
+      LS.social.decay(g);
+    }
 
     var reason = deathReason(g);
     if (reason) {
@@ -2446,6 +2695,11 @@
 
     /* v3：阶段跨越——先落“长期影响”，再生成总结卡，最后才排过场 */
     if (toStage !== fromStage) {
+      LS.pushEventLog(g, {
+        turn: g.turn, age: g.age, year: g.year, stage: toStage, tier: 'sys',
+        eventId: 'sys_stage_' + (LS.stageKeyOf(g.age) || g.age), title: '进入' + toStage,
+        source: 'sys', resultText: '这一年的门槛：' + toStage
+      });
       var impacts = writeStageImpact(g, fromStage);
       g.stageSummary = buildStageSummary(g, fromStage, toStage, impacts);
       g.pendingSummary = true;
@@ -2468,27 +2722,30 @@
     var a = advance(g);
     if (a.dead) return { ok: true, dead: true, summary: g.summary, outcome: r.outcome, changes: r.changes, event: null };
 
-    /* v3 暂停优先级：死亡 → 阶段总结卡 → 阶段过场 → 播报 → 下一事件 */
+    /* v3.2 暂停优先级：死亡 → 阶段过场（内嵌阶段总结）→ 播报 → 下一事件；每回合最多 1 个阻断 */
+    if (g.pendingStage) {
+      g.blockedTurn = g.turn;
+      return { ok: true, dead: false, outcome: r.outcome, changes: r.changes, paused: 'stage', stage: g.pendingStage, summary: g.stageSummary, event: null };
+    }
     if (g.pendingSummary) {
+      g.pendingSummary = false;
+      g.blockedTurn = g.turn;
       return { ok: true, dead: false, outcome: r.outcome, changes: r.changes, paused: 'summary', summary: g.stageSummary, event: null };
     }
-    if (g.pendingStage) {
-      return { ok: true, dead: false, outcome: r.outcome, changes: r.changes, paused: 'stage', stage: g.pendingStage, event: null };
-    }
-    var b = pickBroadcast(g);
+    var b = (g.blockedTurn === g.turn) ? null : pickBroadcast(g);
     if (b) {
+      g.blockedTurn = g.turn;
       return { ok: true, dead: false, outcome: r.outcome, changes: r.changes, paused: 'broadcast', broadcast: b, event: null };
     }
     var e = nextEvent(g);
     if (g.death.dead) {
       return { ok: true, dead: true, summary: g.summary, outcome: r.outcome, changes: r.changes, event: null };
     }
-    if (g.pendingSummary) {
-      return { ok: true, dead: false, outcome: r.outcome, changes: r.changes, paused: 'summary', summary: g.stageSummary, event: null };
-    }
     if (g.pendingStage) {
-      return { ok: true, dead: false, outcome: r.outcome, changes: r.changes, paused: 'stage', stage: g.pendingStage, event: null };
+      g.blockedTurn = g.turn;
+      return { ok: true, dead: false, outcome: r.outcome, changes: r.changes, paused: 'stage', stage: g.pendingStage, summary: g.stageSummary, event: null };
     }
+    if (g.pendingSummary) g.pendingSummary = false;
     return { ok: true, dead: false, outcome: r.outcome, changes: r.changes, event: e };
   }
 
@@ -2508,19 +2765,25 @@
 
     if (kind === 'summary' || (!kind && g.pendingSummary)) {
       g.pendingSummary = false;
-      if (g.pendingStage) {
-        return { ok: true, dead: false, paused: 'stage', stage: g.pendingStage, event: null };
-      }
+      if (g.pendingStage) consumeStage(g);
+      g.pendingSummary = false;
     }
     if (kind === 'stage' || (!kind && g.pendingStage)) {
       consumeStage(g);
+      g.pendingSummary = false;
     }
-    var b = pickBroadcast(g);
-    if (b) return { ok: true, dead: false, paused: 'broadcast', broadcast: b, event: null };
+    var b = (g.blockedTurn === g.turn) ? null : pickBroadcast(g);
+    if (b) {
+      g.blockedTurn = g.turn;
+      return { ok: true, dead: false, paused: 'broadcast', broadcast: b, event: null };
+    }
     var e = nextEvent(g);
     if (g.death.dead) return { ok: true, dead: true, summary: g.summary, event: null };
-    if (g.pendingSummary) return { ok: true, dead: false, paused: 'summary', summary: g.stageSummary, event: null };
-    if (g.pendingStage) return { ok: true, dead: false, paused: 'stage', stage: g.pendingStage, event: null };
+    if (g.pendingStage) {
+      g.blockedTurn = g.turn;
+      return { ok: true, dead: false, paused: 'stage', stage: g.pendingStage, summary: g.stageSummary, event: null };
+    }
+    if (g.pendingSummary) g.pendingSummary = false;
     return { ok: true, dead: false, event: e };
   }
 
@@ -2639,7 +2902,6 @@
     writeStageImpact: writeStageImpact,
     buildStageSummary: buildStageSummary,
     stageImpactActive: stageImpactActive,
-    skipQuiet: skipQuiet,
     hasKeyEvent: hasKeyEvent,
     quietStep: quietStep,
     epitaphOf: epitaphOf,
