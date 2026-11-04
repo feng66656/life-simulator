@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人生模拟器 · Life Simulator</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ========== 欢迎页 ========== -->
+  <section id="screen-welcome" class="screen active">
+    <div class="welcome-inner">
+      <div class="welcome-kicker">A LOCAL LIFE SIMULATION</div>
+      <h1 class="welcome-title">人生模拟器</h1>
+      <div class="welcome-ver">v2.0.0 · 本地单机版</div>
+      <p class="welcome-line">一年一回合。你不点选项，时间就不会向前走。</p>
+      <p class="welcome-line dim">从 2005 年的一声啼哭开始，走到你人生的终点。</p>
+      <div class="welcome-menu">
+        <button id="btnNew" class="btn primary big">开始新游戏</button>
+        <button id="btnLoadWelcome" class="btn big">读取存档</button>
+        <button id="btnExit" class="btn ghost big">退出游戏</button>
+      </div>
+      <div class="welcome-foot">纯本地运行 · 不联网 · 不使用 CDN · 存档保存在本机浏览器</div>
+    </div>
+  </section>
+
+  <!-- ========== 角色创建 ========== -->
+  <section id="screen-create" class="screen">
+    <div class="create-wrap">
+      <div class="create-head">
+        <h2>创建你的角色</h2>
+        <p>背景决定起点，天赋决定偏向，剩下的点数由你分配。人生没有完美开局。</p>
+      </div>
+
+      <div class="create-grid">
+        <div class="panel">
+          <div class="panel-title">基本信息</div>
+          <div class="field">
+            <label for="inName">姓名</label>
+            <input id="inName" type="text" maxlength="12" placeholder="例如：陈立" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="inGender">性别</label>
+            <select id="inGender">
+              <option value="男">男</option>
+              <option value="女">女</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="inBirthplace">出生地</label>
+            <select id="inBirthplace"></select>
+            <div class="field-note" id="noteBirthplace"></div>
+          </div>
+          <div class="field">
+            <label for="inBackground">家庭背景</label>
+            <select id="inBackground"></select>
+            <div class="field-note" id="noteBackground"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">天赋 <span class="panel-tip">最多选 2 个 · <span id="talentCount">0</span>/2</span></div>
+          <div id="talentGrid" class="talent-grid"></div>
+          <div class="field-note" id="noteTalents"></div>
+        </div>
+      </div>
+
+      <div class="panel attr-panel">
+        <div class="panel-title">属性分配 <span class="panel-tip">剩余点数：<b id="pointsLeft">30</b> · 总和：<span id="attrTotal">0</span></span></div>
+        <div class="attr-sliders" id="attrSliders"></div>
+        <div class="attr-foot">
+          <span id="attrHint">拖动滑块微调，每 1 点消耗 1 个剩余点数。</span>
+          <button id="btnResetAlloc" class="btn tiny">重置分配</button>
+        </div>
+      </div>
+
+      <div class="create-actions">
+        <button id="btnRandomChar" class="btn">随机生成角色</button>
+        <button id="btnCreateBack" class="btn ghost">返回</button>
+        <button id="btnStartGame" class="btn primary">开始人生</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 主游戏 ========== -->
+  <section id="screen-game" class="screen">
+    <header class="statusbar" id="statusbar">
+      <div class="sb-left">
+        <div class="sb-time" id="sbTime">2005 年</div>
+        <div class="sb-sub"><span id="sbAge">0 岁</span><i></i><span id="sbStage">婴幼儿</span></div>
+      </div>
+      <div class="sb-attrs" id="sbAttrs"></div>
+      <div class="sb-right">
+        <button id="btnDetail" class="btn tiny">查看详情</button>
+      </div>
+    </header>
+    <div class="annotation-bar" id="annotationBar" hidden></div>
+
+    <main class="play">
+      <section class="story" id="storyPanel">
+        <div class="story-inner">
+          <div class="story-main">
+            <div class="story-meta">
+              <span class="event-type" id="eventType">命运节点</span>
+              <span class="turn-no" id="turnNo">第 1 回合</span>
+            </div>
+            <div class="source-bar" id="sourceBar" hidden></div>
+            <h2 id="eventTitle">—</h2>
+            <div class="outcome" id="lastOutcome" hidden></div>
+          </div>
+          <div class="ev-art" id="evArt" hidden></div>
+        </div>
+        <div class="story-text" id="storyText"></div>
+      </section>
+      <footer class="options-wrap" id="optionsWrap">
+        <div class="options" id="options"></div>
+      </footer>
+    </main>
+
+    <div class="corner-actions" id="cornerActions">
+      <button id="btnSave" class="btn corner">存档</button>
+      <button id="btnLoad" class="btn corner">读档</button>
+      <button id="btnMemoir" class="btn corner">回忆录</button>
+    </div>
+  </section>
+
+  <!-- ========== 结算页 ========== -->
+  <section id="screen-end" class="screen">
+    <div class="end-wrap" id="endWrap"></div>
+  </section>
+
+</div>
+
+<!-- 过场 / 播报遮罩宿主（由 ui.js 注入内容） -->
+<div id="v2Overlay" class="v2-overlay" hidden></div>
+
+<!-- 调试面板（URL 带 #debug 时显示，用于逐类触发播报） -->
+<div id="debugPanel" class="debug-panel" hidden>
+  <div class="debug-title">调试面板 · 播报 / 过场</div>
+  <div id="debugBody" class="debug-body"></div>
+</div>
+
+<!-- 通用弹层 -->
+<div id="modal" class="modal" hidden>
+  <div class="modal-card" id="modalCard">
+    <div class="modal-head">
+      <h3 id="modalTitle">标题</h3>
+      <button id="modalClose" class="btn tiny">关闭</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- 退出提示 -->
+<div id="exitScreen" class="exit-mask" hidden>
+  <div class="exit-card">
+    <div class="exit-title">已退出游戏</div>
+    <p>本作完全在本地运行。你可以直接关闭这个标签页；已保存的存档仍保留在浏览器里。</p>
+    <button id="btnExitBack" class="btn">返回</button>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+
+<script src="js/state.js"></script>
+<script src="js/events.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/art.js"></script>
+<script src="js/save.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,661 @@
+﻿/* =========================================================
+   state.js — 常量、角色生成、派生计算、成就定义
+   ========================================================= */
+(function () {
+  'use strict';
+  var LS = window.LS = window.LS || {};
+
+  LS.VERSION = '2.0.0';
+  LS.START_YEAR = 2005;
+  LS.FREE_POINTS = 30;
+  LS.SAVE_PREFIX = 'lifesim_v1_';
+  LS.SLOT_COUNT = 5;
+
+  /* ---------------- 随机数：可存档的 mulberry32 ---------------- */
+  LS.RNG = {
+    state: 1,
+    reset: function (seed) {
+      this.state = (seed >>> 0) || 1;
+    },
+    next: function () {
+      var a = this.state = (this.state + 0x6D2B79F5) >>> 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+  };
+  LS.rand = function () { return LS.RNG.next(); };
+  LS.randInt = function (min, max) { return min + Math.floor(LS.rand() * (max - min + 1)); };
+  LS.pick = function (arr) { return arr[Math.floor(LS.rand() * arr.length)]; };
+  LS.chance = function (p) { return LS.rand() < p; };
+  LS.clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+  LS.round1 = function (v) { return Math.round(v * 10) / 10; };
+  LS.sum = function (arr) { return arr.reduce(function (a, b) { return a + b; }, 0); };
+
+  /* ---------------- 阶段 ---------------- */
+  LS.STAGES = ['婴幼儿', '童年', '少年', '青年', '中年', '中老年', '晚年'];
+  LS.stageOf = function (age) {
+    if (age <= 3) return '婴幼儿';
+    if (age <= 12) return '童年';
+    if (age <= 18) return '少年';
+    if (age <= 30) return '青年';
+    if (age <= 55) return '中年';
+    if (age <= 75) return '中老年';
+    return '晚年';
+  };
+  LS.stageRange = function (stage) {
+    var map = {
+      '婴幼儿': [0, 3], '童年': [4, 12], '少年': [13, 18], '青年': [19, 30],
+      '中年': [31, 55], '中老年': [56, 75], '晚年': [76, 120]
+    };
+    return map[stage] || [0, 120];
+  };
+
+  /* ---------------- 教育 ---------------- */
+  /* 事件三档：daily 普通日常 / echo 因果回响 / crossroad 命运岔路 */
+  LS.TIERS = {
+    daily: { key: 'daily', label: '日常', cls: 'tier-daily', icon: '·', art: false },
+    echo: { key: 'echo', label: '因果回响', cls: 'tier-echo', icon: '↻', art: true },
+    crossroad: { key: 'crossroad', label: '命运岔路', cls: 'tier-crossroad', icon: '⑂', art: true }
+  };
+  LS.tierOf = function (e) { return LS.TIERS[e && e.tier] || LS.TIERS.daily; };
+
+  /* v2 阶段命名：56 岁起对外统一显示“老年”（内部事件池仍沿用“中老年”） */
+  LS.stageLabel = function (s) { return s === '中老年' ? '老年' : s; };
+
+  /* 人生阶段过场：19 青年 / 31 中年 / 56 老年 */
+  LS.STAGE_MARKS = [
+    { age: 19, key: 'youth', label: '青年', title: '青年：世界刚刚展开',
+      desc: '你终于要为一些事自己拿主意了。世界比想象大，也比想象贵，而时间第一次显得不够用。',
+      art: 'youth' },
+    { age: 31, key: 'midlife', label: '中年', title: '中年：责任逐渐沉重',
+      desc: '账单、家人与身体同时伸手。你开始学会在很多事情上低头，也开始分清哪些东西不能丢。',
+      art: 'midlife' },
+    { age: 56, key: 'elder', label: '老年', title: '老年：岁月开始沉淀',
+      desc: '你不再那么急着证明什么。旧朋友渐渐少，慢下来的日子里，能记清的事反而更少。',
+      art: 'elder' }
+  ];
+  LS.stageKeyOf = function (age) {
+    for (var i = 0; i < LS.STAGE_MARKS.length; i++) {
+      if (LS.STAGE_MARKS[i].age === age) return LS.STAGE_MARKS[i].key;
+    }
+    return null;
+  };
+  LS.stageMark = function (key) {
+    for (var i = 0; i < LS.STAGE_MARKS.length; i++) {
+      if (LS.STAGE_MARKS[i].key === key) return LS.STAGE_MARKS[i];
+    }
+    return null;
+  };
+
+  /* 隐性健康隐患 */
+  LS.RISK_KEYS = ['lateNight', 'highStress', 'noExercise', 'badDiet'];
+  LS.RISK_LABEL = {
+    lateNight: '长期熬夜', highStress: '长期高压', noExercise: '缺乏运动', badDiet: '饮食失衡'
+  };
+
+  LS.EDU = ['未入学', '小学', '初中', '高中/中职', '专科', '本科', '硕士', '博士'];
+  LS.eduName = function (n) { return LS.EDU[LS.clamp(n, 0, LS.EDU.length - 1)]; };
+
+  /* ---------------- 出生地 ---------------- */
+  LS.BIRTHPLACES = {
+    '农村': {
+      label: '农村',
+      desc: '村庄或乡镇，熟人社会，教育资源薄，人情往来密。',
+      cashMul: 0.45, assetMul: 0.35,
+      mods: { knowledge: -5, health: 3, charm: -2, finance: -4, happiness: 1, reputation: -3 },
+      living: 9000, eduWeight: 0.45, stress: 0
+    },
+    '小城': {
+      label: '小城',
+      desc: '地级市或县城，生活成本低，机会有限但稳定。',
+      cashMul: 0.8, assetMul: 0.7,
+      mods: { knowledge: 0, health: 0, charm: 0, finance: 0, happiness: 0, reputation: 0 },
+      living: 15000, eduWeight: 0.65, stress: 0
+    },
+    '二线城市': {
+      label: '二线城市',
+      desc: '省会或强地级市，有像样的大学与产业，房价不低。',
+      cashMul: 1.15, assetMul: 1.15,
+      mods: { knowledge: 3, health: 0, charm: 2, finance: 2, happiness: 0, reputation: 2 },
+      living: 24000, eduWeight: 0.85, stress: 1
+    },
+    '一线城市': {
+      label: '一线城市',
+      desc: '北上广深，眼界与资源最集中，竞争和房价也最狠。',
+      cashMul: 1.45, assetMul: 1.6,
+      mods: { knowledge: 6, health: -1, charm: 4, finance: 3, happiness: -1, reputation: 5 },
+      living: 42000, eduWeight: 1.0, stress: 5
+    },
+    '海外小城': {
+      label: '海外小城',
+      desc: '华人聚居的海外小城，语言与身份是另一道门槛。',
+      cashMul: 1.2, assetMul: 1.1,
+      mods: { knowledge: 5, health: 1, charm: 4, finance: 1, happiness: 0, reputation: 4 },
+      living: 38000, eduWeight: 0.9, stress: 3
+    }
+  };
+
+  /* ---------------- 家庭背景 ---------------- */
+  LS.BACKGROUNDS = {
+    '贫困': {
+      label: '贫困',
+      desc: '父母打零工或务农，家里几乎没有积蓄，一场病就能击穿。',
+      cash: 2000, assets: 5000, fatherFavor: 52, motherFavor: 60,
+      parentHealth: -8, eduBonus: -0.15, stress: 6,
+      base: { knowledge: 38, health: 57, finance: 22, charm: 44, happiness: 48, reputation: 18 }
+    },
+    '普通工薪': {
+      label: '普通工薪',
+      desc: '父母在厂里或单位上班，有房贷，日子过得紧但稳定。',
+      cash: 16000, assets: 70000, fatherFavor: 65, motherFavor: 70,
+      parentHealth: 0, eduBonus: 0, stress: 2,
+      base: { knowledge: 49, health: 62, finance: 38, charm: 50, happiness: 57, reputation: 30 }
+    },
+    '中产': {
+      label: '中产',
+      desc: '父母有稳定职业和一套房，重视教育，也背着自己的房贷。',
+      cash: 65000, assets: 330000, fatherFavor: 72, motherFavor: 75,
+      parentHealth: 3, eduBonus: 0.12, stress: 0,
+      base: { knowledge: 58, health: 65, finance: 52, charm: 55, happiness: 62, reputation: 41 }
+    },
+    '富裕': {
+      label: '富裕',
+      desc: '家里有产业或多套房产，资源充足，但期待与规矩也更多。',
+      cash: 320000, assets: 1600000, fatherFavor: 74, motherFavor: 76,
+      parentHealth: 5, eduBonus: 0.22, stress: -2,
+      base: { knowledge: 64, health: 66, finance: 67, charm: 59, happiness: 66, reputation: 55 }
+    }
+  };
+
+  /* ---------------- 天赋（≥8，含正向与双面） ---------------- */
+  LS.TALENTS = [
+    {
+      id: 'memory', name: '过目不忘', tag: '学习',
+      desc: '记性好，读书省力。代价是更容易被“你应该更优秀”绑架。',
+      mods: { knowledge: 10, happiness: -1 },
+      eduBonus: 0.14, stress: 2
+    },
+    {
+      id: 'sickly', name: '体弱多病', tag: '双面',
+      desc: '从小跑医院，身体底子薄；但对人情冷暖更敏感。',
+      mods: { health: -14, happiness: 2, charm: 2 },
+      healthMul: 1.25, medEvents: 1
+    },
+    {
+      id: 'social', name: '社交达人', tag: '关系',
+      desc: '自来熟，饭桌上能把陌生人变成熟人。',
+      mods: { charm: 9, happiness: 2 },
+      favorGain: 1.45, stress: -1
+    },
+    {
+      id: 'lucky', name: '幸运儿', tag: '运气',
+      desc: '大事未必顺，小事常能躲过去。',
+      mods: { happiness: 3 },
+      luck: 0.08
+    },
+    {
+      id: 'ambitious', name: '野心勃勃', tag: '双面',
+      desc: '你很难接受“就这样吧”，但焦虑也跟着你。',
+      mods: { finance: 5, happiness: -2 },
+      incomeMul: 1.1, stress: 7
+    },
+    {
+      id: 'beauty', name: '天生丽质', tag: '外貌',
+      desc: '外貌带来善意，也带来不必要的麻烦。',
+      mods: { charm: 12, happiness: 1 },
+      favorGain: 1.12
+    },
+    {
+      id: 'steady', name: '心大手稳', tag: '双面',
+      desc: '不太容易慌，也不太容易兴奋。',
+      mods: { health: 3, happiness: 1 },
+      stress: -8, healthMul: 0.94
+    },
+    {
+      id: 'hardbone', name: '命硬', tag: '体质',
+      desc: '别人扛不过去的，你往往能扛过去。',
+      mods: { health: 5 },
+      healthMul: 0.86, deathMul: 0.85
+    },
+    {
+      id: 'math', name: '数理脑袋', tag: '学习',
+      desc: '对数字和结构天然敏感，适合技术路线。',
+      mods: { knowledge: 8, finance: 4 },
+      eduBonus: 0.08
+    },
+    {
+      id: 'art', name: '艺术细胞', tag: '审美',
+      desc: '对色彩、声音和情绪敏锐，但变现常常慢半拍。',
+      mods: { charm: 6, happiness: 3, knowledge: 1 },
+      artBonus: 0.2
+    }
+  ];
+
+  /* ---------------- 职业 ---------------- */
+  LS.JOBS = {
+    civil: {
+      name: '公务员', minEdu: 3, base: 78000, growth: 1.032,
+      stress: 1.6, healthDrain: 0.35, repCap: { industry: 45, society: 86 },
+      path: ['科员', '副科长', '科长', '副处长', '处长'], rep: { school: 0.15, industry: 0.3, society: 0.9 }
+    },
+    engineer: {
+      name: '工程师', minEdu: 4, base: 96000, growth: 1.04,
+      stress: 3.2, healthDrain: 0.60, repCap: { industry: 88, society: 55 },
+      path: ['助理工程师', '工程师', '高级工程师', '技术主管', '技术总监'], rep: { school: 0.2, industry: 0.85, society: 0.25 }
+    },
+    doctor: {
+      name: '医生', minEdu: 5, base: 108000, growth: 1.035,
+      stress: 4.0, healthDrain: 0.70, repCap: { industry: 90, society: 78 },
+      path: ['住院医师', '主治医师', '副主任医师', '主任医师', '科室主任'], rep: { school: 0.3, industry: 0.9, society: 0.6 }
+    },
+    teacher: {
+      name: '教师', minEdu: 4, base: 82000, growth: 1.03,
+      stress: 2.8, healthDrain: 0.50, repCap: { industry: 72, society: 82 },
+      path: ['新教师', '一级教师', '高级教师', '学科组长', '副校长'], rep: { school: 0.5, industry: 0.55, society: 0.75 }
+    },
+    stateowned: {
+      name: '国企职员', minEdu: 4, base: 88000, growth: 1.028,
+      stress: 1.8, healthDrain: 0.40, repCap: { industry: 60, society: 62 },
+      path: ['职员', '主管', '部门副经理', '部门经理', '副总'], rep: { school: 0.2, industry: 0.5, society: 0.45 }
+    },
+    sales: {
+      name: '销售', minEdu: 2, base: 68000, growth: 1.036,
+      stress: 3.6, healthDrain: 0.70, repCap: { industry: 65, society: 50 },
+      path: ['销售专员', '销售主管', '区域经理', '大区总监', '销售副总'], rep: { school: 0.1, industry: 0.55, society: 0.35 }
+    },
+    freelance: {
+      name: '自由职业', minEdu: 3, base: 58000, growth: 1.045,
+      stress: 2.4, healthDrain: 0.60, repCap: { industry: 75, society: 52 },
+      path: ['接单新人', '小有名气', '稳定合作', '工作室主理人', '行业前辈'], rep: { school: 0.05, industry: 0.6, society: 0.4 }
+    },
+    startup: {
+      name: '创业者', minEdu: 3, base: 30000, growth: 1.09,
+      stress: 4.6, healthDrain: 1.10, repCap: { industry: 92, society: 70 },
+      path: ['初创合伙人', '项目负责人', '公司老板', '多店经营', '行业人物'], rep: { school: 0.1, industry: 0.8, society: 0.55 }
+    },
+    gig: {
+      name: '零工', minEdu: 1, base: 46000, growth: 1.02,
+      stress: 3.2, healthDrain: 0.90, repCap: { industry: 30, society: 25 },
+      path: ['日结零工', '固定临时工', '小包工头', '劳务队头', '小老板'], rep: { school: 0.02, industry: 0.2, society: 0.15 }
+    }
+  };
+  LS.jobName = function (id) { return id && LS.JOBS[id] ? LS.JOBS[id].name : '无固定职业'; };
+  LS.jobTitle = function (id, level) {
+    if (!id || !LS.JOBS[id]) return '待业';
+    var j = LS.JOBS[id];
+    return j.path[LS.clamp(level || 0, 0, j.path.length - 1)];
+  };
+  LS.jobSalary = function (id, level) {
+    if (!id || !LS.JOBS[id]) return 0;
+    var j = LS.JOBS[id];
+    return Math.round(j.base * (0.78 + 0.22 * (level || 0)) / 100) * 100;
+  };
+
+  /* ---------------- 名字池 ---------------- */
+  LS.SURNAMES = ['陈', '林', '王', '李', '张', '刘', '周', '吴', '徐', '孙', '马', '朱', '胡', '郭', '何', '高', '罗', '郑', '梁', '谢'];
+  LS.GIVEN_M = ['立', '强', '伟', '磊', '军', '涛', '斌', '鹏', '宇', '浩', '晨', '峰', '健', '博', '宁', '川', '明', '诚', '航', '昇'];
+  LS.GIVEN_F = ['静', '敏', '丽', '娟', '宁', '颖', '雪', '琳', '倩', '婷', '悦', '雯', '佳', '冉', '瑶', '悦', '菲', '澜', '澜', '昕'];
+  LS.randomName = function (gender) {
+    var s = LS.pick(LS.SURNAMES);
+    var g = (gender === '女') ? LS.pick(LS.GIVEN_F) : LS.pick(LS.GIVEN_M);
+    if (LS.chance(0.22)) g += (gender === '女') ? LS.pick(LS.GIVEN_F) : LS.pick(LS.GIVEN_M);
+    return s + g;
+  };
+  LS.randomSpouseName = function (gender) {
+    var target = (gender === '男') ? '女' : '男';
+    return LS.randomName(target);
+  };
+
+  /* ---------------- 派生值 ---------------- */
+  LS.repTotal = function (g) {
+    var r = g.rep || { school: 0, industry: 0, society: 0 };
+    return Math.round((r.school * 0.8 + r.industry * 1.15 + r.society * 1.35) / 3.3);
+  };
+  LS.netWorth = function (g) {
+    return Math.round((g.money.cash || 0) + (g.money.assets || 0) - (g.money.debt || 0));
+  };
+  LS.fmtMoney = function (n) {
+    n = Math.round(n || 0);
+    var sign = n < 0 ? '-' : '';
+    var a = Math.abs(n);
+    if (a >= 100000000) return sign + (a / 100000000).toFixed(2) + ' 亿';
+    if (a >= 10000) {
+      var w = a / 10000;
+      if (w >= 100) return sign + Math.round(w).toLocaleString('zh-CN') + ' 万';
+      return sign + (Math.round(w * 10) / 10).toFixed(1) + ' 万';
+    }
+    return sign + a.toLocaleString('zh-CN');
+  };
+  LS.fmtDelta = function (n) {
+    if (!n) return '';
+    return (n > 0 ? '+' : '') + LS.fmtMoney(n);
+  };
+  LS.cityLiving = function (g) {
+    var p = LS.BIRTHPLACES[g.birthplace] || LS.BIRTHPLACES['小城'];
+    var inflation = Math.pow(1.024, Math.max(0, g.age - 18));
+    return Math.round(p.living * inflation);
+  };
+  LS.hasTalent = function (g, id) { return !!(g.talents && g.talents.indexOf(id) >= 0); };
+  LS.talent = function (id) {
+    for (var i = 0; i < LS.TALENTS.length; i++) if (LS.TALENTS[i].id === id) return LS.TALENTS[i];
+    return null;
+  };
+  LS.hasMark = function (g, id) { return !!(g.marks && g.marks[id]); };
+
+  /* ---------------- 角色生成 ---------------- */
+  LS.baseAttrs = function (birthplace, background, talents) {
+    var b = LS.BACKGROUNDS[background] ? LS.BACKGROUNDS[background].base : LS.BACKGROUNDS['普通工薪'].base;
+    var bp = LS.BIRTHPLACES[birthplace] || LS.BIRTHPLACES['小城'];
+    var attrs = {
+      knowledge: b.knowledge + (bp.mods.knowledge || 0),
+      health: b.health + (bp.mods.health || 0),
+      finance: b.finance + (bp.mods.finance || 0),
+      charm: b.charm + (bp.mods.charm || 0),
+      happiness: b.happiness + (bp.mods.happiness || 0),
+      reputation: b.reputation + (bp.mods.reputation || 0)
+    };
+    (talents || []).forEach(function (id) {
+      var t = LS.talent(id);
+      if (!t || !t.mods) return;
+      for (var k in t.mods) if (attrs[k] !== undefined) attrs[k] += t.mods[k];
+    });
+    for (var key in attrs) attrs[key] = LS.clamp(attrs[key], 1, 95);
+    return attrs;
+  };
+
+  LS.createGame = function (cfg) {
+    if (!cfg || !cfg.name) throw new Error('缺少角色姓名');
+    var seed = cfg.seed || ((Date.now() % 2147483647) || 1);
+    LS.RNG.reset(seed);
+
+    var bg = LS.BACKGROUNDS[cfg.background] || LS.BACKGROUNDS['普通工薪'];
+    var bp = LS.BIRTHPLACES[cfg.birthplace] || LS.BIRTHPLACES['小城'];
+    var base = LS.baseAttrs(cfg.birthplace, cfg.background, cfg.talents);
+    var finalAttrs = cfg.attrs || base;
+    ['knowledge', 'health', 'finance', 'charm', 'happiness', 'reputation'].forEach(function (k) {
+      var raw = finalAttrs[k];
+      if (raw === undefined || isNaN(raw)) raw = (k === 'reputation') ? 30 : 50;
+      finalAttrs[k] = LS.clamp(Math.round(raw), 1, 100);
+    });
+
+    var stress = 18 + (bp.stress || 0) + (bg.stress || 0);
+    (cfg.talents || []).forEach(function (id) {
+      var t = LS.talent(id);
+      if (t && t.stress) stress += t.stress;
+    });
+    stress = LS.clamp(stress, 0, 100);
+
+    var fatherAge = LS.randInt(27, 38);
+    var motherAge = LS.randInt(25, 36);
+
+    var g = {
+      v: LS.VERSION,
+      seed: seed,
+      rngState: LS.RNG.state,
+      birthYear: LS.START_YEAR,
+      year: LS.START_YEAR,
+      age: 0,
+      stage: '婴幼儿',
+      turn: 1,
+      name: String(cfg.name).trim().slice(0, 12),
+      gender: cfg.gender || '男',
+      birthplace: cfg.birthplace || '小城',
+      background: cfg.background || '普通工薪',
+      talents: (cfg.talents || []).slice(0, 2),
+      attrs: {
+        knowledge: finalAttrs.knowledge,
+        health: finalAttrs.health,
+        finance: finalAttrs.finance,
+        charm: finalAttrs.charm,
+        happiness: finalAttrs.happiness,
+        stress: stress
+      },
+      rep: {
+        school: LS.clamp(finalAttrs.reputation, 0, 100),
+        industry: LS.clamp(Math.round(finalAttrs.reputation * 0.75), 0, 100),
+        society: LS.clamp(Math.round(finalAttrs.reputation * 0.85), 0, 100)
+      },
+      money: {
+        cash: Math.round(bg.cash * (bp.cashMul || 1)),
+        assets: Math.round(bg.assets * (bp.assetMul || 1)),
+        debt: 0
+      },
+      edu: {
+        level: 0,
+        path: [{ year: LS.START_YEAR, age: 0, text: '出生' }],
+        inSchool: false
+      },
+      job: {
+        id: null, level: 0, title: '待业', salary: 0, years: 0, history: [],
+        tags: null, huntTries: 0, lastHunt: null
+      },
+      family: {
+        marriage: { status: '未婚', spouseId: null, year: null },
+        childrenIds: []
+      },
+      house: { owned: false, value: 0, mortgage: 0, mortgagePaid: false, buyYear: null },
+      npcs: [],
+      pending: [],
+      /* v2：隐性健康隐患、选择日志、阶段过场与播报队列 */
+      risks: { lateNight: 0, highStress: 0, noExercise: 0, badDiet: 0 },
+      riskOrigin: {},
+      choiceLog: [],
+      echoLog: [],
+      healthNegLog: [],
+      stageSeen: {},
+      pendingStage: null,
+      pendingBroadcasts: [],
+      lastBroadcastTurn: -99,
+      broadcastAges: [],
+      echoInfo: null,
+      crossSeen: {},
+      flags: {},
+      marks: {},
+      memories: [],
+      fired: [],
+      history: [],
+      stats: {
+        jobYears: {},
+        marriedYears: 0,
+        startupSuccess: 0,
+        startupFail: 0,
+        maxNet: 0,
+        minNet: 0,
+        maxAssets: 0,
+        minHealth: 100,
+        childrenEver: 0,
+        loansTaken: 0,
+        promotions: 0,
+        healthNegAge: -99,
+        healthNegCount: 0,
+        huntFail: 0,
+        echoesSeen: 0,
+        crossroadsSeen: 0
+      },
+      maxAge: 72 + LS.randInt(0, 20),
+      current: null,
+      lastOutcome: null,
+      death: { dead: false, reason: '', year: null, age: null },
+      summary: null
+    };
+
+    g.npcs.push(LS.makeNPC('父亲', {
+      id: 'father', age: fatherAge, health: LS.clamp(68 + bg.parentHealth, 30, 95),
+      favor: bg.fatherFavor, note: '家里的顶梁柱', gender: '男'
+    }));
+    g.npcs.push(LS.makeNPC('母亲', {
+      id: 'mother', age: motherAge, health: LS.clamp(72 + bg.parentHealth, 30, 96),
+      favor: bg.motherFavor, note: '操持家务的人', gender: '女'
+    }));
+
+    LS.addMemory(g, '出生在' + g.birthplace + '的一个' + g.background + '家庭。父亲 ' + fatherAge + ' 岁，母亲 ' + motherAge + ' 岁。', 'birth');
+    LS.snapshot(g);
+    g.rngState = LS.RNG.state;
+    return g;
+  };
+
+  /* ---------------- NPC ---------------- */
+  LS.NPC_LIFESPAN = function () { return 66 + LS.randInt(0, 24); };
+  LS.makeNPC = function (role, opt) {
+    opt = opt || {};
+    return {
+      id: opt.id || ('npc_' + role + '_' + Math.floor(Math.random() * 100000)),
+      role: role,
+      name: opt.name || role,
+      gender: opt.gender || '男',
+      age: opt.age || 30,
+      health: opt.health === undefined ? 75 : opt.health,
+      favor: opt.favor === undefined ? 50 : opt.favor,
+      alive: opt.alive === undefined ? true : opt.alive,
+      note: opt.note || '',
+      deathYear: null,
+      lifespan: opt.lifespan || LS.NPC_LIFESPAN(),
+      isChild: !!opt.isChild,
+      isSpouse: !!opt.isSpouse
+    };
+  };
+
+  LS.getNpc = function (g, key) {
+    if (!g || !g.npcs) return null;
+    for (var i = 0; i < g.npcs.length; i++) {
+      if (g.npcs[i].id === key || g.npcs[i].role === key) return g.npcs[i];
+    }
+    return null;
+  };
+  LS.npcAlive = function (g, key) {
+    var n = LS.getNpc(g, key);
+    return !!(n && n.alive);
+  };
+
+  LS.addNpc = function (g, role, opt) {
+    var n = LS.makeNPC(role, opt || {});
+    g.npcs.push(n);
+    return n;
+  };
+
+  LS.ensureNpc = function (g, role, opt) {
+    var n = LS.getNpc(g, role);
+    if (n) return n;
+    return LS.addNpc(g, role, opt || {});
+  };
+
+  LS.addMemory = function (g, text, kind) {
+    if (!text) return;
+    var body = String(text);
+    if (kind === 'choice' && body.indexOf('【') !== 0) body = '【' + g.age + ' 岁】' + body;
+    g.memories.push({
+      year: g.year,
+      age: g.age,
+      text: body,
+      kind: kind || 'choice'
+    });
+  };
+
+  LS.snapshot = function (g) {
+    var snap = {
+      age: g.age,
+      year: g.year,
+      knowledge: Math.round(g.attrs.knowledge),
+      health: Math.round(g.attrs.health),
+      happiness: Math.round(g.attrs.happiness),
+      reputation: LS.repTotal(g),
+      net: LS.netWorth(g),
+      cash: Math.round(g.money.cash),
+      assets: Math.round(g.money.assets),
+      debt: Math.round(g.money.debt)
+    };
+    var last = g.history[g.history.length - 1];
+    if (last && last.age === g.age) g.history[g.history.length - 1] = snap;
+    else g.history.push(snap);
+    if (g.stats) {
+      g.stats.maxNet = Math.max(g.stats.maxNet, LS.netWorth(g));
+      g.stats.minNet = Math.min(g.stats.minNet, LS.netWorth(g));
+      g.stats.maxAssets = Math.max(g.stats.maxAssets, g.money.assets);
+      g.stats.minHealth = Math.min(g.stats.minHealth, g.attrs.health);
+    }
+  };
+
+  /* ---------------- 成就 ---------------- */
+  LS.ACHIEVEMENTS = [
+    {
+      id: 'rags', name: '白手起家', desc: '出身贫困，最终净资产超过 100 万',
+      cond: function (g) { return g.background === '贫困' && LS.netWorth(g) >= 1000000; }
+    },
+    {
+      id: 'longlife', name: '长寿老人', desc: '活到 90 岁及以上',
+      cond: function (g) { return g.age >= 90; }
+    },
+    {
+      id: 'academic', name: '学术之巅', desc: '取得博士学位且学识 ≥ 85',
+      cond: function (g) { return g.edu.level >= 7 && g.attrs.knowledge >= 85; }
+    },
+    {
+      id: 'love', name: '一生挚爱', desc: '婚姻持续 30 年以上，配偶好感 ≥ 80',
+      cond: function (g) {
+        var n = g.family.marriage.spouseId ? LS.getNpc(g, g.family.marriage.spouseId) : null;
+        return g.stats.marriedYears >= 30 && n && n.favor >= 80;
+      }
+    },
+    {
+      id: 'lonely', name: '孤独终老', desc: '离世时无配偶、无子女，也没有好感 ≥ 60 的朋友',
+      cond: function (g) {
+        var spouse = g.family.marriage.spouseId ? LS.getNpc(g, g.family.marriage.spouseId) : null;
+        var hasFriend = g.npcs.some(function (n) {
+          return n.alive && (n.role === '朋友' || n.role === '同学' || n.role === '同事') && n.favor >= 60;
+        });
+        return (!spouse || !spouse.alive) && g.family.childrenIds.length === 0 && !hasFriend;
+      }
+    },
+    {
+      id: 'ironrice', name: '铁饭碗', desc: '公务员岗位累计满 25 年',
+      cond: function (g) { return (g.stats.jobYears.civil || 0) >= 25; }
+    },
+    {
+      id: 'peach', name: '桃李满园', desc: '教师岗位累计满 20 年',
+      cond: function (g) { return (g.stats.jobYears.teacher || 0) >= 20; }
+    },
+    {
+      id: 'housefree', name: '房奴上岸', desc: '买过房，并把房贷还清',
+      cond: function (g) { return g.house.owned && g.house.mortgagePaid; }
+    },
+    {
+      id: 'roller', name: '大起大落', desc: '一生净资产曾超过 100 万，也曾为负',
+      cond: function (g) { return g.stats.maxNet >= 1000000 && g.stats.minNet < 0; }
+    },
+    {
+      id: 'startup', name: '商海沉浮', desc: '创业成功与失败各至少一次',
+      cond: function (g) { return g.stats.startupSuccess > 0 && g.stats.startupFail > 0; }
+    },
+    {
+      id: 'survivor', name: '逆风翻盘', desc: '健康曾跌破 20，最终活过 75 岁',
+      cond: function (g) { return g.stats.minHealth < 20 && g.age >= 75; }
+    },
+    {
+      id: 'dink', name: '丁克到底', desc: '终身无子女，且活过 80 岁',
+      cond: function (g) { return g.stats.childrenEver === 0 && g.age >= 80; }
+    },
+    {
+      id: 'debtfree', name: '无债一身轻', desc: '50 岁后负债清零且净资产为正',
+      cond: function (g) { return g.age >= 50 && g.money.debt === 0 && LS.netWorth(g) > 0; }
+    },
+    {
+      id: 'poorScholar', name: '寒门贵子', desc: '出身贫困，取得硕士及以上学历',
+      cond: function (g) { return g.background === '贫困' && g.edu.level >= 6; }
+    },
+    {
+      id: 'midcrisis', name: '中年渡劫', desc: '40–50 岁间压力曾超过 85，仍活到 70 岁',
+      cond: function (g) { return g.age >= 70 && g.stats.peakStressMidlife === true; }
+    }
+  ];
+
+  LS.computeAchievements = function (g) {
+    return LS.ACHIEVEMENTS.map(function (a) {
+      var ok = false;
+      try { ok = !!a.cond(g); } catch (e) { ok = false; }
+      return { id: a.id, name: a.name, desc: a.desc, got: ok };
+    });
+  };
+
+})();
+
