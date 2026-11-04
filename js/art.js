@@ -28,46 +28,92 @@
       '" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' + inner + '</svg>';
   }
 
-  /* ---------- 人物母版：男/女 × 青年/中年/老年 ---------- */
+  /* ---------- 人物母版：男/女 × 婴幼儿/童年/少年/青年/中年/中老年/晚年 ---------- */
   LS.artPerson = function (gender, stage) {
     var fem = gender === '女' || gender === '其他';
-    var old = stage === 'elder';
-    var mid = stage === 'midlife';
-    var hairColor = old ? C.hairOld : (mid ? C.hairMid : C.hair);
-    var skin = old ? C.skinOld : C.skin;
+    /* 同一脸型、同一衣领、同一发型逻辑，只按年龄改头身比、发量、发色与体态 */
+    var CFG = {
+      infant: {
+        cy: 92, rx: 26, ry: 30, shoulderY: 134, bodyBottom: 190,
+        bodyW: fem ? 24 : 28, cloth: '#d8ccb9', skin: '#ecd0b6', hair: '#4a4139',
+        fx: 0.81, fy: 0.75, style: 'infant', brow: false
+      },
+      child: {
+        cy: 86, rx: 29, ry: 36, shoulderY: 146, bodyBottom: 194,
+        bodyW: fem ? 28 : 34, cloth: '#93a08f', skin: '#e6c9ad', hair: C.hair,
+        fx: 0.91, fy: 0.9, style: 'child', brow: true
+      },
+      teen: {
+        cy: 76, rx: fem ? 29 : 31, ry: 39, shoulderY: 130, bodyBottom: 200,
+        bodyW: fem ? 30 : 40, cloth: '#5c6f82', skin: C.skin, hair: C.hair,
+        fx: 1, fy: 1, style: 'teen', brow: true
+      },
+      youth: {
+        cy: 74, rx: fem ? 30 : 32, ry: 40, shoulderY: 126, bodyBottom: 200,
+        bodyW: fem ? 34 : 44, cloth: fem ? '#7f8b85' : '#6f7d7a', skin: C.skin, hair: C.hair,
+        fx: 1, fy: 1, style: 'youth', brow: true
+      },
+      midlife: {
+        cy: 76, rx: fem ? 30 : 32, ry: 40, shoulderY: 130, bodyBottom: 200,
+        bodyW: fem ? 40 : 50, cloth: fem ? '#7f8b85' : '#6f7d7a', skin: C.skin, hair: C.hairMid,
+        fx: 1, fy: 1, style: 'midlife', brow: true
+      },
+      elder: {
+        cy: 78, rx: fem ? 30 : 32, ry: 38, shoulderY: 134, bodyBottom: 200,
+        bodyW: fem ? 44 : 52, cloth: fem ? '#7f8b85' : '#6f7d7a', skin: C.skinOld, hair: C.hairOld,
+        fx: 1, fy: 0.95, style: 'elder', brow: true
+      },
+      late: {
+        cy: 82, rx: fem ? 30 : 32, ry: 36, shoulderY: 138, bodyBottom: 200,
+        bodyW: fem ? 46 : 54, cloth: '#8a7f70', skin: '#e3cbb3', hair: '#d3ccc0',
+        fx: 1, fy: 0.9, style: 'late', brow: true
+      }
+    };
+    var c = CFG[stage] || CFG.youth;
+    var style = c.style;
+    var isOld = style === 'elder' || style === 'late';
+    var isMid = style === 'midlife';
+    var hairColor = c.hair;
+    var skin = c.skin;
     var w = 150, h = 210;
     var p = [];
-    var headCy = old ? 78 : (mid ? 76 : 74);
-    var headRx = fem ? 30 : 32;
-    var headRy = old ? 38 : 40;
+    var headCy = c.cy;
+    var headRx = c.rx;
+    var headRy = c.ry;
+    var shoulderY = c.shoulderY;
+    var bodyW = c.bodyW;
+    var bodyBottom = c.bodyBottom;
+    var hairDrop = (style === 'teen') ? 10 : 0;
     var eyeY = headCy + 4;
 
     p.push('<rect x="0" y="0" width="' + w + '" height="' + h + '" fill="' + C.paper + '"/>');
     p.push('<ellipse cx="75" cy="196" rx="46" ry="8" fill="#e3dbcb" opacity="0.9"/>');
 
-    /* 身体：青年直立，中年略宽，老年微驼；衣褶与领口保持同一人 */
-    var shoulderY = old ? 134 : (mid ? 130 : 126);
-    var bodyW = fem ? (old ? 44 : (mid ? 40 : 34)) : (old ? 52 : (mid ? 50 : 44));
-    var cloth = fem ? '#7f8b85' : '#6f7d7a';
-    p.push('<path d="M75 ' + shoulderY + ' C ' + (75 - bodyW) + ' ' + (shoulderY + 12) + ', ' + (75 - bodyW - 6) + ' 176, ' + (75 - bodyW - 4) + ' 200 L ' + (75 + bodyW + 4) + ' 200 C ' + (75 + bodyW + 6) + ' 176, ' + (75 + bodyW) + ' ' + (shoulderY + 12) + ', 75 ' + shoulderY + ' Z" fill="' + cloth + '" opacity="0.94"/>');
-    p.push('<path d="M75 ' + (shoulderY + 8) + ' L' + (75 + bodyW - 10) + ' 200 L' + (75 + bodyW + 4) + ' 200 C ' + (75 + bodyW + 6) + ' 176, ' + (75 + bodyW) + ' ' + (shoulderY + 12) + ', 75 ' + shoulderY + ' Z" fill="#3f4a47" opacity="0.10"/>');
+    /* 身体：同一衣领与衣褶，只随年龄改肩线高低、身形宽窄与衣色 */
+    var cloth = c.cloth;
+    var creaseH = Math.min(34, Math.max(10, bodyBottom - (shoulderY + 20) - 2));
+    p.push('<path d="M75 ' + shoulderY + ' C ' + (75 - bodyW) + ' ' + (shoulderY + 12) + ', ' + (75 - bodyW - 6) + ' ' + (bodyBottom - 24) + ', ' + (75 - bodyW - 4) + ' ' + bodyBottom + ' L ' + (75 + bodyW + 4) + ' ' + bodyBottom + ' C ' + (75 + bodyW + 6) + ' ' + (bodyBottom - 24) + ', ' + (75 + bodyW) + ' ' + (shoulderY + 12) + ', 75 ' + shoulderY + ' Z" fill="' + cloth + '" opacity="0.94"/>');
+    p.push('<path d="M75 ' + (shoulderY + 8) + ' L' + (75 + bodyW - 10) + ' ' + bodyBottom + ' L' + (75 + bodyW + 4) + ' ' + bodyBottom + ' C ' + (75 + bodyW + 6) + ' ' + (bodyBottom - 24) + ', ' + (75 + bodyW) + ' ' + (shoulderY + 12) + ', 75 ' + shoulderY + ' Z" fill="#3f4a47" opacity="0.10"/>');
     p.push('<path d="M67 ' + (shoulderY + 2) + ' L75 ' + (shoulderY + 13) + ' L83 ' + (shoulderY + 2) + '" stroke="' + C.paper + '" stroke-width="2" fill="none"/>');
     p.push('<path d="M70 ' + (shoulderY + 3) + ' L75 ' + (shoulderY + 11) + ' L80 ' + (shoulderY + 3) + ' L75 ' + (shoulderY + 7) + ' Z" fill="#ddd3c1" opacity="0.55"/>');
-    p.push('<path d="M63 ' + (shoulderY + 20) + ' q-6 20 -7 34 M87 ' + (shoulderY + 20) + ' q6 20 7 34" stroke="#4d5855" stroke-width="1" fill="none" opacity="0.28"/>');
-    if (mid || old) {
+    p.push('<path d="M63 ' + (shoulderY + 20) + ' q-6 20 -7 ' + creaseH + ' M87 ' + (shoulderY + 20) + ' q6 20 7 ' + creaseH + '" stroke="#4d5855" stroke-width="1" fill="none" opacity="0.28"/>');
+    if (isMid || isOld) {
       p.push('<path d="M75 ' + (shoulderY + 14) + ' L75 178" stroke="#4d5855" stroke-width="1" opacity="0.35"/>');
       p.push('<path d="M58 ' + (shoulderY + 26) + ' q-3 16 -3 26 M92 ' + (shoulderY + 26) + ' q3 16 3 26" stroke="#4d5855" stroke-width="0.8" fill="none" opacity="0.18"/>');
     }
 
-    /* 脖子与头 */
-    p.push('<rect x="66" y="' + (headCy + headRy - 16) + '" width="18" height="' + (shoulderY - headCy - headRy + 22) + '" rx="5" fill="' + skin + '"/>');
+    /* 脖子与头：同一脸型，婴儿/儿童头更大、脖子更短更窄 */
+    var neckW = (style === 'infant' || style === 'child') ? 14 : 18;
+    p.push('<rect x="' + (75 - neckW / 2) + '" y="' + (headCy + headRy - 16) + '" width="' + neckW + '" height="' + (shoulderY - headCy - headRy + 22) + '" rx="5" fill="' + skin + '"/>');
     p.push('<path d="M68 ' + (headCy + headRy - 8) + ' q7 9 14 0" fill="#a9866c" opacity="0.35"/>');
     p.push('<ellipse cx="75" cy="' + headCy + '" rx="' + headRx + '" ry="' + headRy + '" fill="' + skin + '"/>');
-    p.push('<ellipse cx="' + (75 - headRx + 12) + '" cy="' + (headCy + 4) + '" rx="14" ry="28" fill="#ffffff" opacity="0.07"/>');
-    p.push('<ellipse cx="56" cy="' + (headCy + 15) + '" rx="7" ry="5" fill="#c07f66" opacity="0.13"/><ellipse cx="94" cy="' + (headCy + 15) + '" rx="7" ry="5" fill="#c07f66" opacity="0.13"/>');
+    p.push('<ellipse cx="' + (75 - headRx + 12) + '" cy="' + (headCy + 4) + '" rx="' + LS.round1(headRx * 0.44) + '" ry="' + LS.round1(headRy * 0.7) + '" fill="#ffffff" opacity="0.07"/>');
+    p.push('<ellipse cx="' + LS.round1(75 - headRx * 0.59) + '" cy="' + (headCy + 15) + '" rx="' + LS.round1(headRx * 0.22) + '" ry="' + LS.round1(headRy * 0.125) + '" fill="#c07f66" opacity="0.13"/><ellipse cx="' + LS.round1(75 + headRx * 0.59) + '" cy="' + (headCy + 15) + '" rx="' + LS.round1(headRx * 0.22) + '" ry="' + LS.round1(headRy * 0.125) + '" fill="#c07f66" opacity="0.13"/>');
     /* 耳朵 */
-    p.push('<ellipse cx="' + (75 - headRx + 2) + '" cy="' + headCy + '" rx="5" ry="8" fill="' + skin + '"/>');
-    p.push('<ellipse cx="' + (75 + headRx - 2) + '" cy="' + headCy + '" rx="5" ry="8" fill="' + skin + '"/>');
+    var earRx = Math.round(headRx * 0.16);
+    var earRy = Math.round(headRy * 0.2);
+    p.push('<ellipse cx="' + (75 - headRx + 2) + '" cy="' + headCy + '" rx="' + earRx + '" ry="' + earRy + '" fill="' + skin + '"/>');
+    p.push('<ellipse cx="' + (75 + headRx - 2) + '" cy="' + headCy + '" rx="' + earRx + '" ry="' + earRy + '" fill="' + skin + '"/>');
     p.push('<path d="M' + (75 - headRx + 2) + ' ' + (headCy - 3) + ' q3 3 0 7 M' + (75 + headRx - 2) + ' ' + (headCy - 3) + ' q-3 3 0 7" stroke="#b08e72" stroke-width="0.8" fill="none" opacity="0.7"/>');
 
     /* 头发：同一母版，男女不同，年龄改色与发量 */

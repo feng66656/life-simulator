@@ -2320,3 +2320,1277 @@
   LS.EVENT_INDEX = {};
   for (var i = 0; i < E.length; i++) LS.EVENT_INDEX[E[i].id] = E[i];
 })();
+
+/* =========================================================
+   v3：随机库 / 彩蛋 / 多阶段事件链 / 支线 / 时代 / NPC 弧线
+   ========================================================= */
+(function () {
+  'use strict';
+  var LS = window.LS;
+  var E = LS.EVENTS;
+
+  function add(ev) { E.push(ev); }
+  function o(label, fx, extra) {
+    var r = { label: label, fx: fx || {} };
+    if (extra) for (var k in extra) r[k] = extra[k];
+    return r;
+  }
+  function alive(g, role) {
+    var n = LS.getNpc(g, role);
+    return !!(n && n.alive);
+  }
+  function favorOf(g, role) {
+    var n = LS.getNpc(g, role);
+    return n ? n.favor : 0;
+  }
+  function friendNpc(g) {
+    return LS.getNpc(g, '挚友') || LS.getNpc(g, '朋友');
+  }
+  function friendFavor(g) {
+    var n = friendNpc(g);
+    return n ? n.favor : 0;
+  }
+  function firstChild(g, minAge) {
+    for (var i = 0; i < g.family.childrenIds.length; i++) {
+      var c = LS.getNpc(g, g.family.childrenIds[i]);
+      if (c && c.alive && (minAge === undefined || c.age >= minAge)) return c;
+    }
+    return null;
+  }
+  function relationOf(g, key) {
+    if (g.npcArc && g.npcArc[key]) return g.npcArc[key];
+    var n = LS.getNpc(g, key);
+    return n ? LS.relationStageOf(n.favor, '') : '陌生';
+  }
+  function arcTo(key, val) {
+    return function (g) {
+      if (!g.npcArc) g.npcArc = {};
+      g.npcArc[key] = val;
+    };
+  }
+  function spouseNpc(g) {
+    if (!g.family || g.family.marriage.status !== '已婚') return null;
+    var n = g.family.marriage.spouseId ? LS.getNpc(g, g.family.marriage.spouseId) : LS.getNpc(g, '配偶');
+    return (n && n.alive) ? n : null;
+  }
+  function eraSet(name, mods, until) {
+    return function (g) {
+      g.epoch = { name: name, mods: mods || {}, until: g.age + until };
+    };
+  }
+  function friendFx(delta) {
+    return function (g) {
+      var n = friendNpc(g);
+      if (!n) return;
+      n.favor = LS.clamp(n.favor + delta, 0, 100);
+      if (n.role === '朋友' && n.favor >= 60) n.role = '挚友';
+    };
+  }
+
+  /* =========================================================
+     一、随机事件库 20 条
+     ========================================================= */
+
+  /* ---- 好运 5 条 ---- */
+  add({
+    id: 'v3_luck_found', type: 'random', layer: 'random', tier: 'daily',
+    stage: '青年', age: 0, prio: 50, weight: 4, art: 'money',
+    cond: function (g) { return g.age >= 19; },
+    title: '信封',
+    text: '下班路上，你在人行道边捡到一个牛皮纸信封，里面有几张现金、一张超市小票和一张写了一半的购物清单。你站在原地看了一会儿，路过的人都在赶路。',
+    opts: [
+      o('送到附近的派出所', { rep: { society: 2 }, at: { happiness: 3 }, tag: '捡到钱后交给了派出所' }, { tone: 'safe' }),
+      o('等半小时，没人来就先收着', { money: { cash: 800 }, at: { happiness: 1 }, tag: '捡到的钱自己留下了' }, { tone: 'switch' }),
+      {
+        label: '顺手买张彩票试试运气', hint: '小概率中奖', tone: 'risk',
+        gamble: {
+          p: 0.18,
+          winText: '彩票中了两千块。你把钱收进钱包，心情好了一整天。',
+          loseText: '什么也没中。两百块换了一张废纸，你笑自己无聊。',
+          win: { money: { cash: 2000 }, at: { happiness: 3 }, tag: '捡到钱那天顺手买彩票中了小奖' },
+          lose: { money: { cash: -200 }, at: { happiness: -1 } }
+        }
+      }
+    ]
+  });
+
+  add({
+    id: 'v3_luck_mentor', type: 'random', layer: 'random', tier: 'daily',
+    stage: '青年', age: 0, prio: 50, weight: 3, art: 'office',
+    cond: function (g) { return g.attrs.knowledge >= 50 || g.attrs.charm >= 55; },
+    title: '行业前辈',
+    text: '交流会的茶歇区，一位比你大十几岁的前辈主动问你是做什么的。他听你说完，提了两句很实在的话，然后说以后有问题可以找他。',
+    opts: [
+      o('认真请教，留下联系方式', { at: { knowledge: 2 }, npc: { '贵人': { favor: 8 } }, rep: { industry: 2 }, tag: '结识了一位行业前辈' }, { tone: 'safe' }),
+      o('交换名片，客气几句', { at: { charm: 1 }, npc: { '贵人': { favor: 3 } } }, { tone: 'safe' }),
+      o('觉得只是客套，没再联系', { at: { happiness: -1 } }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_luck_inherit', type: 'random', layer: 'random', tier: 'daily',
+    stage: '中年', age: 0, prio: 48, weight: 2, art: 'house',
+    cond: function (g) { return g.age >= 36 && g.age <= 52; },
+    title: '老屋划进了拆迁范围',
+    text: '老家的房子被划进拆迁范围。通知贴在村口，补偿方案有两种：拿钱，或者等安置房。亲戚们已经在电话里讨论了几轮。',
+    opts: [
+      o('拿补偿款，存起来', { money: { cash: 180000 }, at: { finance: 2 }, tag: '老家拆迁，拿了一笔补偿款' }, { hint: '现金增加', tone: 'safe' }),
+      o('要一套安置房', { money: { assets: 120000 }, set: { relocate_house: true }, at: { happiness: 2 }, tag: '老家拆迁换了一套安置房' }, { tone: 'switch' }),
+      o('钱分一部分给兄弟姐妹', { money: { cash: 90000 }, npc: { '父亲': { favor: 6 }, '母亲': { favor: 6 } }, at: { happiness: 3 }, tag: '拆迁款分了一部分给兄弟姐妹' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_luck_patron', type: 'random', layer: 'random', tier: 'daily',
+    stage: '青年', age: 0, prio: 52, weight: 2, art: 'office',
+    cond: function (g) { return !!g.job.id && (g.rep.industry >= 35 || g.attrs.knowledge >= 70); },
+    title: '有人替你说了话',
+    text: '部门主管把你叫进会议室，说上面有个新项目，他提了你的名字。话没说满，但意思很清楚：这是一个往上走的位置。',
+    opts: [
+      o('接下来，先把方案做扎实', { promote: true, at: { stress: 3, knowledge: 1 }, rep: { industry: 3 }, tag: '被上级点名负责新项目' }, { hint: '责任与加班都会增加', tone: 'switch' }),
+      o('推荐更合适的同事', { rep: { industry: 1 }, at: { stress: -2, happiness: 1 }, npc: { '上司': { favor: 3 } }, tag: '把机会让给了同事' }, { tone: 'safe' }),
+      o('先做一份方案再答复', { at: { knowledge: 2 }, money: { cash: 1500 }, tag: '面对机会先做了一份方案' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_luck_antique', type: 'random', layer: 'random', tier: 'daily',
+    stage: '中老年', age: 0, prio: 46, weight: 2, art: 'home',
+    cond: function (g) { return g.age >= 56; },
+    title: '柜子底下的旧物',
+    text: '整理柜子时翻出一件旧东西，是早年长辈留下的。你一直以为它不值钱，直到有人在饭桌上提起，现在这类东西有人收。',
+    opts: [
+      o('请懂行的人估个价', { money: { cash: 6000 }, at: { happiness: 2 }, tag: '旧物卖出六千块' }, { tone: 'safe' }),
+      o('擦干净，摆回原来的位置', { at: { happiness: 3 }, set: { keep_old_thing: true }, tag: '把旧物留了下来' }, { tone: 'safe' }),
+      o('送给子女', { npc: { '子女': { favor: 5 } }, at: { happiness: 2 }, tag: '把旧物送给了子女' }, { tone: 'safe' })
+    ]
+  });
+
+  /* ---- 霉运 5 条 ---- */
+  add({
+    id: 'v3_bad_sudden_ill', type: 'random', layer: 'random', tier: 'daily',
+    stage: '中年', age: 0, prio: 55, weight: 3, art: 'clinic',
+    cond: function (g) { return g.attrs.health < 80; },
+    title: '夜里疼醒',
+    text: '半夜被一阵疼醒，位置说不清，翻来覆去也睡不着。你坐起来喝了口水，想着明天还要上班，先忍一忍。',
+    opts: [
+      o('立刻去医院', { money: { cash: -6000 }, at: { health: 3, stress: 2 }, bc: { key: 'illness', text: '夜里疼醒后去了医院，处理得还算及时。', changes: '医疗支出 -6000 · 健康回升' }, tag: '半夜疼醒后及时就医' }, { tone: 'safe' }),
+      o('吃点药，天亮了再说', { money: { cash: -300 }, at: { health: -6, stress: 3 }, risk: { highStress: 3 }, tag: '身体不适先自己吃药顶着' }, { tone: 'risk' }),
+      o('叫醒家人，送去急诊', { money: { cash: -12000 }, at: { health: 4, stress: 1, happiness: 1 }, npc: { '配偶': { favor: 4 } }, tag: '半夜由家人送去急诊' }, { hint: '花销更大，但更稳妥', tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_bad_scam', type: 'random', layer: 'random', tier: 'daily',
+    stage: '中年', age: 0, prio: 54, weight: 3, art: 'money',
+    cond: function (g) { return g.money.cash > 10000 || g.money.assets > 50000; },
+    title: '熟人推荐的项目',
+    text: '一个多年没联系的熟人突然找你，说手里有个稳赚不赔的项目，名额有限。他把收益讲得很清楚，却一直没说清楚钱到底投到哪里。',
+    opts: [
+      o('先查资质，只投最小额度', { money: { cash: -5000 }, at: { knowledge: 2, finance: 1 }, tag: '对熟人推荐的项目只投了最小额度' }, { tone: 'safe' }),
+      o('不投，把闲钱存定期', { at: { finance: 2, happiness: -1 }, tag: '拒绝了熟人推荐的高收益项目' }, { tone: 'safe' }),
+      {
+        label: '跟着投，机会难得', hint: '可能亏掉本金', tone: 'risk',
+        gamble: {
+          p: 0.25,
+          winText: '项目真的兑付了。你拿到一笔收益，也开始明白这类好运不会常有。',
+          loseText: '三个月后对方失联。本金没要回来，还多了一笔说不清的欠款。',
+          win: { money: { cash: 30000 }, at: { finance: 3 } },
+          lose: { money: { cash: -25000, debt: 10000 }, at: { stress: 8, happiness: -6 }, tag: '在熟人推荐的项目里亏了钱' }
+        }
+      },
+      {
+        label: '看出合同里的问题，反过来劝住对方', hint: '需要较高学识', tone: 'safe',
+        cond: { attr: 'knowledge', min: 75 },
+        fx: { at: { knowledge: 2, happiness: 2 }, rep: { society: 2 }, tag: '识破了熟人推荐的项目' }
+      }
+    ]
+  });
+
+  add({
+    id: 'v3_bad_blame', type: 'random', layer: 'random', tier: 'daily',
+    stage: '青年', age: 0, prio: 54, weight: 3, art: 'office',
+    cond: function (g) { return !!g.job.id; },
+    title: '会上被点了名',
+    text: '项目出了差错，复盘会上有人把责任往你这边推。事情不是你一个人做的，但记录都在别人手里，你一时说不清。',
+    opts: [
+      o('把邮件和记录摆出来', { rep: { industry: 2 }, npc: { '上司': { favor: -8 } }, at: { stress: 3 }, tag: '会上把责任当场说清' }, { tone: 'switch' }),
+      o('先认下来，私下再解释', { npc: { '上司': { favor: 5 } }, at: { happiness: -4, stress: 2 }, tag: '替团队背了一次责任' }, { tone: 'safe' }),
+      o('绕过直属领导向更高层反映', { rep: { industry: -1 }, npc: { '上司': { favor: -12 } }, at: { stress: 4 }, tag: '越级反映了一次问题' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_bad_family_ill', type: 'random', layer: 'random', tier: 'daily',
+    stage: '中年', age: 0, prio: 56, weight: 2, art: 'clinic',
+    cond: function (g) { return g.age >= 32 && (alive(g, '父亲') || alive(g, '母亲')); },
+    title: '住院通知',
+    text: '医院打来电话，说父母中的一位需要住院观察。电话挂断以后，你先想到的是这个月的假还够不够请。',
+    opts: [
+      o('请假陪护', { money: { cash: -8000 }, at: { stress: 3 }, npc: { '父亲': { favor: 8, health: 2 }, '母亲': { favor: 8, health: 2 } }, tag: '父母住院时请假陪护' }, { tone: 'safe' }),
+      o('出钱请护工', { money: { cash: -18000 }, at: { stress: 1 }, npc: { '父亲': { favor: 3 }, '母亲': { favor: 3 } }, tag: '父母住院时请了护工' }, { hint: '花钱换时间', tone: 'safe' }),
+      o('让兄弟姐妹先顶着', { at: { happiness: -3, stress: 2 }, npc: { '母亲': { favor: -2 } }, tag: '父母住院时没能到场' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_bad_layoff', type: 'random', layer: 'random', tier: 'daily',
+    stage: '中年', age: 0, prio: 58, weight: 3, art: 'emptyDesk',
+    cond: function (g) { return !!g.job.id && g.age >= 32; },
+    title: '人事约谈',
+    text: '人事把你叫进小会议室，桌上放着一份打印好的名单。对方话说得很客气，意思是岗位要调整，你的名字在上面。',
+    opts: [
+      o('拿赔偿走人，先歇一段', { quitJob: true, severance: true, needJob: true, at: { stress: 4, happiness: -3 }, bc: { key: 'job_lost' }, tag: '中年被裁员，拿了赔偿离开' }, { hint: '收入中断', tone: 'switch' }),
+      o('争取内部转岗', { money: { cash: -2000 }, at: { stress: 3 }, rep: { industry: 1 }, tag: '被裁员时争取到了内部转岗' }, { tone: 'safe' }),
+      o('主动提出降薪留下', { salaryPct: -0.15, at: { happiness: -5, stress: -1 }, tag: '为了保住工作主动接受了降薪' }, { hint: '收入下降，保住岗位', tone: 'risk' })
+    ]
+  });
+
+  /* ---- 中性趣味 5 条 ---- */
+  add({
+    id: 'v3_neu_reunion', type: 'random', layer: 'random', tier: 'daily',
+    stage: '青年', age: 0, prio: 45, weight: 4, art: 'home',
+    cond: function (g) { return g.age >= 20; },
+    title: '多年没见的同学',
+    text: '在地铁口碰到一个多年没见的同学。他先认出你，叫了一声你的名字，然后两个人都愣了一下，不知道该从哪句说起。',
+    opts: [
+      o('找家小馆子吃顿饭', { money: { cash: -300 }, at: { happiness: 4, stress: -2 }, npc: { '朋友': { favor: 6 } }, tag: '和老友重新联系上' }, { tone: 'safe' }),
+      o('站在路边聊十分钟', { at: { happiness: 2 }, npc: { '朋友': { favor: 2 } } }, { tone: 'safe' }),
+      o('假装没看见，继续走', { at: { happiness: -2 }, tag: '装作没认出多年不见的老友' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_neu_trip', type: 'random', layer: 'random', tier: 'daily',
+    stage: '青年', age: 0, prio: 44, weight: 4, art: 'home',
+    cond: function (g) { return g.money.cash >= 8000; },
+    title: '临时起意',
+    text: '周五下班前，你刷到邻市一个展览的介绍，车票不贵，周末两天刚好够。你盯着屏幕看了一会儿，工作群还在跳消息。',
+    opts: [
+      o('请两天假，去邻市走走', { money: { cash: -2500 }, at: { stress: -4, happiness: 5 }, tag: '临时起意去邻市走了两天' }, { tone: 'switch' }),
+      o('只在家休息', { at: { happiness: 1, stress: -2 } }, { tone: 'safe' }),
+      o('带上父母一起去', { money: { cash: -5000 }, at: { happiness: 4 }, npc: { '父亲': { favor: 5 }, '母亲': { favor: 5 } }, tag: '临时带父母出门玩了两天' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_neu_letter', type: 'random', layer: 'random', tier: 'daily',
+    stage: '中年', age: 0, prio: 44, weight: 3, art: 'home',
+    cond: function (g) { return g.age >= 34; },
+    title: '一封手写信',
+    text: '信箱里出现一封手写信，寄信人说是多年前和你打过交道的人。信写得不长，末尾留了一个地址，没有电话。',
+    opts: [
+      o('按地址回一封信', { at: { happiness: 3, knowledge: 1 }, tag: '给一封陌生来信回了信' }, { tone: 'safe' }),
+      o('收进抽屉，没回', { at: { happiness: 1 }, tag: '把陌生来信收进了抽屉' }, { tone: 'safe' }),
+      o('按地址去看一眼', { money: { cash: -1200 }, at: { happiness: 4, charm: 1 }, tag: '按陌生来信的地址去了一趟' }, { tone: 'switch' })
+    ]
+  });
+
+  add({
+    id: 'v3_neu_city', type: 'random', layer: 'random', tier: 'daily',
+    stage: '青年', age: 0, prio: 44, weight: 4, art: 'office',
+    cond: function (g) { return g.attrs.charm >= 50; },
+    title: '外地街头',
+    text: '出差在外地，你在路口看手机，一个陌生人拿着地址过来问路。你也不太熟，但大概知道方向。',
+    opts: [
+      o('带对方走一段', { at: { charm: 2, happiness: 2 }, tag: '在外地给陌生人带了路' }, { tone: 'safe' }),
+      o('指个方向就走', { at: { happiness: 1 } }, { tone: 'safe' }),
+      o('顺手加了联系方式', { at: { charm: 3 }, npc: { '朋友': { favor: 4 } }, tag: '在外地认识了一个新朋友' }, { tone: 'switch' })
+    ]
+  });
+
+  add({
+    id: 'v3_neu_radio', type: 'random', layer: 'random', tier: 'daily',
+    stage: '中老年', age: 0, prio: 42, weight: 3, art: 'home',
+    cond: function (g) { return g.age >= 55; },
+    title: '深夜电台',
+    text: '睡不着，你打开收音机。深夜节目在念听众来信，说的都是些小事：谁家的猫丢了，谁在老城区开了一家修表店。',
+    opts: [
+      o('听完再睡', { at: { happiness: 3, stress: -2, health: -1 }, tag: '深夜电台听到很晚' }, { tone: 'safe' }),
+      o('关掉，按时睡', { at: { health: 2 } }, { tone: 'safe' }),
+      o('给电台写一封信', { at: { happiness: 4, charm: 1 }, tag: '给深夜电台写了一封信' }, { tone: 'switch' })
+    ]
+  });
+
+  /* ---- 道德抉择 5 条 ---- */
+  add({
+    id: 'v3_mor_phone', type: 'random', layer: 'random', tier: 'echo',
+    stage: '青年', age: 0, prio: 52, weight: 4, art: 'money',
+    cond: function (g) { return g.age >= 19; },
+    title: '车筐里的手机',
+    text: '共享单车的车筐里躺着一部手机，屏幕还亮着，锁屏上跳出几条消息。周围没有人回来找。',
+    opts: [
+      o('等失主回来', { at: { happiness: 4 }, rep: { society: 3 }, tag: '捡到手机后等到了失主' }, { tone: 'safe' }),
+      o('交给附近的警务站', { rep: { society: 4 }, at: { happiness: 2 }, tag: '捡到手机后交给了警务站' }, { tone: 'safe' }),
+      o('关机带走，找地方卖掉', { money: { cash: 2500 }, at: { happiness: -5, stress: 2 }, tag: '捡到手机后没有归还' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_mor_blame', type: 'random', layer: 'random', tier: 'echo',
+    stage: '青年', age: 0, prio: 52, weight: 3, art: 'office',
+    cond: function (g) { return !!g.job.id; },
+    title: '一份没签字的单子',
+    text: '同事把一份手续不全的单子放到你桌上，让你先签个字，说他来担。你翻了翻附件，缺的那页正好是最关键的一页。',
+    opts: [
+      o('不签，让他把手续补全', { npc: { '同事': { favor: -6 } }, at: { stress: 1 }, tag: '拒绝替同事签不合规的手续' }, { tone: 'safe' }),
+      o('签了，出事他认', { flag: { event: 'v3_bad_blame', delay: 2, mark: 'signed_for_colleague', note: '替同事签了一份手续' }, at: { stress: 2 }, tag: '替同事签了一份手续' }, { hint: '人情留下了，风险也留下了', tone: 'risk' }),
+      o('直接把情况告诉领导', { rep: { industry: 2 }, npc: { '同事': { favor: -10 }, '上司': { favor: 2 } }, at: { stress: 3 }, tag: '把不合规手续的事告诉了领导' }, { tone: 'switch' })
+    ]
+  });
+
+  add({
+    id: 'v3_mor_ex', type: 'random', layer: 'random', tier: 'echo',
+    stage: '中年', age: 0, prio: 54, weight: 3, art: 'emptyHome',
+    cond: function (g) { return g.age >= 32 && (g.family.marriage.status === '已婚' || g.family.marriage.status === '离异'); },
+    title: '前任发来消息',
+    text: '一个很久没有动静的头像突然亮起来。对方只问了一句最近怎么样，后面跟着一条删掉又发回来的长消息。',
+    opts: [
+      o('见面把话说清，然后各自回家', { at: { happiness: 2, stress: 2 }, npc: { '配偶': { favor: -4 } }, tag: '和前任见了一面，把话说清' }, { tone: 'safe' }),
+      o('不回，删掉对话', { at: { happiness: -1 }, set: { cut_old_love: true }, tag: '没有回复前任的消息' }, { tone: 'safe' }),
+      o('聊了很久', { at: { happiness: 3, stress: 5 }, npc: { '配偶': { favor: -12 } }, flag: { event: 'c_marriage_crisis', delay: 2, mark: 'old_love_contact', note: '和前任重新联系' }, tag: '和前任重新联系上了' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_mor_report', type: 'random', layer: 'random', tier: 'echo',
+    stage: '青年', age: 0, prio: 52, weight: 2, art: 'office',
+    cond: function (g) { return !!g.job.id; },
+    title: '报销单上的两处改动',
+    text: '你替同事整理报销单时，发现有两处金额对不上。票是真的，改动的数字也是真的。对方平时跟你关系还不错。',
+    opts: [
+      o('实名向合规部门反映', { rep: { society: 4 }, npc: { '上司': { favor: -5 } }, at: { stress: 4 }, tag: '实名举报了同事的违规报销' }, { tone: 'switch' }),
+      o('匿名寄一份材料', { rep: { society: 2 }, at: { stress: 2 }, tag: '匿名反映了同事的违规问题' }, { tone: 'safe' }),
+      o('装作没看见', { at: { happiness: -2 }, tag: '看到违规报销但没说话' }, { tone: 'safe' }),
+      o('先留证据，再按流程反映', { at: { knowledge: 2, stress: 2 }, rep: { society: 3 }, tag: '留下证据后按流程反映了违规问题' }, { cond: { attr: 'knowledge', min: 70 }, tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_mor_lend', type: 'random', layer: 'random', tier: 'echo',
+    stage: '中年', age: 0, prio: 48, weight: 3, art: 'money',
+    cond: function (g) { return g.money.cash >= 3000; },
+    title: '差几百块的陌生人',
+    text: '医院门口，一个外地口音的陌生人说钱包丢了，差几百块买药。他把身份证拿给你看，手一直在抖。',
+    opts: [
+      o('给两百，不留联系方式', { money: { cash: -200 }, at: { happiness: 3 }, tag: '给陌生人垫了两百块' }, { tone: 'safe' }),
+      o('陪对方去派出所说明情况', { money: { cash: -500 }, at: { happiness: 4, stress: 1 }, rep: { society: 2 }, tag: '陪陌生人去派出所说明了情况' }, { tone: 'safe' }),
+      o('摆摆手走开', { at: { happiness: -2 }, tag: '没有帮在路边借钱的陌生人' }, { tone: 'risk' })
+    ]
+  });
+
+  /* =========================================================
+     二、彩蛋 2 条
+     ========================================================= */
+  add({
+    id: 'v3_egg_scholar', type: 'random', layer: 'random', tier: 'echo',
+    stage: '青年', age: 0, prio: 60, weight: 1, art: 'exam',
+    cond: function (g) {
+      return g.attrs.knowledge >= 90 && g.edu.level >= 7 && LS.repTotal(g) >= 55 && !g.marks.v3_egg_scholar;
+    },
+    title: '没有署名的推荐信',
+    text: '一封没有署名的信寄到你的地址，字迹工整，只有一页。写信的人说读过你发表的东西，末尾留了一个名字和一个地址，没有解释更多。',
+    opts: [
+      o('按信里的线索去一趟', { money: { cash: -2000 }, at: { knowledge: 2, happiness: 6 }, rep: { society: 5 }, set: { v3_egg_scholar: true }, tag: '收到一封没有署名的推荐信' }, { tone: 'switch' }),
+      o('收进抽屉，等对方再联系', { at: { happiness: 2 }, set: { v3_egg_scholar: true }, tag: '把那封推荐信收了起来' }, { tone: 'safe' }),
+      o('把信交给学校存档', { at: { knowledge: 2, happiness: 3 }, rep: { school: 6 }, set: { v3_egg_scholar: true }, tag: '把推荐信交给了学校' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_egg_quiet', type: 'random', layer: 'random', tier: 'echo',
+    stage: '中年', age: 0, prio: 60, weight: 1, art: 'house',
+    cond: function (g) {
+      return g.age >= 45 && g.money.debt === 0 && (g.stats.loansTaken || 0) === 0 &&
+        (g.stats.startupFail || 0) === 0 && LS.netWorth(g) >= 500000 && !g.marks.v3_egg_quiet;
+    },
+    title: '一本没有逾期的账',
+    text: '银行客户经理建议你把闲钱做个配置，你回家翻出这些年的账本。每一笔都按时还上，没有一笔逾期，也没有一次是靠借钱翻身的。',
+    opts: [
+      o('把账本收好，继续这样过', { at: { happiness: 5, stress: -2 }, set: { v3_egg_quiet: true }, tag: '一生没有一笔逾期' }, { tone: 'safe' }),
+      o('请家人吃顿饭', { money: { cash: -3000 }, at: { happiness: 4 }, npc: { '配偶': { favor: 5 }, '子女': { favor: 5 } }, set: { v3_egg_quiet: true }, tag: '为一本没有逾期的账请家人吃了饭' }, { tone: 'safe' }),
+      o('捐一笔给本地的助学项目', { money: { cash: -10000 }, at: { happiness: 3 }, rep: { society: 6 }, set: { v3_egg_quiet: true }, tag: '把一部分积蓄捐给了助学项目' }, { tone: 'switch' })
+    ]
+  });
+
+  /* =========================================================
+     三、多阶段事件链：创业四段
+     ========================================================= */
+  add({
+    id: 'v3_chain_startup_1', type: 'causal', layer: 'chain', tier: 'echo',
+    stage: '青年', age: 0, prio: 62, weight: 1, art: 'office',
+    cond: function (g) {
+      return g.age >= 25 && g.age <= 31 && g.money.cash >= 30000 &&
+        !g.marks.chain_startup_1 && !g.marks.chain_startup_done && !g.marks.chain_startup_aborted &&
+        (g.attrs.knowledge >= 55 || g.attrs.finance >= 55);
+    },
+    title: '一个没跟人提过的想法',
+    text: '你在表格里写下一个想了很久的生意，成本、客源、最坏的结果都列了出来。关掉电脑以后，这个想法还在脑子里转。',
+    opts: [
+      o('先做小规模试水', { money: { cash: -20000 }, at: { stress: 3 }, set: { chain_startup_1: true }, flag: { event: 'v3_chain_startup_2', delay: 1, mark: 'startup_try', note: '拿出积蓄做了第一次小规模试水' }, tag: '把创业想法做了一次小规模试水' }, { hint: '投入两万，先看市场反应', tone: 'switch' }),
+      o('再准备一年，把资源攒够', { money: { cash: -5000 }, at: { knowledge: 3 }, set: { chain_startup_1: true }, flag: { event: 'v3_chain_startup_2', delay: 2, mark: 'startup_prepare', note: '为创业准备了一年' }, tag: '为创业又准备了一年' }, { tone: 'safe' }),
+      o('算了，风险太大', { set: { chain_startup_aborted: true }, at: { happiness: 1 }, tag: '最终没有启动那个创业想法' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_chain_startup_2', type: 'causal', layer: 'chain', tier: 'echo',
+    stage: '青年', age: 0, prio: 68, weight: 1, art: 'money',
+    cond: function (g) {
+      return !!g.marks.chain_startup_1 && !g.marks.chain_startup_2 && !g.marks.chain_startup_aborted;
+    },
+    title: '第一笔钱',
+    text: '试水有了点回声，也有人愿意坐下来谈。对方把条件写在纸上：钱可以给，但要占股，还要在董事会里留一个位置。',
+    opts: [
+      o('接受投资，把规模做起来', { money: { cash: 80000 }, at: { stress: 5 }, rep: { industry: 3 }, set: { chain_startup_2: true, startup_funded: true }, flag: { event: 'v3_chain_startup_3', delay: 1, mark: 'startup_funded', note: '拿了第一笔外部投资' }, tag: '创业拿到了第一笔投资' }, { hint: '钱进来了，话语权也分出去了', tone: 'switch' }),
+      o('自己掏钱，慢慢做', { money: { cash: -60000 }, at: { stress: 3, health: -2 }, set: { chain_startup_2: true }, flag: { event: 'v3_chain_startup_3', delay: 2, mark: 'startup_bootstrap', note: '用自己的钱撑起生意' }, tag: '用自己的积蓄撑起了生意' }, { hint: '压力更大，但不用听别人的', tone: 'risk' }),
+      o('缩成副业，不扩大', { money: { cash: -10000 }, at: { happiness: 2 }, set: { chain_startup_2: true, chain_startup_aborted: true }, tag: '把创业缩成了一门副业' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_chain_startup_3', type: 'causal', layer: 'chain', tier: 'echo',
+    stage: '青年', age: 0, prio: 70, weight: 1, art: 'jobfair',
+    cond: function (g) { return !!g.marks.chain_startup_2 && !g.marks.chain_startup_3 && !g.marks.chain_startup_aborted; },
+    title: '扩张的诱惑',
+    text: '订单比预期多，场地和人都不够用。有人劝你趁势再开一处，也有人说现在扩张等于把风险放大一倍。',
+    opts: [
+      o('趁势扩张，招人开新点', { money: { cash: -50000 }, at: { stress: 6 }, set: { chain_startup_3: true, startup_expand: true }, flag: { event: 'v3_chain_startup_4', delay: 2, mark: 'startup_expand', note: '在生意最好的时候选择了扩张' }, tag: '在生意最好的时候选择了扩张' }, { hint: '成本上升，回报不确定', tone: 'risk' }),
+      o('守住现有规模，先把利润做实', { at: { stress: 2 }, set: { chain_startup_3: true }, flag: { event: 'v3_chain_startup_4', delay: 1, mark: 'startup_hold', note: '没有选择扩张' }, tag: '没有趁势扩张，选择守住现有规模' }, { tone: 'safe' }),
+      o('卖掉一部分股份，落袋为安', { money: { cash: 50000 }, at: { stress: -2, happiness: -1 }, set: { chain_startup_3: true, chain_startup_done: true }, tag: '在扩张前卖掉了一部分股份' }, { tone: 'switch' })
+    ]
+  });
+
+  add({
+    id: 'v3_chain_startup_4', type: 'causal', layer: 'chain', tier: 'echo',
+    stage: '青年', age: 0, prio: 74, weight: 1, art: 'emptyDesk',
+    cond: function (g) {
+      return !!g.marks.chain_startup_3 && !g.marks.chain_startup_done &&
+        (g.money.debt > 20000 || !!g.marks.startup_expand || (g.stageImpact || []).length >= 1);
+    },
+    title: '账上的现金只够两个月',
+    text: '财务把报表发过来，现金只够撑两个月。供应商在催款，员工在等工资，之前所有的乐观在这一页纸上都不作数了。',
+    opts: [
+      o('关停，先把工资结清', { quitJob: true, money: { cash: -30000, debt: 40000 }, at: { stress: 8, happiness: -6 }, set: { chain_startup_done: true, startup_failed: true }, statsStartupFail: true, bc: { key: 'startup_fail' }, tag: '创业公司在现金流断裂后关停' }, { hint: '负债增加，但不再拖下去', tone: 'safe' }),
+      o('借一笔过桥资金，再撑半年', { money: { cash: 100000, debt: 120000 }, at: { stress: 10 }, risk: { highStress: 8 }, set: { chain_startup_done: true }, tag: '在现金断裂时借了一笔过桥资金' }, { hint: '赌一把，负债翻倍', tone: 'risk' }),
+      o('低价转让，及时退出', { money: { cash: 30000 }, quitJob: true, at: { happiness: -4 }, set: { chain_startup_done: true, startup_failed: true }, statsStartupFail: true, tag: '把公司低价转让后退出' }, { tone: 'switch' })
+    ]
+  });
+
+  /* =========================================================
+     三、多阶段事件链：病中三年
+     ========================================================= */
+  add({
+    id: 'v3_chain_illness_1', type: 'causal', layer: 'chain', tier: 'echo',
+    stage: '中年', age: 0, prio: 64, weight: 1, art: 'clinic',
+    cond: function (g) {
+      return g.age >= 38 && g.attrs.health < 80 &&
+        !g.marks.chain_illness_1 && !g.marks.chain_illness_done;
+    },
+    title: '报告上的一项异常',
+    text: '体检报告里有一项指标被标了出来。医生说不算急，但需要进一步检查。你把报告折起来放进包里，回家路上一直在想这件事。',
+    opts: [
+      o('立刻预约复查', { money: { cash: -8000 }, at: { stress: 4 }, set: { chain_illness_1: true }, flag: { event: 'v3_chain_illness_2', delay: 1, mark: 'illness_checked', note: '体检发现异常后立刻复查' }, tag: '体检异常后立刻预约了复查' }, { tone: 'safe' }),
+      o('先观察半年再说', { money: { cash: -1000 }, at: { stress: 2 }, set: { chain_illness_1: true }, flag: { event: 'v3_chain_illness_2', delay: 2, mark: 'illness_watch', note: '对体检异常选择了先观察' }, tag: '对体检异常选择了先观察半年' }, { tone: 'switch' }),
+      o('不查了，等有症状再说', { at: { health: -5, stress: 3 }, set: { chain_illness_1: true, illness_delayed: true }, flag: { event: 'v3_chain_illness_2', delay: 2, mark: 'illness_ignore', note: '把体检异常搁在了一边' }, tag: '把体检异常搁在了一边' }, { hint: '省下检查费，风险留着', tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_chain_illness_2', type: 'causal', layer: 'chain', tier: 'echo',
+    stage: '中年', age: 0, prio: 70, weight: 1, art: 'clinic',
+    cond: function (g) { return !!g.marks.chain_illness_1 && !g.marks.chain_illness_2 && !g.marks.chain_illness_done; },
+    title: '治疗方案摆在桌上',
+    text: '确诊之后，医生给了两套方案：一套要住院、恢复慢，但把握更大；一套保守，先吃药观察，随时可能反复。',
+    opts: [
+      o('选把握更大的方案', { money: { cash: -60000 }, at: { health: 6, stress: 5 }, set: { chain_illness_2: true, illness_treated: true }, flag: { event: 'v3_chain_illness_3', delay: 2, mark: 'illness_treated', note: '选择了积极治疗' }, bc: { key: 'surgery_ok', text: '治疗按计划完成，恢复期还需要时间。', changes: '医疗支出 -6 万 · 健康回升' }, tag: '生病后选择了积极治疗' }, { hint: '花钱多，恢复慢', tone: 'safe' }),
+      o('保守治疗，边治边看', { money: { cash: -20000 }, at: { health: -2 }, risk: { highStress: 3 }, set: { chain_illness_2: true, illness_conserve: true }, flag: { event: 'v3_chain_illness_3', delay: 1, mark: 'illness_conserve', note: '选择了保守治疗' }, tag: '生病后选择了保守治疗' }, { tone: 'switch' }),
+      o('只拿药，先扛着', { money: { cash: -3000 }, at: { health: -6 }, set: { chain_illness_2: true, illness_untreated: true }, flag: { event: 'v3_chain_illness_3', delay: 1, mark: 'illness_untreated', note: '只拿药没有系统治疗' }, tag: '只拿了药，没有系统治疗' }, { hint: '钱省下了，病情不等人', tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_chain_illness_3', type: 'causal', layer: 'chain', tier: 'echo',
+    stage: '中年', age: 0, prio: 72, weight: 1, art: 'clinic',
+    cond: function (g) { return !!g.marks.chain_illness_2 && !g.marks.chain_illness_done; },
+    title: '第三年复查',
+    text: '复查的日子到了。这三年你把一部分生活让给了医院，也把一部分工作让给了别人。结果会在下午出来。',
+    opts: [
+      o('按期复查，指标平稳', { money: { cash: -15000 }, at: { health: 3, happiness: 3 }, set: { chain_illness_done: true, illness_recovered: true }, tag: '病后第三年复查指标平稳' }, { tone: 'safe' }),
+      o('撑不住了，停工休养', { quitJob: true, needJob: true, money: { cash: -40000 }, at: { health: 8, stress: -6, happiness: 2 }, set: { chain_illness_done: true, illness_recovered: true }, tag: '病后停工休养了一段时间' }, { hint: '收入中断，把身体先补回来', tone: 'switch' }),
+      o('复发，重新住院', { money: { cash: -80000 }, at: { health: -10, happiness: -8, stress: 6 }, risk: { highStress: 6 }, set: { chain_illness_done: true, illness_relapse: true }, bc: { key: 'illness', text: '复查发现病情反复，需要重新住院。', changes: '医疗支出 -8 万 · 健康明显下降' }, tag: '病后第三年病情复发' }, { tone: 'risk' })
+    ]
+  });
+
+  /* =========================================================
+     四、支线事件 10 条
+     ========================================================= */
+  add({
+    id: 'v3_br_research', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 60, weight: 2, art: 'exam',
+    cond: function (g) { return g.age >= 22 && g.attrs.knowledge >= 75 && g.edu.level >= 5; },
+    title: '实验室递来的机会',
+    text: '导师问你愿不愿意进课题组，说项目周期长、出成果慢，但做出来就是另一条路。你算了一下时间，也算了算手里的钱。',
+    opts: [
+      o('全力投入', { money: { cash: -5000 }, at: { knowledge: 6, stress: 8, happiness: 2 }, rep: { school: 4 }, set: { research_path: true }, tag: '全力投入了一个长期科研项目' }, { hint: '周期长，收入低', tone: 'switch' }),
+      o('业余参与，不耽误工作', { at: { knowledge: 3, stress: 4 }, tag: '业余参与了一个科研项目' }, { tone: 'safe' }),
+      o('先工作，把生活稳住', { at: { finance: 2, happiness: -2 }, tag: '放弃了科研项目，先工作' }, { tone: 'safe' }),
+      {
+        label: '直接申请顶尖实验室', hint: '需要极高学识', tone: 'risk',
+        cond: { attr: 'knowledge', min: 88 },
+        fx: { money: { cash: -10000 }, at: { knowledge: 4, stress: 6 }, rep: { school: 8 }, set: { research_path: true, top_lab: true }, tag: '申请了顶尖实验室' }
+      }
+    ]
+  });
+
+  add({
+    id: 'v3_br_host', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 58, weight: 2, art: 'office',
+    cond: function (g) { return g.age >= 22 && g.attrs.charm >= 70; },
+    title: '被邀请主持',
+    text: '活动负责人看过你上次发言，问你愿不愿意主持今年的行业交流会。稿子要自己写，台下坐着不少人。',
+    opts: [
+      o('答应，认真准备', { money: { cash: 1000 }, at: { charm: 3, stress: 3 }, rep: { industry: 3 }, tag: '主持了一次行业交流会' }, { tone: 'switch' }),
+      o('推给更合适的同事', { at: { happiness: 1 }, rep: { industry: -1 }, tag: '推掉了主持的机会' }, { tone: 'safe' }),
+      {
+        label: '答应，并借机谈一个条件', hint: '需要很强的临场感', tone: 'switch',
+        cond: { attr: 'charm', min: 85 },
+        fx: { money: { cash: 3000 }, at: { stress: 2, charm: 2 }, rep: { industry: 4 }, tag: '主持前谈下了一个条件' }
+      }
+    ]
+  });
+
+  add({
+    id: 'v3_br_sidejob', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '中年', age: 0, prio: 58, weight: 2, art: 'emptyDesk',
+    cond: function (g) { return g.age >= 32 && g.money.debt > 0; },
+    title: '下班以后还有一笔账',
+    text: '账上还有一笔没还完的钱。白天的工作已经排满，晚上和周末还能挤出一点时间，但身体不一定答应。',
+    opts: [
+      o('下班接私活', { money: { cash: 12000 }, at: { health: -4, stress: 4 }, tag: '下班后长期接私活还债' }, { hint: '收入增加，身体透支', tone: 'switch' }),
+      o('周末跑车', { money: { cash: 6000 }, at: { health: -3, stress: 2 }, tag: '周末跑车补贴还款' }, { tone: 'safe' }),
+      o('先不接，保住身体', { at: { health: 2 }, money: { cash: -1000 }, tag: '没有接私活，先把身体保住' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_br_father_intro', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 60, weight: 2, art: 'office',
+    cond: function (g) { return g.age >= 20 && g.age <= 32 && alive(g, '父亲') && favorOf(g, '父亲') >= 70; },
+    title: '父亲托人介绍',
+    text: '父亲说他有个老同事在城里做事，问你要不要去见一面。他说得很随意，但提前把对方的脾气和忌讳都讲了一遍。',
+    opts: [
+      o('去见一面', { at: { happiness: 2, stress: 2 }, rep: { industry: 3 }, npc: { '父亲': { favor: 6 } }, needJob: true, tag: '父亲托人介绍了一个机会' }, { tone: 'safe' }),
+      o('婉拒，想自己找', { at: { happiness: 1 }, npc: { '父亲': { favor: -6 } }, tag: '拒绝了父亲托人介绍的机会' }, { tone: 'switch' }),
+      o('让父亲别操心', { at: { stress: -1 }, npc: { '父亲': { favor: -4 } }, tag: '让父亲不要再为工作的事操心' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_br_parent_meeting', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '中年', age: 0, prio: 56, weight: 2, art: 'exam',
+    cond: function (g) { var c = firstChild(g, 6); return !!c; },
+    title: '家长会',
+    text: '学校通知开家长会。老师说要单独聊几句，语气不重，但你听得出不是表扬。你翻了翻日程，那天正好有个会。',
+    opts: [
+      o('请假去学校', { money: { cash: -1000 }, at: { stress: 2 }, npc: { '子女': { favor: 8 } }, tag: '请假去参加了孩子的家长会' }, { tone: 'safe' }),
+      o('让配偶去', { npc: { '配偶': { favor: -3 }, '子女': { favor: -2 } }, at: { stress: -1 }, tag: '让配偶去开了家长会' }, { tone: 'safe' }),
+      o('散会后单独找老师聊', { money: { cash: -500 }, at: { knowledge: 1, stress: 2 }, npc: { '子女': { favor: 4 } }, tag: '单独找老师聊了孩子的学习' }, { tone: 'switch' })
+    ]
+  });
+
+  add({
+    id: 'v3_br_sick_leave', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '中年', age: 0, prio: 60, weight: 2, art: 'clinic',
+    cond: function (g) { return g.age >= 30 && g.attrs.health < 45; },
+    title: '医生建议休假',
+    text: '医生说这段时间最好停下来，至少不要再连轴转。你嘴上答应了，心里在算请假的代价。',
+    opts: [
+      o('请一段长假', { money: { cash: -15000 }, at: { health: 8, stress: -6 }, set: { rest_leave: true }, tag: '健康恶化后请了一段长假' }, { hint: '收入减少，身体优先', tone: 'safe' }),
+      o('只休一周', { money: { cash: -3000 }, at: { health: 3, stress: -2 }, tag: '只休了一周就回去上班' }, { tone: 'safe' }),
+      o('硬撑，工作不能停', { at: { health: -4, stress: 5 }, risk: { highStress: 5, noExercise: 3 }, tag: '身体不好仍然硬撑上班' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_br_move_city', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 56, weight: 2, art: 'jobfair',
+    cond: function (g) { return g.age >= 23 && g.age <= 32 && !g.house.owned && g.money.cash >= 30000; },
+    title: '另一座城市',
+    text: '朋友在另一座城市落脚，说那边机会多一点、房租贵一点。你把两地的招聘信息并排打开，看了很久。',
+    opts: [
+      o('过去试试', { money: { cash: -20000 }, at: { stress: 5, happiness: 2 }, set: { moved_city: true }, needJob: true, tag: '离开原城市去了另一座城市' }, { hint: '重新开始，成本不低', tone: 'switch' }),
+      o('留在原地', { at: { happiness: 1 }, tag: '没有离开原城市' }, { tone: 'safe' }),
+      o('先远程投简历', { money: { cash: -3000 }, at: { knowledge: 2 }, needJob: true, tag: '先远程投了外地的岗位' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_br_friend_loan', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '中年', age: 0, prio: 56, weight: 2, art: 'money',
+    cond: function (g) { return g.age >= 32 && friendFavor(g) >= 60; },
+    title: '挚友开口借钱',
+    text: '多年交情的老朋友打电话来，说周转不开，想借一笔钱。他没有说什么时候还，只说等他缓过来。',
+    opts: [
+      o('借给对方', { money: { cash: -20000 }, at: { happiness: 2 }, apply: friendFx(10), tag: '借给挚友一笔钱应急' }, { hint: '可能很久收不回来', tone: 'switch' }),
+      o('借一半，把还款时间说清', { money: { cash: -8000 }, at: { stress: 1 }, apply: friendFx(5), tag: '借钱给挚友时把还款时间说清了' }, { tone: 'safe' }),
+      o('不借，但帮着想办法', { at: { stress: 2 }, apply: friendFx(-8), tag: '没有借钱给挚友，但帮着出了主意' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_br_marriage_flat', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '中年', age: 0, prio: 58, weight: 2, art: 'emptyHome',
+    cond: function (g) { var s = spouseNpc(g); return !!s && s.favor < 58 && g.age >= 32; },
+    title: '话越来越少',
+    text: '这段时间你和配偶的对话只剩下家务和账单。不是吵架，是没什么可说。晚上各自拿着手机，客厅里只有电视的声音。',
+    opts: [
+      o('坐下来谈一次', { at: { stress: 2, happiness: 2 }, npc: { '配偶': { favor: 10 } }, apply: arcTo('spouse', '熟悉'), tag: '和配偶认真谈了一次' }, { tone: 'safe' }),
+      o('各过各的，先不勉强', { at: { happiness: -4 }, npc: { '配偶': { favor: -6 } }, apply: arcTo('spouse', '疏离'), tag: '和配偶开始各过各的' }, { tone: 'risk' }),
+      o('提议一起出去走走', { money: { cash: -5000 }, at: { happiness: 4 }, npc: { '配偶': { favor: 12 } }, apply: arcTo('spouse', '亲密'), tag: '和配偶一起出门走了几天' }, { tone: 'switch' })
+    ]
+  });
+
+  add({
+    id: 'v3_br_learn_new', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '中老年', age: 0, prio: 50, weight: 2, art: 'exam',
+    cond: function (g) { return g.age >= 55 && g.attrs.health >= 50; },
+    title: '还想学点东西',
+    text: '社区贴出老年大学的招生简章，摄影、书法、智能手机都有。你站在公告栏前看了一会儿，觉得自己还没到只想坐着的时候。',
+    opts: [
+      o('报名老年大学', { money: { cash: -3000 }, at: { knowledge: 4, happiness: 5, charm: 2 }, tag: '报名上了老年大学' }, { tone: 'switch' }),
+      o('自学手机摄影', { money: { cash: -1500 }, at: { knowledge: 2, happiness: 4 }, tag: '自己学起了手机摄影' }, { tone: 'safe' }),
+      o('不折腾了', { at: { happiness: 1 }, tag: '没有去学新东西' }, { tone: 'safe' })
+    ]
+  });
+
+  /* =========================================================
+     五、时代事件 3 条
+     ========================================================= */
+  add({
+    id: 'v3_era_crisis', type: 'era', layer: 'era', tier: 'crossroad',
+    stage: '青年', age: 0, prio: 88, weight: 1, art: 'emptyDesk',
+    cond: function (g) { return g.age >= 22 && g.age <= 30 && !g.marks.era_crisis; },
+    title: '经济下行',
+    text: '新闻里连续几个月都是裁员和降薪，招聘会一场比一场挤。你所在的行业也在收缩，所有人都开始把话说得更保守。',
+    opts: [
+      { label: '保住现有工作，少提要求', hint: '收入略降，位置更稳', tone: 'safe',
+        fx: { salaryPct: -0.08, at: { stress: 4 }, rep: { industry: 2 }, set: { epoch_crisis: true }, tag: '经济下行时选择保住现有工作' },
+        apply: eraSet('经济下行', { random: -0.12, hunt: -0.25 }, 4) },
+      { label: '趁低价换一条赛道', hint: '风险高，机会也在低价里', tone: 'risk',
+        fx: { quitJob: true, needJob: true, money: { cash: -10000 }, at: { stress: 8, happiness: -2 }, set: { epoch_crisis: true }, tag: '经济下行时换了赛道' },
+        apply: eraSet('经济下行', { random: -0.12, hunt: -0.25 }, 4) },
+      { label: '存现金，减少开支', hint: '不冒险，先撑过去', tone: 'safe',
+        fx: { at: { finance: 2, stress: -2 }, set: { epoch_crisis: true, epoch_frugal: true }, tag: '经济下行时开始压缩开支' },
+        apply: eraSet('经济下行', { random: -0.12, hunt: -0.25 }, 4) }
+    ]
+  });
+
+  add({
+    id: 'v3_era_boom', type: 'era', layer: 'era', tier: 'crossroad',
+    stage: '青年', age: 0, prio: 88, weight: 1, art: 'jobfair',
+    cond: function (g) { return g.age >= 23 && g.age <= 30 && !!g.job.id && !g.marks.era_boom; },
+    title: '行业风口',
+    text: '行业突然热了起来，猎头的电话多了，同行群里每天都在传谁又跳去了哪里。你也接到了两个面试邀请。',
+    opts: [
+      { label: '跳槽到风口上', hint: '收入上涨，稳定性下降', tone: 'switch',
+        fx: { salaryPct: 0.25, at: { stress: 5, happiness: 2 }, rep: { industry: 3 }, set: { epoch_boom: true }, tag: '在行业风口上跳了槽' },
+        apply: eraSet('行业风口', { random: 0.08, hunt: 0.15 }, 3) },
+      { label: '留在原岗，把本行做深', hint: '错过快钱，积累经验', tone: 'safe',
+        fx: { at: { knowledge: 3, stress: -1 }, rep: { industry: 2 }, set: { epoch_boom: true }, tag: '行业风口里选择留在原岗' },
+        apply: eraSet('行业风口', { random: 0.08, hunt: 0.15 }, 3) },
+      { label: '业余做点相关的小生意', hint: '投入不大，精力要跟上', tone: 'risk',
+        fx: { money: { cash: -8000 }, at: { finance: 2, stress: 3 }, set: { epoch_boom: true, epoch_side: true }, tag: '在行业风口里做了点小生意' },
+        apply: eraSet('行业风口', { random: 0.08, hunt: 0.15 }, 3) }
+    ]
+  });
+
+  add({
+    id: 'v3_era_policy', type: 'era', layer: 'era', tier: 'crossroad',
+    stage: '青年', age: 0, prio: 88, weight: 1, art: 'office',
+    cond: function (g) { return g.age >= 24 && g.age <= 30 && !g.marks.era_policy; },
+    title: '政策变了',
+    text: '行业规范收紧，原来能做的事现在要补资质，原来默认的做法现在要写进流程。通知下得很急，解释只有一页。',
+    opts: [
+      { label: '按新规补齐资质', hint: '花钱，换长期合规', tone: 'safe',
+        fx: { money: { cash: -6000 }, at: { knowledge: 2, stress: 2 }, set: { epoch_policy: true }, tag: '按新规补齐了从业资质' },
+        apply: eraSet('规范收紧', { random: -0.04, hunt: -0.1 }, 3) },
+      { label: '换到受鼓励的方向', hint: '重新开始，风险自担', tone: 'switch',
+        fx: { money: { cash: -10000 }, at: { stress: 4 }, needJob: true, set: { epoch_policy: true }, tag: '政策收紧后换了方向' },
+        apply: eraSet('规范收紧', { random: -0.04, hunt: -0.1 }, 3) },
+      { label: '先观望一年', hint: '不做决定，也是一种决定', tone: 'safe',
+        fx: { at: { stress: 1 }, set: { epoch_policy: true, epoch_wait: true }, tag: '政策变化后先观望了一年' },
+        apply: eraSet('规范收紧', { random: -0.04, hunt: -0.1 }, 3) }
+    ]
+  });
+
+  /* =========================================================
+     六、核心 NPC 关系弧线
+     ========================================================= */
+  function friendArc(delta, stage) {
+    return function (g) {
+      friendFx(delta)(g);
+      if (!g.npcArc) g.npcArc = {};
+      g.npcArc.friend = stage;
+    };
+  }
+
+  /* ---- 父亲 4 节点 ---- */
+  add({
+    id: 'v3_npc_father_1', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 78, weight: 2, art: 'home',
+    cond: function (g) { return g.age >= 22 && alive(g, '父亲') && favorOf(g, '父亲') >= 55 && !g.marks.npc_father_1; },
+    title: '父亲让你回家一趟',
+    text: '父亲打电话来，说家里有点事，让你周末回去一趟。你问是什么事，他说回去再说，语气和平时一样，听不出轻重。',
+    opts: [
+      o('回去一趟，听完再说', { at: { happiness: 2 }, npc: { '父亲': { favor: 8 } }, set: { npc_father_1: true }, apply: arcTo('father', '熟悉'), tag: '父亲叫你回家时，你回去了' }, { tone: 'safe' }),
+      o('在电话里问清楚', { at: { stress: -1 }, npc: { '父亲': { favor: -4 } }, set: { npc_father_1: true }, apply: arcTo('father', '疏离'), tag: '没有回家，只在电话里问了情况' }, { tone: 'safe' }),
+      o('说忙，改天再说', { at: { happiness: -3 }, npc: { '父亲': { favor: -8 } }, set: { npc_father_1: true }, apply: arcTo('father', '疏离'), tag: '以忙为由没有回家' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_father_2', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '青年', age: 0, prio: 72, weight: 2, art: 'clinic',
+    cond: function (g) {
+      return g.age >= 26 && alive(g, '父亲') && !g.marks.npc_father_2 &&
+        (relationOf(g, 'father') === '熟悉' || relationOf(g, 'father') === '亲密');
+    },
+    title: '父亲的体检报告',
+    text: '父亲把体检报告拍给你，说医生让复查，他觉得自己没事。照片拍得有点歪，几项指标被红笔圈了出来。',
+    opts: [
+      o('陪他去复查', { money: { cash: -3000 }, at: { stress: 2 }, npc: { '父亲': { favor: 6, health: 2 } }, set: { npc_father_2: true }, apply: arcTo('father', '亲密'), tag: '陪父亲去做了复查' }, { tone: 'safe' }),
+      o('出钱，让他自己去', { money: { cash: -5000 }, npc: { '父亲': { favor: 1 } }, set: { npc_father_2: true }, tag: '出钱让父亲自己去复查' }, { tone: 'safe' }),
+      o('让他别小题大做', { at: { stress: 2 }, npc: { '父亲': { favor: -6 } }, set: { npc_father_2: true }, apply: arcTo('father', '疏离'), tag: '觉得父亲在小题大做' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_father_3', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 75, weight: 2, art: 'home',
+    cond: function (g) {
+      return g.age >= 38 && alive(g, '父亲') && !g.marks.npc_father_3 && relationOf(g, 'father') === '亲密';
+    },
+    title: '父亲想搬过来住',
+    text: '父亲说老房子冬天太冷，问能不能到你这边住一段。他说只是住一段，等开春就回去，行李已经收拾好了一个箱子。',
+    opts: [
+      o('接过来一起住', { money: { cash: -3000 }, at: { stress: 3, happiness: 2 }, npc: { '父亲': { favor: 10 } }, set: { npc_father_3: true, father_live_with: true }, apply: arcTo('father', '亲密'), tag: '把父亲接来一起住' }, { tone: 'safe' }),
+      o('在附近租一间房', { money: { cash: -20000 }, at: { stress: 2 }, npc: { '父亲': { favor: 6 } }, set: { npc_father_3: true }, apply: arcTo('father', '亲密'), tag: '在附近给父亲租了一间房' }, { tone: 'switch' }),
+      o('先维持现状，等开春再说', { at: { happiness: -2 }, npc: { '父亲': { favor: -5 } }, set: { npc_father_3: true }, apply: arcTo('father', '疏离'), tag: '没有让父亲搬过来' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_father_4', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 85, weight: 2, art: 'grave',
+    cond: function (g) {
+      return g.age >= 52 && alive(g, '父亲') && favorOf(g, '父亲') >= 35 && !g.marks.npc_father_4;
+    },
+    title: '病房外的走廊',
+    text: '父亲住院了，医生说这个年纪，能做的治疗有限。夜里走廊很安静，护工在打盹，你坐在塑料椅上，想起他年轻时走路很快。',
+    opts: [
+      o('守夜，陪他把话说完', { money: { cash: -5000 }, at: { health: -2, stress: 5 }, npc: { '父亲': { favor: 12, health: 2 } }, set: { npc_father_4: true }, apply: arcTo('father', '亲密'), tag: '父亲住院时守了一夜' }, { tone: 'safe' }),
+      o('安排护工，白天再过来', { money: { cash: -15000 }, at: { stress: 2 }, npc: { '父亲': { favor: 4 } }, set: { npc_father_4: true }, tag: '给父亲安排了护工' }, { tone: 'safe' }),
+      o('让兄弟姐妹轮流', { at: { stress: 2 }, npc: { '父亲': { favor: -5 } }, set: { npc_father_4: true }, apply: arcTo('father', '疏离'), tag: '父亲住院时让兄弟姐妹轮流照顾' }, { tone: 'risk' })
+    ]
+  });
+
+  /* ---- 母亲 3 节点 ---- */
+  add({
+    id: 'v3_npc_mother_1', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 76, weight: 2, art: 'home',
+    cond: function (g) { return g.age >= 20 && alive(g, '母亲') && favorOf(g, '母亲') >= 55 && !g.marks.npc_mother_1; },
+    title: '母亲收拾出一箱旧衣服',
+    text: '母亲在电话里说，她把你的旧衣服都收拾出来了，有几件还能穿。她问你什么时候回来，又说不用特意回，只是告诉你一声。',
+    opts: [
+      o('周末回去一趟', { at: { happiness: 3 }, npc: { '母亲': { favor: 8 } }, set: { npc_mother_1: true }, apply: arcTo('mother', '亲密'), tag: '母亲收拾旧衣服时，你回了家' }, { tone: 'safe' }),
+      o('让她别留着，处理掉就行', { at: { happiness: -1 }, npc: { '母亲': { favor: -5 } }, set: { npc_mother_1: true }, apply: arcTo('mother', '疏离'), tag: '让母亲把旧衣服处理掉了' }, { tone: 'safe' }),
+      o('说过年一定回去', { npc: { '母亲': { favor: 2 } }, set: { npc_mother_1: true }, apply: arcTo('mother', '熟悉'), tag: '答应母亲过年回去' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_mother_2', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 72, weight: 2, art: 'clinic',
+    cond: function (g) {
+      return g.age >= 34 && alive(g, '母亲') && favorOf(g, '母亲') >= 60 && !g.marks.npc_mother_2;
+    },
+    title: '母亲说腰疼',
+    text: '母亲说腰疼了半个月，自己去药店买过膏药，没什么用。她说不用你管，等你周末有空再带她去看看。',
+    opts: [
+      o('请假陪她去', { money: { cash: -3000 }, at: { stress: 2 }, npc: { '母亲': { favor: 8, health: 3 } }, set: { npc_mother_2: true }, apply: arcTo('mother', '亲密'), tag: '陪母亲去医院看了腰疼' }, { tone: 'safe' }),
+      o('让她先去，回头报销', { money: { cash: -4000 }, npc: { '母亲': { favor: 2 } }, set: { npc_mother_2: true }, tag: '让母亲先去医院，费用你来出' }, { tone: 'safe' }),
+      o('说忙，让她找亲戚陪', { at: { happiness: -3 }, npc: { '母亲': { favor: -7 } }, set: { npc_mother_2: true }, apply: arcTo('mother', '疏离'), tag: '母亲腰疼时没能陪她去医院' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_mother_3', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中老年', age: 0, prio: 80, weight: 2, art: 'home',
+    cond: function (g) {
+      return g.age >= 58 && alive(g, '母亲') && favorOf(g, '母亲') >= 50 && !g.marks.npc_mother_3;
+    },
+    title: '院子里那棵树',
+    text: '母亲在电话里说，院子里那棵树今年又结果了，吃不完，晒了一些。她问你今年回来几次，问完又说，不回来也没关系。',
+    opts: [
+      o('定个日子，常回去', { npc: { '母亲': { favor: 8 } }, at: { happiness: 3 }, set: { npc_mother_3: true }, apply: arcTo('mother', '亲密'), tag: '和母亲约定常回家看看' }, { tone: 'safe' }),
+      o('视频通话也算见面', { npc: { '母亲': { favor: 2 } }, at: { happiness: 1 }, set: { npc_mother_3: true }, tag: '用视频通话代替回家' }, { tone: 'safe' }),
+      o('说等忙完这阵再说', { at: { happiness: -2 }, npc: { '母亲': { favor: -4 } }, set: { npc_mother_3: true }, apply: arcTo('mother', '疏离'), tag: '总说忙完再回家' }, { tone: 'risk' })
+    ]
+  });
+
+  /* ---- 配偶 4 节点 ---- */
+  add({
+    id: 'v3_npc_spouse_1', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 74, weight: 2, art: 'home',
+    cond: function (g) {
+      var s = spouseNpc(g);
+      return g.age >= 28 && !!s && s.favor >= 60 && !g.marks.npc_spouse_1;
+    },
+    title: '配偶说想商量一件事',
+    text: '晚上吃完饭，配偶把碗放下，说想和你商量一件事。关于以后住在哪里、钱怎么花，还有要不要孩子。话说得很慢。',
+    opts: [
+      o('认真听完，把自己的想法也说清', { at: { happiness: 3 }, npc: { '配偶': { favor: 8 } }, set: { npc_spouse_1: true }, apply: arcTo('spouse', '亲密'), tag: '和配偶认真谈了一次以后的事' }, { tone: 'safe' }),
+      o('说改天再谈，今天太累', { at: { stress: 1 }, npc: { '配偶': { favor: -6 } }, set: { npc_spouse_1: true }, apply: arcTo('spouse', '疏离'), tag: '把和配偶的谈话推到了改天' }, { tone: 'risk' }),
+      o('边看手机边听', { at: { happiness: -2 }, npc: { '配偶': { favor: -10 } }, set: { npc_spouse_1: true }, apply: arcTo('spouse', '疏离'), tag: '配偶说话时你一直在看手机' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_spouse_2', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 72, weight: 2, art: 'home',
+    cond: function (g) {
+      var s = spouseNpc(g);
+      return g.age >= 34 && !!s && s.favor >= 50 && s.favor < 75 && !g.marks.npc_spouse_2 &&
+        (!g.npcArc || !g.npcArc.spouse || g.npcArc.spouse !== '决裂');
+    },
+    title: '家务清单',
+    text: '配偶把一张家务清单贴在冰箱上，说不是要计较，只是希望你能看见。清单上大部分项目后面，写的都是同一个名字。',
+    opts: [
+      o('主动多做一些', { at: { stress: 2, happiness: 2 }, npc: { '配偶': { favor: 6 } }, set: { npc_spouse_2: true }, apply: arcTo('spouse', '亲密'), tag: '主动分担了更多家务' }, { tone: 'safe' }),
+      o('请个钟点工', { money: { cash: -2000 }, npc: { '配偶': { favor: 3 } }, set: { npc_spouse_2: true }, tag: '请了钟点工分担家务' }, { tone: 'safe' }),
+      o('觉得对方太计较', { at: { happiness: -3 }, npc: { '配偶': { favor: -7 } }, set: { npc_spouse_2: true }, apply: arcTo('spouse', '疏离'), tag: '觉得配偶在家务上太计较' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_spouse_3', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 78, weight: 2, art: 'clinic',
+    cond: function (g) {
+      var s = spouseNpc(g);
+      return g.age >= 40 && !!s && s.favor < 55 && !g.marks.npc_spouse_3 &&
+        (!g.npcArc || !g.npcArc.spouse || g.npcArc.spouse !== '决裂');
+    },
+    title: '配偶的检查结果',
+    text: '配偶体检查出了问题，需要进一步治疗。你们已经很久没有认真坐下来讲话，但这一次，医生把你们叫进了同一间诊室。',
+    opts: [
+      o('陪着治，把这段时间扛下来', { money: { cash: -20000 }, at: { stress: 4 }, npc: { '配偶': { favor: 12, health: 3 } }, set: { npc_spouse_3: true }, apply: arcTo('spouse', '亲密'), tag: '配偶生病时一直陪在身边' }, { tone: 'safe' }),
+      o('出钱，但少有时间陪', { money: { cash: -15000 }, at: { stress: 1 }, npc: { '配偶': { favor: 2 } }, set: { npc_spouse_3: true }, tag: '配偶生病时出了钱，但陪得少' }, { tone: 'safe' }),
+      o('嫌麻烦，让亲戚去照顾', { at: { happiness: -5 }, npc: { '配偶': { favor: -12 } }, set: { npc_spouse_3: true }, apply: arcTo('spouse', '疏离'), tag: '配偶生病时你没有照顾' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_spouse_4', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中老年', age: 0, prio: 70, weight: 2, art: 'wedding',
+    cond: function (g) {
+      var s = spouseNpc(g);
+      return g.age >= 55 && !!s && s.favor >= 70 && !g.marks.npc_spouse_4 &&
+        (!g.npcArc || !g.npcArc.spouse || g.npcArc.spouse !== '决裂');
+    },
+    title: '结婚纪念日',
+    text: '结婚纪念日那天，配偶没有提，你也没有提。晚上她把一盘切好的水果放到你手边，说了一句，时间过得真快。',
+    opts: [
+      o('在家做顿饭', { money: { cash: -500 }, at: { happiness: 4 }, npc: { '配偶': { favor: 8 } }, set: { npc_spouse_4: true }, apply: arcTo('spouse', '亲密'), tag: '结婚纪念日在家做了一顿饭' }, { tone: 'safe' }),
+      o('出去吃一顿', { money: { cash: -3000 }, at: { happiness: 5 }, npc: { '配偶': { favor: 10 } }, set: { npc_spouse_4: true }, apply: arcTo('spouse', '亲密'), tag: '结婚纪念日出去吃了一顿' }, { tone: 'switch' }),
+      o('忘了，第二天才想起来', { at: { happiness: -2 }, npc: { '配偶': { favor: -6 } }, set: { npc_spouse_4: true }, apply: arcTo('spouse', '疏离'), tag: '忘了结婚纪念日' }, { tone: 'risk' })
+    ]
+  });
+
+  /* ---- 子女 4 节点 ---- */
+  add({
+    id: 'v3_npc_child_1', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '中年', age: 0, prio: 72, weight: 2, art: 'exam',
+    cond: function (g) {
+      var c = firstChild(g, 10);
+      return g.age >= 36 && !!c && c.favor >= 50 && !g.marks.npc_child_1;
+    },
+    title: '孩子说有事想讲',
+    text: '孩子放学回来，书包还没放下，就站在你房门口说有事想讲。你正在回一条工作消息，屏幕上的字还没打完。',
+    opts: [
+      o('放下手机，听完', { at: { happiness: 3 }, npc: { '子女': { favor: 8 } }, set: { npc_child_1: true }, apply: arcTo('child', '亲密'), tag: '孩子有话想说时，你认真听完了' }, { tone: 'safe' }),
+      o('让他先写作业', { at: { stress: 1 }, npc: { '子女': { favor: -6 } }, set: { npc_child_1: true }, apply: arcTo('child', '疏离'), tag: '孩子想说话时，你让他先去写作业' }, { tone: 'risk' }),
+      o('让他自己决定', { at: { knowledge: 1 }, npc: { '子女': { favor: 2 } }, set: { npc_child_1: true }, tag: '让孩子自己拿主意' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_child_2', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 74, weight: 2, art: 'exam',
+    cond: function (g) {
+      var c = firstChild(g, 16);
+      return g.age >= 42 && !!c && !g.marks.npc_child_2 &&
+        (!g.npcArc || !g.npcArc.child || g.npcArc.child !== '决裂');
+    },
+    title: '成绩单上的名次',
+    text: '孩子的成绩单放在餐桌上，名次比上次退了不少。孩子说这次题难，同学都没考好。你没有马上说话。',
+    opts: [
+      o('一起把错题看完', { at: { knowledge: 2, stress: 2 }, npc: { '子女': { favor: 6 } }, set: { npc_child_2: true }, apply: arcTo('child', '亲密'), tag: '和孩子一起看完了错题' }, { tone: 'safe' }),
+      o('报个补习班', { money: { cash: -8000 }, at: { stress: 2 }, npc: { '子女': { favor: -4 } }, set: { npc_child_2: true }, tag: '给孩子报了补习班' }, { tone: 'switch' }),
+      o('顺其自然，不逼他', { at: { happiness: 1 }, npc: { '子女': { favor: 2 } }, set: { npc_child_2: true }, tag: '没有因为成绩给孩子压力' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_child_3', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 70, weight: 2, art: 'jobfair',
+    cond: function (g) {
+      var c = firstChild(g, 22);
+      return g.age >= 50 && !!c && !g.marks.npc_child_3 &&
+        (!g.npcArc || !g.npcArc.child || g.npcArc.child !== '决裂');
+    },
+    title: '孩子毕业了',
+    text: '孩子毕业了，简历投出去几十份，回音不多。饭桌上他说想先去大城市试试，问你能不能帮着问问熟人。',
+    opts: [
+      o('托人介绍一个面试', { money: { cash: -2000 }, at: { stress: 2 }, rep: { industry: 2 }, npc: { '子女': { favor: 5 } }, set: { npc_child_3: true }, tag: '托人给孩子介绍了一次面试' }, { tone: 'safe' }),
+      o('让他自己投，别急着托关系', { at: { happiness: 1 }, npc: { '子女': { favor: 1 } }, set: { npc_child_3: true }, tag: '让孩子自己投简历' }, { tone: 'safe' }),
+      o('劝他先考编', { at: { stress: 2 }, npc: { '子女': { favor: -3 } }, set: { npc_child_3: true }, tag: '劝孩子先考编制' }, { tone: 'switch' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_child_4', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中老年', age: 0, prio: 72, weight: 2, art: 'nursery',
+    cond: function (g) {
+      var c = firstChild(g, 28);
+      return g.age >= 60 && !!c && !g.marks.npc_child_4 &&
+        (!g.npcArc || !g.npcArc.child || g.npcArc.child !== '决裂');
+    },
+    title: '孩子问你要不要过去住',
+    text: '孩子打电话来，说那边房子收拾出一间，问你要不要过去住一段。他说得很客气，像在邀请一个客人。',
+    opts: [
+      o('过去住一段', { at: { happiness: 5 }, npc: { '子女': { favor: 8 } }, set: { npc_child_4: true }, apply: arcTo('child', '亲密'), tag: '去孩子那里住了一段' }, { tone: 'safe' }),
+      o('留在老房子', { at: { happiness: 1 }, npc: { '子女': { favor: -3 } }, set: { npc_child_4: true }, apply: arcTo('child', '疏离'), tag: '没有去孩子那里住' }, { tone: 'safe' }),
+      o('两边住，来回跑', { at: { happiness: 3, stress: 2 }, npc: { '子女': { favor: 5 } }, set: { npc_child_4: true }, apply: arcTo('child', '亲密'), tag: '在孩子家和老房子之间来回住' }, { tone: 'switch' })
+    ]
+  });
+
+  /* ---- 挚友 3 节点 ---- */
+  add({
+    id: 'v3_npc_friend_1', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 75, weight: 2, art: 'home',
+    cond: function (g) { return g.age >= 22 && friendFavor(g) >= 55 && !g.marks.npc_friend_1; },
+    title: '半夜的电话',
+    text: '半夜一点，老朋友打来电话。他先问你是不是睡了，然后沉默了几秒，说没什么大事，就是想找个人说说话。',
+    opts: [
+      o('听他说完', { at: { happiness: 2 }, apply: friendArc(8, '亲密'), set: { npc_friend_1: true }, tag: '老朋友半夜打电话时，你听他说完了' }, { tone: 'safe' }),
+      o('说明天再聊', { at: { stress: 1 }, apply: friendArc(-5, '疏离'), set: { npc_friend_1: true }, tag: '老朋友半夜打电话时，你说明天再聊' }, { tone: 'safe' }),
+      o('关机继续睡', { at: { happiness: -2 }, apply: friendArc(-10, '疏离'), set: { npc_friend_1: true }, tag: '老朋友半夜打电话时，你关了机' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_friend_2', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 70, weight: 2, art: 'money',
+    cond: function (g) {
+      return g.age >= 35 && friendFavor(g) >= 60 && !g.marks.npc_friend_2 &&
+        (!g.npcArc || !g.npcArc.friend || g.npcArc.friend !== '决裂');
+    },
+    title: '老朋友拉你合伙',
+    text: '老朋友说有个小项目，想拉你一起做。他负责跑外面，你出一部分钱。他说亏了算他的，但你们都知道，真亏了不会这么算。',
+    opts: [
+      o('合伙做', { money: { cash: -30000 }, at: { stress: 5 }, apply: friendArc(8, '亲密'), set: { npc_friend_2: true, friend_partner: true }, tag: '和老朋友合伙做了一个项目' }, { hint: '投入三万，交情也押上了', tone: 'risk' }),
+      o('只出一点，不掺和经营', { money: { cash: -8000 }, apply: friendArc(3, '熟悉'), set: { npc_friend_2: true }, tag: '给老朋友的项目投了一点钱' }, { tone: 'safe' }),
+      o('拒绝，把话说清楚', { at: { stress: 1 }, apply: friendArc(-6, '疏离'), set: { npc_friend_2: true }, tag: '拒绝了老朋友合伙的提议' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_friend_3', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 68, weight: 2, art: 'emptyHome',
+    cond: function (g) {
+      return g.age >= 45 && !!friendNpc(g) && friendFavor(g) < 50 && !g.marks.npc_friend_3 &&
+        (!g.npcArc || !g.npcArc.friend || g.npcArc.friend !== '决裂');
+    },
+    title: '很久没联系了',
+    text: '你翻通讯录时看到老朋友的名字，最后一条消息停在两年前。你想起以前你们一周能见三次，现在连近况都不知道。',
+    opts: [
+      o('主动约一次', { at: { happiness: 2 }, apply: friendArc(10, '熟悉'), set: { npc_friend_3: true }, tag: '主动约了很久没见的老朋友' }, { tone: 'safe' }),
+      o('等对方先联系', { at: { happiness: -1 }, apply: friendArc(-4, '疏离'), set: { npc_friend_3: true }, tag: '没有主动联系老朋友' }, { tone: 'safe' }),
+      o('删掉联系方式', { at: { happiness: -3 }, apply: friendArc(-15, '决裂'), set: { npc_friend_3: true }, tag: '删掉了老朋友的联系方式' }, { tone: 'risk' })
+    ]
+  });
+
+  /* ---- 上司 3 节点 ---- */
+  add({
+    id: 'v3_npc_boss_1', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '青年', age: 0, prio: 76, weight: 2, art: 'office',
+    cond: function (g) { return g.age >= 24 && !!g.job.id && !g.marks.npc_boss_1; },
+    title: '上司下班前叫住你',
+    text: '快下班时，上司叫住你，说耽误两分钟。他把办公室的门带上，先问了句最近家里怎么样，然后才说到正事。',
+    opts: [
+      o('留下来，把话听完', { at: { stress: 2 }, npc: { '上司': { favor: 8 } }, set: { npc_boss_1: true }, apply: arcTo('boss', '熟悉'), tag: '上司找你谈话时，你留了下来' }, { tone: 'safe' }),
+      o('说家里有事，明天再谈', { at: { happiness: 1 }, npc: { '上司': { favor: -5 } }, set: { npc_boss_1: true }, apply: arcTo('boss', '疏离'), tag: '上司找你谈话时，你推到了明天' }, { tone: 'safe' }),
+      o('直接问是不是要升职', { at: { stress: 2 }, npc: { '上司': { favor: 3 } }, set: { npc_boss_1: true }, apply: arcTo('boss', '熟悉'), tag: '直接问了上司是不是要升职' }, { tone: 'switch' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_boss_2', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 74, weight: 2, art: 'office',
+    cond: function (g) {
+      return g.age >= 35 && !!g.job.id && favorOf(g, '上司') >= 55 && !g.marks.npc_boss_2 &&
+        (!g.npcArc || !g.npcArc.boss || g.npcArc.boss !== '决裂');
+    },
+    title: '位置空出来了',
+    text: '上司说上面有个位置空出来了，他倾向于从内部提。他没有直接说你的名字，只问你想不想接更多的责任。',
+    opts: [
+      o('争取，把想法说清楚', { promote: true, at: { stress: 4 }, npc: { '上司': { favor: 6 } }, set: { npc_boss_2: true }, apply: arcTo('boss', '亲密'), tag: '向上司争取了一次晋升' }, { hint: '责任增加', tone: 'switch' }),
+      o('推辞，暂时不想接', { at: { stress: -3 }, npc: { '上司': { favor: -3 } }, set: { npc_boss_2: true }, tag: '推辞了一次晋升机会' }, { tone: 'safe' }),
+      o('推荐更合适的同事', { rep: { industry: 2 }, at: { happiness: 1 }, npc: { '上司': { favor: 2 } }, set: { npc_boss_2: true }, tag: '把晋升机会推荐给了同事' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_npc_boss_3', type: 'causal', layer: 'branch', tier: 'echo',
+    stage: '中年', age: 0, prio: 76, weight: 2, art: 'office',
+    cond: function (g) {
+      return g.age >= 45 && !!g.job.id && favorOf(g, '上司') < 45 && !g.marks.npc_boss_3 &&
+        (!g.npcArc || !g.npcArc.boss || g.npcArc.boss !== '决裂');
+    },
+    title: '方案被当众否定',
+    text: '会上，上司当着几个人的面把你的方案否了，说你考虑得不周全。他没有给你解释的时间，直接让下一个同事继续。',
+    opts: [
+      o('当场把逻辑讲清楚', { rep: { industry: 2 }, at: { stress: 4 }, npc: { '上司': { favor: -10 } }, set: { npc_boss_3: true }, apply: arcTo('boss', '疏离'), tag: '会上和上司当面争了一次' }, { tone: 'switch' }),
+      o('会后单独沟通', { at: { stress: 2 }, npc: { '上司': { favor: 6 } }, set: { npc_boss_3: true }, apply: arcTo('boss', '熟悉'), tag: '会后找上司单独沟通了方案' }, { tone: 'safe' }),
+      o('忍着，照着改', { at: { happiness: -4, stress: 3 }, npc: { '上司': { favor: 2 } }, set: { npc_boss_3: true }, apply: arcTo('boss', '疏离'), tag: '方案被否后忍着照改' }, { tone: 'safe' })
+    ]
+  });
+
+  /* =========================================================
+     七、各阶段补充事件
+     ========================================================= */
+
+  /* ---- 婴幼儿 ---- */
+  add({
+    id: 'v3_in_babble', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '婴幼儿', age: 0, prio: 40, weight: 2, art: 'nursery',
+    cond: function (g) { return g.age >= 1 && g.age <= 2; },
+    title: '第一个完整的词',
+    text: '你第一次清清楚楚地叫出一个词，屋里的人一下子都安静了，然后笑起来。母亲蹲下来，又问了一遍，让你再叫一次。',
+    opts: [
+      o('又叫了一声', { at: { happiness: 3 }, npc: { '母亲': { favor: 4 } }, tag: '第一次清楚地叫出了声' }, { tone: 'safe' }),
+      o('只顾着玩手里的玩具', { at: { happiness: 1 }, tag: '第一次开口后只顾着玩' }, { tone: 'safe' }),
+      o('伸手要抱', { at: { happiness: 2 }, npc: { '父亲': { favor: 3 }, '母亲': { favor: 3 } }, tag: '第一次开口后伸手要抱' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_in_fever', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '婴幼儿', age: 0, prio: 45, weight: 2, art: 'clinic',
+    cond: function (g) { return g.age >= 1 && g.age <= 3 && g.attrs.health < 85; },
+    title: '半夜发烧',
+    text: '半夜你烧了起来，额头烫，哭得停不下来。家里的退烧药只剩半瓶，窗外没有车，母亲抱着你在屋里来回走。',
+    opts: [
+      o('连夜去医院', { money: { cash: -1200 }, at: { health: 3, stress: 2 }, npc: { '母亲': { favor: 3 } }, tag: '小时候半夜发烧去了医院' }, { tone: 'safe' }),
+      o('先物理降温', { at: { health: -2 }, money: { cash: -100 }, tag: '小时候发烧先物理降温' }, { tone: 'switch' }),
+      o('用老人说的土方', { at: { health: -5 }, set: { used_folk_cure: true }, tag: '小时候发烧用了土方' }, { tone: 'risk' })
+    ]
+  });
+
+  /* ---- 童年 ---- */
+  add({
+    id: 'v3_ch_first_friend', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '童年', age: 5, prio: 55, weight: 1, art: 'nursery',
+    title: '最好的朋友要搬家',
+    text: '幼儿园里最好的朋友说他要搬家了，下个月就不来了。他把最喜欢的一辆小汽车塞给你，说送你了，以后再来找你玩。',
+    opts: [
+      o('画一幅画送给他', { at: { happiness: 2 }, npc: { '朋友': { favor: 4 } }, tag: '五岁时送别了最好的朋友' }, { tone: 'safe' }),
+      o('说以后一定去找他', { at: { happiness: 3 }, tag: '答应以后去找搬走的朋友' }, { tone: 'safe' }),
+      o('装作不在乎', { at: { happiness: -2 }, tag: '朋友搬走时装作不在乎' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_ch_pocket', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '童年', age: 7, prio: 55, weight: 1, art: 'home',
+    title: '第一笔零花钱',
+    text: '母亲把几张零钱放在你手里，说这个月的零花钱，怎么花你自己决定。钱不多，但足够买好几样一直想要的东西。',
+    opts: [
+      o('存起来', { money: { cash: 200 }, at: { finance: 2 }, tag: '第一次把零花钱存了起来' }, { tone: 'safe' }),
+      o('买零食分给同学', { money: { cash: -100 }, at: { happiness: 3 }, npc: { '朋友': { favor: 3 } }, tag: '第一次用零花钱请同学吃东西' }, { tone: 'safe' }),
+      o('当天花光', { money: { cash: -200 }, at: { happiness: 2 }, tag: '第一次拿到零花钱就花光了' }, { tone: 'switch' })
+    ]
+  });
+
+  /* ---- 少年 ---- */
+  add({
+    id: 'v3_te_body', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '少年', age: 0, prio: 45, weight: 2, art: 'home',
+    cond: function (g) { return g.age >= 13 && g.age <= 15; },
+    title: '体育课跑不完的圈',
+    text: '体育课测长跑，你跑到第三圈就开始掉队。体育老师在终点喊加油，同学已经跑完了，站在边上看你。',
+    opts: [
+      o('每天早起跑两圈', { at: { health: 3, happiness: 1 }, set: { started_running: true }, tag: '少年时开始每天跑步' }, { tone: 'safe' }),
+      o('找同学一起练', { at: { health: 2 }, npc: { '朋友': { favor: 4 } }, tag: '少年时和朋友一起练长跑' }, { tone: 'safe' }),
+      o('能躲就躲', { at: { health: -1, happiness: -1 }, risk: { noExercise: 2 }, tag: '少年时总想躲开体育课' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_te_night', type: 'branch', layer: 'branch', tier: 'daily',
+    stage: '少年', age: 0, prio: 45, weight: 2, art: 'home',
+    cond: function (g) { return g.age >= 15 && g.age <= 17; },
+    title: '晚自习以后',
+    text: '晚自习下课已经十点，校门口的人流散得很快。回家的路有两条，一条近但灯少，一条绕远但一直有人。',
+    opts: [
+      o('走亮一点的那条', { at: { stress: 1, happiness: 1 }, tag: '晚自习后总走亮一点的那条路' }, { tone: 'safe' }),
+      o('走近路，早点回去', { at: { stress: -1 }, risk: { lateNight: 2 }, tag: '晚自习后常走近路回家' }, { tone: 'switch' }),
+      o('打电话让家人来接', { at: { happiness: 2 }, npc: { '母亲': { favor: 3 } }, tag: '晚自习后常让家人来接' }, { tone: 'safe' })
+    ]
+  });
+
+  /* ---- 青年 ---- */
+  add({
+    id: 'v3_yo_share', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '青年', age: 24, prio: 58, weight: 1, art: 'jobfair',
+    title: '合租的第三年',
+    text: '合租的第三年，房东说要涨租。室友问你续不续，另一个房间的人刚搬走，新来的还没定。你算了一下通勤时间。',
+    opts: [
+      o('续租，省得折腾', { money: { cash: -2000 }, at: { stress: 1 }, tag: '房租上涨后还是续了租' }, { tone: 'safe' }),
+      o('搬到远一点的地方', { money: { cash: -4000 }, at: { stress: 3, happiness: -1 }, tag: '为了省房租搬到了远一点的地方' }, { tone: 'switch' }),
+      o('和同事合住', { at: { happiness: 2, stress: -2 }, npc: { '朋友': { favor: 4 } }, tag: '和同事合住省下了一笔房租' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_yo_wedding', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '青年', age: 28, prio: 58, weight: 1, art: 'wedding',
+    title: '同龄人的婚礼',
+    text: '这个月你收到了三张婚礼请柬，都是同龄人。份子钱一笔一笔转出去，朋友圈里全是婚纱和酒席。',
+    opts: [
+      o('都去，份子钱给足', { money: { cash: -1500 }, at: { happiness: 1 }, tag: '一个月参加了三场婚礼' }, { tone: 'safe' }),
+      o('只发红包，人不去', { money: { cash: -900 }, at: { stress: -1 }, tag: '朋友的婚礼只随了礼没到场' }, { tone: 'safe' }),
+      o('借这些婚礼想想自己的事', { at: { happiness: 2, knowledge: 1 }, tag: '从同龄人的婚礼想到自己的以后' }, { tone: 'switch' })
+    ]
+  });
+
+  /* ---- 中年 ---- */
+  add({
+    id: 'v3_mid_belly', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '中年', age: 36, prio: 58, weight: 1, art: 'clinic',
+    title: '裤腰紧了一格',
+    text: '体检报告上多了两项提醒，医生指了指腰围那一栏，说不用吃药，但要动起来。你想起上一次运动还是去年。',
+    opts: [
+      o('开始规律运动', { at: { health: 3, stress: -1 }, set: { started_exercise: true }, tag: '三十六岁开始规律运动' }, { tone: 'safe' }),
+      o('先控制饮食', { at: { health: 2 }, tag: '开始控制饮食' }, { tone: 'safe' }),
+      o('先不管，忙过这阵再说', { at: { health: -2 }, risk: { badDiet: 3 }, tag: '体检提醒后没有采取行动' }, { tone: 'risk' })
+    ]
+  });
+
+  add({
+    id: 'v3_mid_child_exam', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '中年', age: 48, prio: 58, weight: 1, art: 'exam',
+    title: '孩子的升学季',
+    text: '孩子的升学结果出来了，不上不下，刚好卡在几个选择之间。家里开了两次会，意见没有统一。',
+    opts: [
+      o('陪孩子把几条路都走一遍', { at: { stress: 3 }, npc: { '子女': { favor: 4 } }, tag: '孩子升学时陪着跑了几条路' }, { tone: 'safe' }),
+      o('请家教再冲一冲', { money: { cash: -12000 }, at: { stress: 1 }, tag: '为孩子升学请了家教' }, { tone: 'switch' }),
+      o('尊重孩子的选择', { at: { happiness: 1 }, npc: { '子女': { favor: 3 } }, tag: '孩子升学时尊重了他自己的选择' }, { tone: 'safe' })
+    ]
+  });
+
+  /* ---- 中老年 ---- */
+  add({
+    id: 'v3_sr_rhythm', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '中老年', age: 57, prio: 58, weight: 1, art: 'home',
+    title: '退休后的第一年',
+    text: '退休后的第一年，时间突然多出来一大块。早上不用赶车，晚上不用回消息，你反而不知道该把这一天放在哪里。',
+    opts: [
+      o('找一件固定的事做', { at: { happiness: 3 }, set: { retired_hobby: true }, tag: '退休后找了一件固定的事做' }, { tone: 'safe' }),
+      o('帮子女带孩子', { at: { stress: 2 }, npc: { '子女': { favor: 5 } }, tag: '退休后帮着子女带孩子' }, { tone: 'safe' }),
+      o('什么都不做，先休息', { at: { health: 2, happiness: 1 }, tag: '退休后先让自己休息了一阵' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_sr_old_house', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '中老年', age: 59, prio: 58, weight: 1, art: 'house',
+    title: '老房子怎么办',
+    text: '住了几十年的老房子，墙皮开始掉，水管也修过两次。有人劝你卖掉换个小点的，也有人说住惯了就别动。',
+    opts: [
+      o('卖掉，换一套小的', { houseSell: true }, { hint: '现金增加，居住面积变小', tone: 'switch' }),
+      o('留着，修修补补继续住', { at: { happiness: 2 }, set: { keep_old_house: true }, tag: '没有卖掉老房子' }, { tone: 'safe' }),
+      o('花一笔钱重新装修', { money: { cash: -30000 }, at: { happiness: 3 }, tag: '把老房子重新装修了一遍' }, { tone: 'safe' })
+    ]
+  });
+
+  /* ---- 晚年 ---- */
+  add({
+    id: 'v3_el_morning', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '晚年', age: 77, prio: 58, weight: 1, art: 'home',
+    title: '早晨的路线',
+    text: '你每天早上去公园走一圈，路线固定，遇到的人也固定。今天走到岔路口，你忽然想换一条走走。',
+    opts: [
+      o('还是走原来的路线', { at: { health: 2, happiness: 2 }, tag: '晚年每天走同一条路线' }, { tone: 'safe' }),
+      o('换一条没走过的', { at: { happiness: 3 }, tag: '晚年换了一条散步路线' }, { tone: 'switch' }),
+      o('今天不去了', { at: { health: -1 }, tag: '有一天没有出门散步' }, { tone: 'safe' })
+    ]
+  });
+
+  add({
+    id: 'v3_el_letter', type: 'forced', layer: 'main', tier: 'daily',
+    stage: '晚年', age: 80, prio: 58, weight: 1, art: 'home',
+    title: '整理旧信件',
+    text: '抽屉里的旧信件攒了一叠，有工作时的、有亲戚的，也有几封你已经想不起是谁写的。纸张发黄，字迹还清楚。',
+    opts: [
+      o('一封封回看', { at: { happiness: 4 }, tag: '晚年把旧信件一封封看完了' }, { tone: 'safe' }),
+      o('挑几封留着', { at: { happiness: 2 }, set: { kept_letters: true }, tag: '晚年挑了几封信留下' }, { tone: 'safe' }),
+      o('全部处理掉', { at: { happiness: -2 }, tag: '晚年把旧信件都处理掉了' }, { tone: 'switch' })
+    ]
+  });
+
+  /* v3：阶段隐患回响——20 岁前后落下的隐患，30 岁后被体检报告翻出来 */
+  add({
+    id: 'v3_echo_stage_risk',
+    type: 'forced', layer: 'chain', tier: 'echo', stage: '中年',
+    age: 30, prio: 96, weight: 1, art: 'clinic',
+    cond: function (g) {
+      if (!g || !LS.engine || g.age < 30) return false;
+      var ks = LS.RISK_KEYS || [];
+      for (var i = 0; i < ks.length; i++) {
+        if (LS.engine.stageImpactActive(g, 'risk', ks[i])) return true;
+      }
+      return false;
+    },
+    title: '体检报告上的箭头',
+    text: '体检报告上多了几个向上的箭头。医生没说得太重，只让你过三个月再来复查。你想起十几年前就有的那些习惯——熬夜、久坐、三餐不定。它们一直没走。',
+    opts: [
+      o('认真去复查', { money: -600, at: { health: 5 }, risk: { lateNight: -8, noExercise: -6 }, tag: '中年认真复查过一次' }, { tone: 'safe', risk: 'low', hint: '花钱买安心' }),
+      o('再拖一年看看', { risk: { lateNight: 10, badDiet: 8 }, at: { health: -4 }, healthNeg: true }, { tone: 'risk', risk: 'high', hint: '省下检查费，隐患继续累积' }),
+      o('买份保险兜底', { money: -1500, risk: { highStress: -4 } }, { tone: 'switch', risk: 'mid', hint: '不解决问题，但留条后路' })
+    ]
+  });
+
+  /* v3：阶段负债回响——阶段总结写下的负债，几年后找上门 */
+  add({
+    id: 'v3_echo_stage_debt',
+    type: 'forced', layer: 'chain', tier: 'echo', stage: '中年',
+    age: 35, prio: 94, weight: 1, art: 'money',
+    cond: function (g) {
+      return !!(g && LS.engine && g.age >= 35 && LS.engine.stageImpactActive(g, 'debt'));
+    },
+    title: '旧账找上门',
+    text: '那笔一直没结清的账，利滚利之后还是追到了你面前。对方不算凶，只把一张对账单推过来，说可以再宽限，但要先还一部分。',
+    opts: [
+      o('先还一部分', { money: -Math.round(3000), tag: '中年还掉一笔旧账' }, { tone: 'safe', risk: 'low', hint: '现金减少，信誉保住' }),
+      o('再谈一次宽限', { rep: { society: -3 }, flag: 'debt_delay', risk: { highStress: 8 } }, { tone: 'risk', risk: 'mid', hint: '能拖，但人情也薄了' }),
+      o('拿资产抵', { houseSell: true, tag: '中年卖掉一处资产还债' }, { tone: 'switch', risk: 'high', hint: '一笔勾销，但家底薄了' })
+    ]
+  });
+
+  /* 重建索引 */
+  LS.EVENT_INDEX = {};
+  for (var i = 0; i < E.length; i++) LS.EVENT_INDEX[E[i].id] = E[i];
+})();
+

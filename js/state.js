@@ -5,11 +5,75 @@
   'use strict';
   var LS = window.LS = window.LS || {};
 
-  LS.VERSION = '2.0.0';
+  LS.VERSION = '3.0.0';
   LS.START_YEAR = 2005;
   LS.FREE_POINTS = 30;
   LS.SAVE_PREFIX = 'lifesim_v1_';
   LS.SLOT_COUNT = 5;
+
+  /* ---------------- v3 跨局数据（localStorage 不可用时降级到模块内存） ---------------- */
+  LS.LEGACY_KEY = 'lifesim_legacy_v3';
+  LS.ACH_KEY = 'lifesim_ach_v3';
+  LS.EVENT_CD_KEY = 'lifesim_eventcd_v3';
+
+  var v3Mem = {};
+  function v3get(key) {
+    var txt = null;
+    try {
+      if (window.localStorage) txt = window.localStorage.getItem(key);
+    } catch (e) { /* 隐私模式 / file:// 下可能被禁用 */ }
+    if (!txt) txt = v3Mem[key] || null;
+    if (!txt) return null;
+    try { return JSON.parse(txt); } catch (e) { return null; }
+  }
+  function v3set(key, obj) {
+    var txt;
+    try { txt = JSON.stringify(obj || {}); } catch (e) { txt = '{}'; }
+    try {
+      if (window.localStorage) { window.localStorage.setItem(key, txt); return; }
+    } catch (e) { /* 写入失败时降级到内存 */ }
+    v3Mem[key] = txt;
+  }
+
+  LS.legacyRead = function () {
+    var o = v3get(LS.LEGACY_KEY) || {};
+    return {
+      reputation: Number(o.reputation) || 0,
+      cash: Number(o.cash) || 0,
+      source: o.source === undefined ? null : o.source,
+      runs: Number(o.runs) || 0
+    };
+  };
+  LS.legacyWrite = function (o) {
+    o = o || {};
+    v3set(LS.LEGACY_KEY, {
+      reputation: Number(o.reputation) || 0,
+      cash: Number(o.cash) || 0,
+      source: o.source === undefined ? null : o.source,
+      runs: Number(o.runs) || 0
+    });
+  };
+  LS.achRead = function () {
+    var o = v3get(LS.ACH_KEY) || {};
+    return {
+      ids: Array.isArray(o.ids) ? o.ids : [],
+      endings: Array.isArray(o.endings) ? o.endings : [],
+      eggs: Array.isArray(o.eggs) ? o.eggs : []
+    };
+  };
+  LS.achWrite = function (o) {
+    o = o || {};
+    v3set(LS.ACH_KEY, {
+      ids: Array.isArray(o.ids) ? o.ids : [],
+      endings: Array.isArray(o.endings) ? o.endings : [],
+      eggs: Array.isArray(o.eggs) ? o.eggs : []
+    });
+  };
+  LS.eventCDRead = function () {
+    var o = v3get(LS.EVENT_CD_KEY);
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  };
+  LS.eventCDWrite = function (o) { v3set(LS.EVENT_CD_KEY, o || {}); };
 
   /* ---------------- 随机数：可存档的 mulberry32 ---------------- */
   LS.RNG = {
@@ -60,20 +124,32 @@
   };
   LS.tierOf = function (e) { return LS.TIERS[e && e.tier] || LS.TIERS.daily; };
 
-  /* v2 阶段命名：56 岁起对外统一显示“老年”（内部事件池仍沿用“中老年”） */
-  LS.stageLabel = function (s) { return s === '中老年' ? '老年' : s; };
+  /* v3 阶段命名：状态栏显示七个阶段真名，不再把“中老年”显示成“老年” */
+  LS.stageLabel = function (s) { return s; };
 
-  /* 人生阶段过场：19 青年 / 31 中年 / 56 老年 */
+  /* 人生阶段过场：0 婴幼儿 / 4 童年 / 13 少年 / 19 青年 / 31 中年 / 56 中老年 / 76 晚年 */
   LS.STAGE_MARKS = [
+    { age: 0, key: 'infant', label: '婴幼儿', title: '婴幼儿：最初的几年',
+      desc: '你还不会说话，世界由气味、光线和一双双抱你的手组成。你学会走路之前，先学会了被照顾。',
+      art: 'infant' },
+    { age: 4, key: 'child', label: '童年', title: '童年：世界还很新鲜',
+      desc: '上学、放学、被叫家长，日子在一条固定路线里重复。你开始记住一些大人的表情，却还说不清那是什么意思。',
+      art: 'child' },
+    { age: 13, key: 'teen', label: '少年', title: '少年：开始有了心事',
+      desc: '身体先于想法变化，你开始在意别人的目光。成绩单、走廊里的笑声和没说出口的话，一起堆积起来。',
+      art: 'teen' },
     { age: 19, key: 'youth', label: '青年', title: '青年：世界刚刚展开',
       desc: '你终于要为一些事自己拿主意了。世界比想象大，也比想象贵，而时间第一次显得不够用。',
       art: 'youth' },
     { age: 31, key: 'midlife', label: '中年', title: '中年：责任逐渐沉重',
       desc: '账单、家人与身体同时伸手。你开始学会在很多事情上低头，也开始分清哪些东西不能丢。',
       art: 'midlife' },
-    { age: 56, key: 'elder', label: '老年', title: '老年：岁月开始沉淀',
+    { age: 56, key: 'elder', label: '中老年', title: '老年：岁月开始沉淀',
       desc: '你不再那么急着证明什么。旧朋友渐渐少，慢下来的日子里，能记清的事反而更少。',
-      art: 'elder' }
+      art: 'elder' },
+    { age: 76, key: 'late', label: '晚年', title: '晚年：日子慢了下来',
+      desc: '同龄人一个个变少，日历翻得比记忆快。你把常走的那条路走得很慢，遇到熟人要停下来想一想名字。',
+      art: 'late' }
   ];
   LS.stageKeyOf = function (age) {
     for (var i = 0; i < LS.STAGE_MARKS.length; i++) {
@@ -86,6 +162,33 @@
       if (LS.STAGE_MARKS[i].key === key) return LS.STAGE_MARKS[i];
     }
     return null;
+  };
+  /* 阶段序号（1..7），与状态栏七格对应 */
+  LS.stageIndexOf = function (age) {
+    return LS.STAGES.indexOf(LS.stageOf(age)) + 1;
+  };
+  /* 按阶段名找过场配置，用于总结卡标题 */
+  LS.stageMarkByStage = function (stage) {
+    for (var i = 0; i < LS.STAGE_MARKS.length; i++) {
+      if (LS.STAGE_MARKS[i].label === stage) return LS.STAGE_MARKS[i];
+    }
+    return null;
+  };
+
+  /* ---------------- NPC 关系阶段（带迟滞的双向变化） ---------------- */
+  LS.RELATION_STAGES = ['陌生', '熟悉', '亲密', '疏离', '决裂'];
+  LS.relationStageOf = function (favor, prev) {
+    var f = Number(favor);
+    if (isNaN(f)) f = 50;
+    var p = (prev && LS.RELATION_STAGES.indexOf(prev) >= 0) ? prev : '陌生';
+    if (f >= 80) return '亲密';
+    if (f >= 60) {
+      /* 疏离/决裂要回升到 65 才重新算熟悉，避免在 60 附近来回跳 */
+      if ((p === '疏离' || p === '决裂') && f < 65) return p;
+      return '熟悉';
+    }
+    if (f >= 35) return '疏离';
+    return '决裂';
   };
 
   /* 隐性健康隐患 */
@@ -477,7 +580,26 @@
       current: null,
       lastOutcome: null,
       death: { dead: false, reason: '', year: null, age: null },
-      summary: null
+      summary: null,
+      /* v3：抉择计数、事件池记忆、平淡年、阶段总结、时代背景、NPC 弧线、跨局传承 */
+      decisionCount: 0,
+      eventSeen: [],
+      eventCD: {},
+      quietYears: 0,
+      quietNote: '',
+      quietNoteSeen: [],
+      stageSummary: null,
+      pendingSummary: false,
+      stageImpact: [],
+      stageImpactRuns: 0,
+      recap: [],
+      epoch: { name: '平稳年代', mods: {}, until: null },
+      npcArc: {},
+      npcInitiated: [],
+      legacy: { reputation: 0, cash: 0, source: null },
+      milestones: {},
+      achievementsV3: [],
+      lastSummaryAt: -99
     };
 
     g.npcs.push(LS.makeNPC('父亲', {
@@ -491,6 +613,7 @@
 
     LS.addMemory(g, '出生在' + g.birthplace + '的一个' + g.background + '家庭。父亲 ' + fatherAge + ' 岁，母亲 ' + motherAge + ' 岁。', 'birth');
     LS.snapshot(g);
+    g.stageStart = LS.stageSnapshot(g);
     g.rngState = LS.RNG.state;
     return g;
   };
@@ -576,6 +699,36 @@
     }
   };
 
+  /* v3：阶段快照，用于阶段总结卡与跨阶段对比 */
+  LS.stageSnapshot = function (g) {
+    var a = (g && g.attrs) || {};
+    var m = (g && g.money) || {};
+    var tags = [];
+    if (g && g.marks) {
+      for (var k in g.marks) if (g.marks[k]) tags.push(k);
+    }
+    var num = function (v) { return Math.round(Number(v) || 0); };
+    return {
+      age: num(g && g.age),
+      attrs: {
+        knowledge: num(a.knowledge),
+        health: num(a.health),
+        finance: num(a.finance),
+        charm: num(a.charm),
+        happiness: num(a.happiness),
+        stress: num(a.stress)
+      },
+      rep: num(g ? LS.repTotal(g) : 0),
+      cash: num(m.cash),
+      assets: num(m.assets),
+      debt: num(m.debt),
+      tags: tags,
+      npcs: ((g && g.npcs) || []).map(function (n) {
+        return { id: n.id, role: n.role, alive: !!n.alive, favor: num(n.favor) };
+      })
+    };
+  };
+
   /* ---------------- 成就 ---------------- */
   LS.ACHIEVEMENTS = [
     {
@@ -646,6 +799,70 @@
     {
       id: 'midcrisis', name: '中年渡劫', desc: '40–50 岁间压力曾超过 85，仍活到 70 岁',
       cond: function (g) { return g.age >= 70 && g.stats.peakStressMidlife === true; }
+    },
+    /* ---- v3 追加：只用 g 上已有字段判定 ---- */
+    {
+      id: 'v3_warm', name: '灯火可亲', desc: '60 岁以后，仍有至少两位好感 ≥ 65 的亲友活着',
+      cond: function (g) {
+        if (!g.npcs || g.age < 60) return false;
+        var n = 0;
+        for (var i = 0; i < g.npcs.length; i++) {
+          var x = g.npcs[i];
+          if (x && x.alive && x.favor >= 65) n++;
+        }
+        return n >= 2;
+      }
+    },
+    {
+      id: 'v3_tycoon', name: '富甲一方', desc: '净资产达到 500 万',
+      cond: function (g) { return LS.netWorth(g) >= 5000000; }
+    },
+    {
+      id: 'v3_quiet', name: '平常一生', desc: '活到 80 岁，从未创业，也从未负债',
+      cond: function (g) {
+        if (g.age < 80) return false;
+        var everStartup = (g.stats.startupSuccess || 0) > 0 || (g.stats.startupFail || 0) > 0 ||
+          !!(g.marks && (g.marks.startup_success || g.marks.startup_failed)) ||
+          !!(g.job && g.job.id === 'startup');
+        var hist = (g.job && g.job.history) || [];
+        for (var i = 0; i < hist.length; i++) {
+          if (hist[i] && /创业/.test(String(hist[i].text || ''))) everStartup = true;
+        }
+        if (g.flags && (g.flags.startup || g.flags.startupEver || g.flags.entrepreneur)) everStartup = true;
+        var everDebt = !!(g.money && g.money.debt > 0) || (g.stats.loansTaken || 0) > 0 ||
+          !!(g.house && g.house.mortgage > 0) || (g.stats.minNet || 0) < 0;
+        if (g.flags && (g.flags.loan || g.flags.debt || g.flags.inDebt)) everDebt = true;
+        return !everStartup && !everDebt;
+      }
+    },
+    {
+      id: 'v3_scar', name: '带伤前行', desc: '留下至少两道健康隐患，仍活过 70 岁',
+      cond: function (g) {
+        if (g.age < 70) return false;
+        var list = g.stageImpact || [];
+        var n = 0;
+        for (var i = 0; i < list.length; i++) {
+          if (list[i] && list[i].type === 'risk') n++;
+        }
+        return n >= 2;
+      }
+    },
+    {
+      id: 'v3_mentor', name: '桃李/提携', desc: '一生至少提携过两个人',
+      cond: function (g) { return !!(g.flags && g.flags.mentorCount >= 2); }
+    },
+    {
+      id: 'v3_rootless', name: '无根之城', desc: '一生搬家或换城至少两次',
+      cond: function (g) {
+        var n = 0;
+        if (g.marks) {
+          for (var k in g.marks) {
+            if (g.marks[k] && /move|moved|city|relocat|搬家|换城/.test(k)) n++;
+          }
+        }
+        var mv = g.flags ? (Number(g.flags.moved) || 0) : 0;
+        return n >= 2 || mv >= 2;
+      }
     }
   ];
 

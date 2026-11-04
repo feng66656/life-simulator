@@ -96,6 +96,7 @@
     if (!Array.isArray(g.echoLog)) g.echoLog = [];
     if (!Array.isArray(g.healthNegLog)) g.healthNegLog = [];
     if (!g.stageSeen) g.stageSeen = {};
+    /* v3：v2 存档只有 youth/midlife/elder 三个 key，infant/child/teen/late 保持未设置，过场才会触发 */
     if (g.pendingStage === undefined) g.pendingStage = null;
     if (!Array.isArray(g.pendingBroadcasts)) g.pendingBroadcasts = [];
     if (g.lastBroadcastTurn === undefined) g.lastBroadcastTurn = -99;
@@ -109,11 +110,43 @@
     if (!Array.isArray(g.job.history)) g.job.history = [];
     if (g.job.huntTries === undefined) g.job.huntTries = 0;
     if (g.job.lastHunt === undefined) g.job.lastHunt = null;
-    if (!g.job.tags && g.job.id) g.job.tags = LS.jobTagsOf ? LS.jobTagsOf(g.job.id) : null;
+    if (!g.job.tags && g.job.id && LS.engine && LS.engine.jobTagsOf) g.job.tags = LS.engine.jobTagsOf(g.job.id);
     if (!g.stats) g.stats = {};
     ['healthNegAge', 'healthNegCount', 'huntFail', 'echoesSeen', 'crossroadsSeen'].forEach(function (k) {
       if (g.stats[k] === undefined) g.stats[k] = (k === 'healthNegAge') ? -99 : 0;
     });
+    /* v3 存档迁移：抉择计数、事件池、平淡年、阶段总结、时代、NPC 弧线与跨局传承 */
+    if (g.decisionCount === undefined || isNaN(g.decisionCount)) g.decisionCount = 0;
+    if (!Array.isArray(g.eventSeen)) g.eventSeen = [];
+    if (!g.eventCD || typeof g.eventCD !== 'object' || Array.isArray(g.eventCD)) g.eventCD = {};
+    if (g.quietYears === undefined || isNaN(g.quietYears)) g.quietYears = 0;
+    if (typeof g.quietNote !== 'string') g.quietNote = '';
+    if (!Array.isArray(g.quietNoteSeen)) g.quietNoteSeen = [];
+    if (g.stageSummary === undefined) g.stageSummary = null;
+    if (g.pendingSummary === undefined) g.pendingSummary = false;
+    if (!Array.isArray(g.stageImpact)) g.stageImpact = [];
+    if (g.stageImpactRuns === undefined || isNaN(g.stageImpactRuns)) g.stageImpactRuns = 0;
+    if (!Array.isArray(g.recap)) g.recap = [];
+    if (!g.epoch || typeof g.epoch !== 'object' || Array.isArray(g.epoch)) {
+      g.epoch = { name: '平稳年代', mods: {}, until: null };
+    } else {
+      if (!g.epoch.name) g.epoch.name = '平稳年代';
+      if (!g.epoch.mods || typeof g.epoch.mods !== 'object') g.epoch.mods = {};
+      if (g.epoch.until === undefined) g.epoch.until = null;
+    }
+    if (!g.npcArc || typeof g.npcArc !== 'object' || Array.isArray(g.npcArc)) g.npcArc = {};
+    if (!Array.isArray(g.npcInitiated)) g.npcInitiated = [];
+    if (!g.legacy || typeof g.legacy !== 'object' || Array.isArray(g.legacy)) {
+      g.legacy = { reputation: 0, cash: 0, source: null };
+    } else {
+      if (g.legacy.reputation === undefined || isNaN(g.legacy.reputation)) g.legacy.reputation = 0;
+      if (g.legacy.cash === undefined || isNaN(g.legacy.cash)) g.legacy.cash = 0;
+      if (g.legacy.source === undefined) g.legacy.source = null;
+    }
+    if (!g.milestones || typeof g.milestones !== 'object' || Array.isArray(g.milestones)) g.milestones = {};
+    if (!Array.isArray(g.achievementsV3)) g.achievementsV3 = [];
+    if (g.lastSummaryAt === undefined || isNaN(g.lastSummaryAt)) g.lastSummaryAt = -99;
+    if (!g.stageStart && LS.stageSnapshot) g.stageStart = LS.stageSnapshot(g);
     g.migratedTo = LS.VERSION;
     return g;
   }
