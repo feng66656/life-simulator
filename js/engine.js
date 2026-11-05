@@ -27,7 +27,7 @@
     ];
   }
 
-  var LAYER_OF_TYPE = { forced: 'main', causal: 'chain', random: 'random', daily: 'random' };
+  var LAYER_OF_TYPE = { forced: 'main', causal: 'chain', random: 'random', daily: 'random', dilemma: 'dilemma' };
   function layerOf(e) {
     if (e && e.layer) return e.layer;
     if (e && e.tier === 'crossroad') return 'branch';
@@ -1426,6 +1426,35 @@
       return forced[0];
     }
 
+    /* 3e. v3.6 两难层：青年/中年有概率撞上一次；不抢占紧急到期事件 */
+    if (LS.V36 && LS.V36.DILEMMAS && (g.stage === '青年' || g.stage === '中年')) {
+      var urgentDue = false;
+      for (var uq = 0; uq < g.pending.length; uq++) {
+        var pu = g.pending[uq];
+        if (pu.urgent && num0(pu.dueAge) <= g.age) { urgentDue = true; break; }
+      }
+      if (!urgentDue && num0(g.dilemmaCount) < 8 && g.turn - num0(g.lastDilemmaTurn) >= 4 && LS.chance(0.42)) {
+        var dilemmaPool = [];
+        for (var di = 0; di < LS.V36.DILEMMAS.length; di++) {
+          var de = LS.V36.DILEMMAS[di];
+          if (de.stage && de.stage.indexOf(g.stage) < 0) continue;
+          if (!condOk(g, de)) continue;
+          if (isFired(g, de)) continue;
+          if (isPendingFuture(g, de.id)) continue;
+          if (seenBefore(g, de)) continue;
+          dilemmaPool.push(de);
+        }
+        if (dilemmaPool.length) {
+          var dBan = pickWeighted(dilemmaPool, g);
+          if (dBan) {
+            g.lastDilemmaTurn = g.turn;
+            g.dilemmaCount = num0(g.dilemmaCount) + 1;
+            return dBan;
+          }
+        }
+      }
+    }
+
     /* 2. 到期的因果标记 */
     var due = [];
     for (var p = 0; p < g.pending.length; p++) {
@@ -2427,6 +2456,7 @@
       var e = selectEvent(g);
       if (!e) return null;
       e = prepEvent(g, e);
+      if (LS.V36 && LS.V36.attachOverlays) e = LS.V36.attachOverlays(g, e);
 
       if (autoResolvable(e)) {
         g.current = e;
@@ -2596,6 +2626,8 @@
       });
       if (g.outcomeLog.length > 200) g.outcomeLog.shift();
     }
+    /* v3.6：两难记账、放弃方降亲密、承诺与多年回响 */
+    if (LS.V36 && LS.V36.onChoice) LS.V36.onChoice(g, ev, opt, outcomeLabel);
     g._ctxChoice = null;
 
     clampAttrs(g);
@@ -2720,6 +2752,8 @@
     }
     /* v3.6：九条人生线 / 身世征兆 / 线索卡 / 交叉撞车 / 承诺到期 */
     if (LS.LINES && LS.LINES.tick) LS.LINES.tick(g);
+    /* v3.6：两难回响到期、承诺自动补足 */
+    if (LS.V36 && LS.V36.tick) LS.V36.tick(g);
 
     var reason = deathReason(g);
     if (reason) {

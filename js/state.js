@@ -5,7 +5,7 @@
   'use strict';
   var LS = window.LS = window.LS || {};
 
-  LS.VERSION = '3.3.0';
+  LS.VERSION = '3.6.0';
   LS.START_YEAR = 2005;
   LS.FREE_POINTS = 30;
   LS.SAVE_PREFIX = 'lifesim_v1_';
@@ -727,6 +727,14 @@
       broadcastAges: [],
       echoInfo: null,
       crossSeen: {},
+      /* v3.6：两难 / 老地方 / 时代锚点 / 承诺 */
+      lastDilemmaTurn: -99,
+      placeYear: null,
+      placeLog: [],
+      echoQueue: [],
+      dilemmaLog: [],
+      eraFired: {},
+      promises: [],
       flags: {},
       marks: {},
       memories: [],

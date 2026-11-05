@@ -201,6 +201,15 @@
     if (!Array.isArray(g.promises)) g.promises = [];
     if (!g.colSeen) g.colSeen = {};
     if (!g.lineAP) g.lineAP = { year: g.year, used: 0, max: 2 };
+    /* v3.6：两难 / 老地方 / 时代锚点 / 结局信（旧档只补空状态，不改写已有记录） */
+    if (g.birthYear === undefined || isNaN(g.birthYear)) g.birthYear = LS.START_YEAR;
+    if (g.lastDilemmaTurn === undefined || isNaN(g.lastDilemmaTurn)) g.lastDilemmaTurn = -99;
+    if (g.placeYear === undefined) g.placeYear = null;
+    if (!Array.isArray(g.placeLog)) g.placeLog = [];
+    if (!Array.isArray(g.echoQueue)) g.echoQueue = [];
+    if (!Array.isArray(g.dilemmaLog)) g.dilemmaLog = [];
+    if (!g.eraFired || typeof g.eraFired !== 'object' || Array.isArray(g.eraFired)) g.eraFired = {};
+    if (!Array.isArray(g.promises)) g.promises = [];
     g.migratedTo = LS.VERSION;
     return g;
   }

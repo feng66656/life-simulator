@@ -1834,7 +1834,7 @@
       var toneCls = '';
       if (e.tier === 'crossroad') toneCls = ' tone-' + (opt.tone || (opt.gamble ? 'risk' : 'safe'));
       else if (e.tier === 'echo') toneCls = ' echo-opt';
-      b.className = 'opt-btn opt-in' + toneCls;
+      b.className = 'opt-btn opt-in' + toneCls + (opt.fuzzy ? ' opt-fuzzy' : '');
       b.style.animationDelay = (k * 70) + 'ms';
       var rk = opt.risk && RISK_META[opt.risk];
       var hardWarn = (Number(game.attrs.happiness) < 40 && LS.isHardOpt && LS.isHardOpt(opt))
@@ -1842,7 +1842,7 @@
       b.innerHTML = '<span class="emoji opt-emoji" aria-hidden="true">' + esc(optionEmoji(opt, e)) + '</span>' +
         '<span class="opt-main" style="flex:1 1 0;min-width:0">' +
         (rk ? '<span class="risk-badge ' + rk.cls + '">' + rk.text + '</span>' : '') +
-        esc(tpl(opt.label)) + (opt.hint ? '<span class="opt-cost">' + esc(tpl(opt.hint)) + '</span>' : '') +
+        esc(tpl(opt.label)) + (opt.hint ? '<span class="opt-cost' + (opt.fuzzy ? ' opt-fuzzy-hint' : '') + '">' + esc(tpl(opt.hint)) + '</span>' : '') +
         hardWarn + '</span>' +
         '<span class="opt-arrow">›</span>';
       b.addEventListener('click', function () { onChoose(i); });
@@ -2739,29 +2739,38 @@
         '<span class="legacy-tip">下一局开局自动带入</span></div>'
       : '<div class="legacy-note muted">传承 · 这一世没有留下可被继承的声望或现金。</div>';
 
+    var letter = (LS.V36 && LS.V36.letter) ? LS.V36.letter(game, s) : null;
+    var letterHtml = '';
+    if (letter) {
+      letterHtml =
+        '<div class="end-letter">' +
+        '<div class="letter-salute">' + esc(letter.salute) + '</div>' +
+        letter.paragraphs.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('') +
+        '<div class="letter-sign">' + esc(letter.sign) +
+        '<span class="letter-quote">' + esc(letter.quote.t) + '<i>—— ' + esc(letter.quote.a) + '</i></span>' +
+        '</div></div>' +
+        '<div class="letter-stats">' + letter.stats.map(function (st) {
+          return '<div class="letter-stat"><div class="k">' + esc(st.k) + '</div><div class="v">' + esc(st.v) + '</div></div>';
+        }).join('') + '</div>';
+    } else {
+      letterHtml = '<div class="end-cards">' + cards.slice(0, 3).map(function (c) {
+        return '<div class="end-card"><div class="k">' + c.k + '</div><div class="v">' + esc(c.v) + '</div></div>';
+      }).join('') + '</div>';
+    }
+
     var html =
       '<div class="end-head">' +
       '<div class="end-kicker">人生结算 · LIFE SUMMARY</div>' +
       '<div class="end-title">' + esc(s.name) + '　' + s.age + ' 岁</div>' +
       '<div class="end-sub">' + s.birthYear + ' 年 — ' + s.deathYear + ' 年　·　' + esc(s.reason) + '　·　出生于' + esc(game.birthplace) + '，' + esc(game.background) + '家庭　·　随机种子 ' + s.seed + '</div>' +
-      (LS.V35 ? '<div class="life-quote end-quote">' + LS.V35.quoteHtml(game) + '</div>' : '') +
       '</div>' +
-      '<div class="end-cards">' + cards.map(function (c) {
-        return '<div class="end-card"><div class="k">' + c.k + '</div><div class="v ' + (c.small ? 'small' : '') + '">' + esc(c.v) + '</div><div class="x">' + esc(c.x) + '</div></div>';
-      }).join('') + '</div>' +
 
-      '<div class="end-section"><h3>人生六维</h3>' +
-      '<div class="end-v3-grid">' +
-      radarSvg(s.radar) +
-      '<div class="end-v3-side">' +
+      letterHtml +
+
+      '<div class="end-section"><h3>留下的标签</h3>' +
       tagsHtml +
       '<div class="epitaph">' + esc(s.epitaph || s.evaluation || '') + '</div>' +
-      legacyHtml +
-      '</div></div></div>' +
-
-      '<div class="end-section"><h3>谁还在你身边</h3><div class="survivor-list">' + survHtml + '</div></div>' +
-
-      '<div class="end-section"><h3>一生属性变化</h3>' + chartSvg(s.history) + '</div>' +
+      legacyHtml + '</div>' +
 
       '<div class="end-section"><h3>人生大事记</h3>' +
       '<div class="memoir-open"><div class="memory-actions">' +
@@ -2769,21 +2778,6 @@
       '<button type="button" class="btn tiny" id="btnEndMemoirChain">回忆录 · 因果链</button>' +
       '</div><div class="end-note">两种视角阅读这一生，所有记忆都已经留在里面。</div></div>' +
       timeline + '</div>' +
-
-      '<div class="end-section"><h3>履历汇总</h3>' +
-      '<div class="detail-grid">' +
-      '<div class="detail-block"><h4>教育</h4>' + (eduLines || '<div class="empty-note">未入学</div>') + '</div>' +
-      '<div class="detail-block"><h4>职业变迁</h4>' + jobLines + '</div>' +
-      '<div class="detail-block"><h4>婚姻与子女</h4>' +
-      '<div class="kv"><span>婚姻</span><span>' + esc(s.marriage.status) + (s.marriage.spouseName ? ' · ' + esc(s.marriage.spouseName) : '') + '</span></div>' +
-      '<div class="kv"><span>婚龄</span><span>' + s.marriage.years + ' 年</span></div>' +
-      childLines + '</div>' +
-      '<div class="detail-block"><h4>资产负债终值</h4>' +
-      '<div class="kv"><span>现金</span><span>' + esc(LS.fmtMoney(s.cash)) + '</span></div>' +
-      '<div class="kv"><span>固定资产</span><span>' + esc(LS.fmtMoney(s.assets)) + '</span></div>' +
-      '<div class="kv"><span>负债</span><span>' + esc(LS.fmtMoney(s.debt)) + '</span></div>' +
-      '<div class="kv"><span>净资产</span><span>' + esc(LS.fmtMoney(s.netWorth)) + '</span></div>' +
-      '</div></div></div>' +
 
       '<div class="end-section"><h3>成就</h3><div class="ach-grid">' + achHtml + '</div></div>' +
 
