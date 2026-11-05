@@ -210,6 +210,15 @@
     if (!Array.isArray(g.dilemmaLog)) g.dilemmaLog = [];
     if (!g.eraFired || typeof g.eraFired !== 'object' || Array.isArray(g.eraFired)) g.eraFired = {};
     if (!Array.isArray(g.promises)) g.promises = [];
+    /* v3.6.1：死亡队列与 NPC 死亡年份（旧档回填，不补造事件、不清 eventLog） */
+    if (!Array.isArray(g.deathQueue)) g.deathQueue = [];
+    if (g._deathTurn === undefined || isNaN(g._deathTurn)) g._deathTurn = -99;
+    (g.npcs || []).forEach(function (n) {
+      if (n.deathYear === undefined) n.deathYear = null;
+      if (n.deathAge === undefined) n.deathAge = null;
+      if (n.deathEventDone === undefined) n.deathEventDone = false;
+    });
+    if (LS.V35 && LS.V35.initNpcLifespans) LS.V35.initNpcLifespans(g);
     g.migratedTo = LS.VERSION;
     return g;
   }

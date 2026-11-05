@@ -16,7 +16,10 @@
   }
   function alive(g, key) {
     var n = npcOf(g, key);
-    return !!(n && n.alive);
+    if (n) return !!n.alive;
+    /* 三岁前 NPC 可能尚未建档，视为在世；成年后未建档一律按“不在”处理，宁可少出 */
+    if ((key === '父亲' || key === '母亲') && g && g.age <= 3) return true;
+    return false;
   }
 
   V.childIds = function (g) {
@@ -67,18 +70,25 @@
      ========================================================= */
   V.pass = function (g, e) {
     if (!g || !e) return true;
-    if (e._guardExempt === 'daily') return true;
     var i;
-    if (e.aliveGuard) {
-      for (i = 0; i < e.aliveGuard.length; i++) {
-        var role = e.aliveGuard[i];
-        if (role === '子女' || role === 'child') {
-          if (!V.hasLivingChild(g)) return false;
-        } else if (role === '配偶' || role === 'spouse') {
-          if (!V.spouseAlive(g)) return false;
-        } else if (!alive(g, role)) {
-          return false;
-        }
+    /* 1) 声明式硬过滤：requiresAlive（v3.6.1 起的统一写法）+ 旧字段 aliveGuard */
+    var req = e.requiresAlive || e.aliveGuard || [];
+    for (i = 0; i < req.length; i++) {
+      var role = req[i];
+      if (role === '子女' || role === 'child') {
+        if (!V.hasLivingChild(g)) return false;
+      } else if (role === '配偶' || role === 'spouse') {
+        if (!V.spouseAlive(g)) return false;
+      } else if (!alive(g, role)) {
+        return false;
+      }
+    }
+    /* 2) requiresDeceased：只有该人物已死亡才允许（deceased 池专用） */
+    if (e.requiresDeceased && e.requiresDeceased.length) {
+      for (i = 0; i < e.requiresDeceased.length; i++) {
+        if (alive(g, e.requiresDeceased[i])) return false;
+        var dn = npcOf(g, e.requiresDeceased[i]);
+        if (!dn || !dn.deathYear) return false;
       }
     }
     if (e.hasChildrenGuard && !V.hasChildren(g)) return false;
@@ -87,6 +97,18 @@
     if (e.spouseGuard && !V.spouseAlive(g)) return false;
     if (e.siblingGuard && !V.siblingOk(g)) return false;
     if (e.friendGuard && !V.friendOk(g)) return false;
+    /* 3) 文本级硬过滤：不依赖作者是否写了 guard。
+       v36 两难、职业事件、daily 兜底都从这里过一遍，已故亲属永不再出共同生活事件。 */
+    if (!e.requiresDeceased && !e._deceasedOk) {
+      var s = textOf(e);
+      if (PARENT.test(s) && !REFLECT.test(s)) {
+        if (/父亲|爸爸|老爸|父母|爸妈/.test(s) && !alive(g, '父亲')) return false;
+        if (/母亲|妈妈|老妈|父母|爸妈/.test(s) && !alive(g, '母亲')) return false;
+      }
+      if (SPOUSE.test(s) && !REFLECT.test(s) && !V.spouseAlive(g)) return false;
+      if (SIBLING.test(s) && !REFLECT.test(s) && !V.siblingOk(g)) return false;
+      if (CHILD_STRONG.test(s) && !OTHER_KID.test(s) && g.age >= 22 && !V.hasLivingChild(g)) return false;
+    }
     return true;
   };
 
@@ -145,7 +167,9 @@
     return STAGE_IDX[e.stage] == null ? -1 : STAGE_IDX[e.stage];
   }
 
-  var REFLECT = /上坟|扫墓|坟前|坟头|坟|遗物|遗照|相册|旧照片|老照片|照片里|梦里|梦见|忌日|去世|离世|过世|生前|回忆|百天|走的那年|走了以后|走了之后|已经不在了/;
+  var REFLECT = /上坟|扫墓|坟前|坟头|坟|遗物|遗照|相册|旧照片|老照片|照片里|梦里|梦见|忌日|葬礼|去世|离世|过世|生前|回忆|百天|走的那年|走了以后|走了之后|已经不在了/;
+  /* 明确死亡语义词：这类事件只能在人物死亡后触发，不能只在梦里出现 */
+  var DEAD_STRONG = /上坟|扫墓|坟前|坟头|坟|遗物|遗照|忌日|葬礼|去世|离世|过世|生前|走的那年|走了以后|走了之后|已经不在了|最后一面/;
   var PARENT = /父亲|母亲|爸爸|妈妈|爸妈|父母|老爸|老妈/;
   var CHILD = /子女|儿女|儿子|女儿|孙辈|孙子|孙女|带孩子|接孩子|给孩子|孩子|小孩/;
   var CHILD_STRONG = /子女|儿女|儿子|女儿|孙辈|孙子|孙女|带孩子|接孩子|给孩子/;
@@ -176,15 +200,8 @@
       else addGuard(e, 'aliveGuard', [e.npcRole]);
     }
 
-    /* 真正的日常兜底事件（type='daily'）永不设硬性守卫，保证随机池不空；
-       注意：tier='daily' 只是分层标签，几乎所有随机事件都会被标成 daily，
-       不能用它来豁免，否则守卫会整体失效。 */
-    if (e.type === 'daily') {
-      e._guardExempt = 'daily';
-      e.familyExempt = e.familyExempt || 'daily';
-      return;
-    }
-
+    /* v3.6.1：取消 daily 豁免。日常兜底事件同样要过亲属守卫，
+       否则「父母已故仍过生日」正是从这里漏出去的。 */
     /* 子女 / 孙辈：中年及以后出现即视为主角的孩子 */
     if (CHILD.test(s) && !OTHER_KID.test(s)) {
       if (st >= 4 || (st >= 3 && CHILD_STRONG.test(s))) {
@@ -198,36 +215,37 @@
       delete e.hasChildrenGuard;
     }
 
-    /* 强制主线事件若只在正文顺带提到亲属（标题/选项不含），不做硬性拦截，
-       避免把必经的人生节点错误过滤；记为 forced-incidental 供静态检查识别。 */
-    var forcedIncidental = (e.type === 'forced') &&
-      !PARENT.test(headline) && !SPOUSE.test(headline) &&
-      !SIBLING.test(headline) && !FRIEND.test(headline);
-    if (forcedIncidental) e.familyExempt = e.familyExempt || 'forced-incidental';
-
-    /* 父母：共同生活类必须都活着；追忆类放行 */
-    if (PARENT.test(s) && !REFLECT.test(s) && !forcedIncidental) {
+    /* 父母：共同生活类必须活着；明确的追忆类（坟/遗物/忌日/生前/走了）
+       反过来标记 requiresDeceased，只能在死后触发。 */
+    var deadStrong = DEAD_STRONG.test(s);
+    if (PARENT.test(s)) {
       var roles = [];
       if (/父亲|爸爸|老爸|父母|爸妈/.test(s)) roles.push('父亲');
       if (/母亲|妈妈|老妈|父母|爸妈/.test(s)) roles.push('母亲');
-      addGuard(e, 'aliveGuard', roles);
-    } else if (PARENT.test(s) && REFLECT.test(s)) {
-      e.familyExempt = e.familyExempt || 'reflection';
+      if (!REFLECT.test(s)) {
+        addGuard(e, 'aliveGuard', roles);
+      } else if (deadStrong && roles.length) {
+        addGuard(e, 'requiresDeceased', roles);
+        e._deceasedOk = true;
+      } else {
+        e.familyExempt = e.familyExempt || 'reflection';
+      }
     }
 
-    /* 配偶：未婚/丧偶/离异不出 */
-    if (SPOUSE.test(s) && !REFLECT.test(s) && !forcedIncidental) {
-      e.spouseGuard = true;
+    /* 配偶：未婚/丧偶/离异不出；明确追忆类反向只允许丧偶后触发 */
+    if (SPOUSE.test(s)) {
+      if (!REFLECT.test(s)) e.spouseGuard = true;
+      else if (deadStrong) e.requiresDeceased = e.requiresDeceased || ['配偶'];
     }
 
     /* 兄弟姊妹：独生不出 */
-    if (SIBLING.test(s) && !REFLECT.test(s) && !forcedIncidental) {
+    if (SIBLING.test(s) && !REFLECT.test(s)) {
       e.siblingGuard = true;
     }
 
     /* 朋友：关系断裂或已故不出 */
-    if (FRIEND.test(s) && !forcedIncidental) {
-      e.friendGuard = true;
+    if (FRIEND.test(s)) {
+      if (!REFLECT.test(s)) e.friendGuard = true;
     }
   }
 
@@ -583,6 +601,206 @@
   }
 
   /* =========================================================
+     8b. v3.6.1 hotfix：父母死亡事件 + deceased 池
+     ========================================================= */
+  /* 旧档/新建档统一补齐死亡年份；父母独立寿数在此兜底 */
+  V.initNpcLifespans = function (g) {
+    if (!g || !g.npcs) return;
+    for (var i = 0; i < g.npcs.length; i++) {
+      var n = g.npcs[i];
+      if (!n || !n.alive || n.deathYear) continue;
+      if (/父亲|母亲/.test(n.role)) {
+        var base = /母亲|妈/.test(n.role) ? [65, 86] : [60, 82];
+        if (!n.deathAge) {
+          var hOff = Math.round(((Number(n.health) || 70) - 70) / 8);
+          n.deathAge = L.clamp(base[0] + L.randInt(0, base[1] - base[0]) + hOff, base[0] - 4, base[1] + 4);
+          n.lifespan = n.deathAge;
+        }
+        n.deathYear = g.year + Math.max(0, n.deathAge - (Number(n.age) || 0));
+      } else {
+        n.deathYear = g.year + Math.max(1, (Number(n.lifespan) || 78) - (Number(n.age) || 0));
+      }
+    }
+  };
+
+  function besideText(g, q) {
+    var names = [];
+    for (var i = 0; i < (g.npcs || []).length; i++) {
+      var n = g.npcs[i];
+      if (!n.alive || n.id === q.id) continue;
+      if (n.role === '配偶' || n.role === '父亲' || n.role === '母亲' || n.role === '子女') {
+        if (n.role === '子女' && (Number(n.age) || 0) < 16) continue;
+        names.push(n.role === '配偶' ? '你的爱人' : (n.role === '子女' ? n.name : '你' + n.role));
+      }
+    }
+    if (!names.length) return '床边没有别人，只有值班的护工';
+    if (names.length === 1) return names[0] + '守在床边';
+    return names.slice(0, 2).join('和') + '都在';
+  }
+
+  function whereText(g) {
+    var pools = [
+      '你当时在工地，安全帽都没摘就往医院赶',
+      '你那天在外地出差，手机静音了整整一个下午',
+      '你正在店里盘账，计算器上的数字停在一半',
+      '你刚下班，站在地铁口，风把电话里的声音吹得断断续续',
+      '你在医院另一层陪人看病，电梯一层层停',
+      '你其实就在本市，只是前一晚说了“明天再来”'
+    ];
+    var job = g && g.job && (g.job.name || g.job);
+    var base = pools[Math.abs(Number(g.turn) || 0) % pools.length];
+    return job ? ('你当时在做' + job + '，' + base.replace(/^你当时/, '') ) : base;
+  }
+
+  V.dueDeath = function (g) {
+    if (!g || !g.deathQueue || !g.deathQueue.length) return null;
+    if (g._deathTurn === g.turn) return null; /* 同一回合只出一场 */
+    var q = g.deathQueue.shift();
+    var n = npcOf(g, q.id);
+    if (n && n.deathEventDone) return V.dueDeath(g);
+    if (n) n.deathEventDone = true;
+    g._deathTurn = g.turn;
+    var isParent = (q.role === '父亲' || q.role === '母亲');
+    var title = isParent ? (q.role + '走的那天') : '爱人走的那天';
+    var text = (q.year || g.year) + '年，' + q.name + '（' + q.role + '，' + ((n && n.age) || '?') + '岁）走了。' +
+      q.cause + '。' + besideText(g, q) + '。' + whereText(g) + '。';
+    return {
+      id: 'v35_death_' + q.id + '_' + (q.year || g.year),
+      type: 'forced', tier: 'crossroad', stage: g.stage, prio: 99,
+      family: 'death', theme: 'death', title: title, text: text,
+      opts: [
+        {
+          label: '守在床边，把话说完', hint: '工作/钱先放下', tone: 'calm',
+          outcomes: [
+            { w: 70, text: '你握住' + (isParent ? q.role === '父亲' ? '他的手' : '她的手' : 'TA的手') + '，那只手一点点凉下去。', fx: { at: { happiness: -12, stress: 8 } } },
+            { w: 30, text: '你到的时候只剩仪器上的直线，护士让你再叫一声。', fx: { at: { happiness: -16, stress: 10 } } }
+          ]
+        },
+        {
+          label: '赶回去，路上一直催司机', hint: '请假 · 路费 · 可能还是晚一步', tone: 'bold',
+          outcomes: [
+            { w: 55, text: '你赶到时还有一口气，他/她听见你喊了一声。', fx: { at: { happiness: -9, stress: 9 }, money: -3000 } },
+            { w: 45, text: '你还是晚了两小时。白布已经盖上了。', fx: { at: { happiness: -15, stress: 12 }, money: -3000 } }
+          ]
+        },
+        {
+          label: '没能回去，在电话里听', hint: '这一辈子都会记得这个选择', tone: 'cool',
+          outcomes: [
+            { w: 60, text: '电话那头很吵，你只听清一句“别急着回来”。', fx: { at: { happiness: -18, stress: 14 }, tag: '没见到最后一面' } },
+            { w: 40, text: '电话挂断后你在原地站了很久，风把外套吹得鼓起来。', fx: { at: { happiness: -14, stress: 16 }, tag: '没见到最后一面' } }
+          ]
+        }
+      ]
+    };
+  };
+
+  /* deceased 池：父母去世后才可出现，且只能在死后 */
+  function deceasedEvents() {
+    pushEvent({
+      id: 'v35h_tomb', type: 'random', tier: 'daily', weight: 1.6, family: 'v35h_tomb',
+      theme: '追忆', title: '清明',
+      cond: function (g) { return g.age >= 22 && g.marks.father_dead; },
+      requiresDeceased: ['父亲'], _deceasedOk: true,
+      text: '清明前一天，你请了半天假，买了纸钱和一束白菊。墓园在半山腰，台阶上的青苔比上回来更厚了。',
+      opts: [
+        O('把这一年的事说给他听', '你知道他听不见', 'calm', [
+          W2(70, '你说了工作、说了家里，最后说“我妈还行”。风把纸灰卷起来，贴在你的裤脚上。', { at: { happiness: -3, stress: -3 } }),
+          W2(30, '你说了两句就说不下去，蹲在碑前把纸钱一张张烧完。', { at: { happiness: -5, stress: -2 } })
+        ]),
+        O('只把碑擦干净就走', '像完成一件差事', 'cool', [
+          W2(60, '下山时你回头看了一眼，那块碑在一排碑里并不显眼。', { at: { stress: -2 } }),
+          W2(40, '你在台阶上坐了一会儿，想起他最后一次叫你小名。', { at: { happiness: -2 } })
+        ])
+      ]
+    });
+    pushEvent({
+      id: 'v35h_relics', type: 'random', tier: 'daily', weight: 1.4, family: 'v35h_relics',
+      theme: '追忆', title: '整理遗物',
+      cond: function (g) { return g.age >= 22 && (g.marks.father_dead || g.marks.mother_dead); },
+      requiresDeceased: ['父亲'], _deceasedOk: true,
+      text: '衣柜最上层有个铁盒子，落满了灰。你打开，里面是一块停了的手表、几张粮票，还有你小学时得的一张奖状，折得很整齐。',
+      opts: [
+        O('手表留下，其余收起来', '表已经不走了', 'calm', [
+          W2(65, '你把表上了弦，它居然又走了两天。你把它放在书桌边，再没戴过。', { at: { happiness: 1, stress: -2 }, tag: '父亲那块停过又走起来的手表' }),
+          W2(35, '表彻底坏了，你还是放进抽屉，没舍得扔。', { at: { happiness: -1 } })
+        ]),
+        O('把奖状带走，剩下的捐掉', '你不想留一屋子旧东西', 'bold', [
+          W2(60, '奖状背面有一行铅笔字：“这孩子争气”。字很轻，像是怕被人看见。', { at: { happiness: 2, stress: -1 } }),
+          W2(40, '捐东西的人上门时，你还是把铁盒留下了，塞进柜子最深处。', { at: { happiness: -1 } })
+        ])
+      ]
+    });
+    pushEvent({
+      id: 'v35h_dream', type: 'random', tier: 'daily', weight: 1.5, family: 'v35h_dream',
+      theme: '追忆', title: '梦见',
+      cond: function (g) { return g.age >= 22 && g.marks.mother_dead; },
+      requiresDeceased: ['母亲'], _deceasedOk: true,
+      text: '你梦见她站在老屋门口，围裙还没解，手里拎着一把青菜。她问你吃了没有，你说吃了，她就点点头。醒来时天还没亮。',
+      opts: [
+        O('躺着把梦做完', '明知道是梦', 'calm', [
+          W2(70, '你再闭眼，梦却接不上了。窗外有车经过，灯扫过天花板。', { at: { happiness: -2, stress: -2 } }),
+          W2(30, '你在梦里跟她说了很多话，醒来一句也记不住，只记得她点头。', { at: { happiness: 1 } })
+        ]),
+        O('起来给她煮一碗面', '厨房里只有你一个人', 'bold', [
+          W2(60, '面煮好了，你放在桌上，坐到它凉。', { at: { happiness: -3, stress: -1 } }),
+          W2(40, '你吃了一半，剩下的倒掉，洗碗时水开得很大。', { at: { happiness: -2 } })
+        ])
+      ]
+    });
+    pushEvent({
+      id: 'v35h_anniversary', type: 'random', tier: 'daily', weight: 1.2, family: 'v35h_anniversary',
+      theme: '追忆', title: '忌日',
+      cond: function (g) { return g.age >= 22 && g.marks.father_dead; },
+      requiresDeceased: ['父亲'], _deceasedOk: true,
+      text: '又到了那一天。你没跟任何人提，照常上班，照常吃饭。傍晚回家，路过他常去的那个小卖部，老板娘问了一句：“好久没见你爸了。”',
+      opts: [
+        O('说她爸搬去外地了', '你不想解释', 'cool', [
+          W2(65, '老板娘“哦”了一声，转身去给别人拿烟。你站在原地，忽然不知道接下来该往哪走。', { at: { happiness: -4, stress: 2 } }),
+          W2(35, '你说完就后悔了，后来再没进过那家店。', { at: { happiness: -3, stress: 3 } })
+        ]),
+        O('如实说，然后买一包他常抽的烟', '你不抽烟', 'calm', [
+          W2(70, '你把烟放在他照片前，没点。那包烟在那里放了很久。', { at: { happiness: -1, stress: -2 }, money: -20, tag: '忌日那包没点的烟' }),
+          W2(30, '你点了一根，呛得咳嗽，剩下的全扔了。', { at: { health: -1, stress: 1 }, money: -20 })
+        ])
+      ]
+    });
+    pushEvent({
+      id: 'v35h_empty_chair', type: 'random', tier: 'daily', weight: 1.3, family: 'v35h_empty_chair',
+      theme: '追忆', title: '空椅子',
+      cond: function (g) { return g.age >= 30 && g.marks.mother_dead; },
+      requiresDeceased: ['母亲'], _deceasedOk: true,
+      text: '老屋的饭桌还是那张，四条长凳。靠里的位置空着，椅背上搭着一件旧外套，谁也没去动。',
+      opts: [
+        O('把外套收进柜子', '屋子会更空一点', 'calm', [
+          W2(60, '柜门关上时有一声响。你回到桌前，发现自己还是只摆了兩副碗筷。', { at: { happiness: -3, stress: -2 } }),
+          W2(40, '你收了一半又拿出来，重新搭回椅背。', { at: { happiness: -1 } })
+        ]),
+        O('就让它搭着', '像她只是出门了', 'cool', [
+          W2(70, '每次回家你都先看一眼那件外套。它慢慢落了灰。', { at: { happiness: -2, stress: -1 } }),
+          W2(30, '有一年你带朋友回来，他问这是谁的，你说是以前的。', { at: { happiness: -2, stress: 1 } })
+        ])
+      ]
+    });
+    pushEvent({
+      id: 'v35h_photo', type: 'random', tier: 'daily', weight: 1.3, family: 'v35h_photo',
+      theme: '追忆', title: '旧照片',
+      cond: function (g) { return g.age >= 22 && (g.marks.father_dead || g.marks.mother_dead); },
+      requiresDeceased: ['父亲'], _deceasedOk: true,
+      text: '收拾抽屉时翻出一张照片：厂门口，他穿着蓝色工装，手搭在你肩上。照片背面写着年份和一个名字，字迹被磨得发白。',
+      opts: [
+        O('拿去照相馆翻拍一张', '花几十块钱', 'calm', [
+          W2(70, '翻拍出来的照片更清楚了，也更陌生。你把它放进钱包夹层。', { at: { happiness: 1, stress: -1 }, money: -60, tag: '钱包里那张厂门口的照片' }),
+          W2(30, '照相馆说底片早就没了，只能扫描。扫出来的脸上有一道白痕。', { at: { happiness: -1 }, money: -40 })
+        ]),
+        O('照原样放回去', '有些东西不适合天天看', 'cool', [
+          W2(60, '你把照片压回抽屉最底下，上面盖了一层单据。', { at: { stress: -1 } }),
+          W2(40, '过了几天你又翻出来，看了很久，才放回去。', { at: { happiness: -1 } })
+        ])
+      ]
+    });
+  }
+
+  /* =========================================================
      9. 权重与收尾
      ========================================================= */
   function tuneWeights() {
@@ -616,6 +834,7 @@
   newEvents();
   tuneWeights();
   tuneOpening();
+  deceasedEvents();
   V.apply();
   V.applyAlt();
   if (L.EVENT_INDEX) {

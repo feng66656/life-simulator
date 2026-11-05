@@ -5,7 +5,7 @@
   'use strict';
   var LS = window.LS = window.LS || {};
 
-  LS.VERSION = '3.6.0';
+  LS.VERSION = '3.6.1';
   LS.START_YEAR = 2005;
   LS.FREE_POINTS = 30;
   LS.SAVE_PREFIX = 'lifesim_v1_';
@@ -828,6 +828,9 @@
     }
     g.socialQuota.max = 1 + (g.attrs.charm >= 60 ? 1 : 0);
 
+    /* v3.6.1：新建档也补齐 NPC 死亡年份（父母为独立寿数） */
+    if (LS.V35 && LS.V35.initNpcLifespans) LS.V35.initNpcLifespans(g);
+
     /* v3.6：出生档案（阶层/地域/隐秘身世）+ 九条人生线状态 */
     if (LS.LINES) {
       LS.LINES.init(g);
@@ -929,6 +932,21 @@
 
   LS.addNpc = function (g, role, opt) {
     var n = LS.makeNPC(role, opt || {});
+    if (/父亲|母亲/.test(role) && !n.deathYear) {
+      /* v3.6.1 hotfix：父母各自独立寿数（父 60–82 / 母 65–86），
+         再按健康、时代与医疗条件偏移；写入 deathYear，到点强制死亡事件。 */
+      var base = /母亲|妈/.test(role) ? [65, 86] : [60, 82];
+      var hOff = Math.round(((Number(n.health) || 70) - 70) / 8);
+      var eraOff = ((g && g.year) || LS.START_YEAR) >= 2010 ? 2 : 1;
+      var medOff = (g && g.money && Number(g.money.cash) > 50000) ? 2 : 0;
+      var deathAge = LS.clamp(base[0] + LS.randInt(0, base[1] - base[0]) + hOff + eraOff + medOff, base[0] - 4, base[1] + 4);
+      n.lifespan = deathAge;
+      n.deathAge = deathAge;
+      n.deathYear = ((g && g.year) || LS.START_YEAR) + Math.max(1, deathAge - (Number(n.age) || 0));
+    } else if (g && !n.deathYear) {
+      var life = Number(n.lifespan) || 78;
+      n.deathYear = (g.year || LS.START_YEAR) + Math.max(1, life - (Number(n.age) || 0));
+    }
     g.npcs.push(n);
     return n;
   };

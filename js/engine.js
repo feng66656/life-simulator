@@ -1396,6 +1396,12 @@
     var E = LS.EVENTS;
     maybeNewEpoch(g);
 
+    /* v3.6.1：到寿死亡事件优先于一切 */
+    if (LS.V35 && LS.V35.dueDeath) {
+      var dEv = LS.V35.dueDeath(g);
+      if (dEv) return dEv;
+    }
+
     /* 0. 待业/毕业：进入独立的求职命运岔路（同岁有强制剧情时先走剧情） */
     if (needHunt(g)) {
       var hasForced = E.some(function (x) {
@@ -2031,10 +2037,23 @@
         bcPush(g, 'child_adult', null, { changes: n.name + '成年 · 家庭抚养支出下降 · 幸福感 +3' });
         g.attrs.happiness = LS.clamp(g.attrs.happiness + 3, 0, 100);
       }
-      if (n.health <= 0 || n.age > n.lifespan) {
+      /* v3.6.1 hotfix：到点必死（deathYear 由寿数推算），不再只靠 age > lifespan 的概率式判定 */
+      var dueDeath = !!(n.deathYear && g.year >= n.deathYear);
+      if (n.health <= 0 || n.age > n.lifespan || dueDeath) {
         n.health = 0;
         n.alive = false;
         n.deathYear = g.year;
+        /* 父母/配偶死亡必须有一场死亡事件（谁在身边、你当时在哪），先排队，下一回合强制出 */
+        if (n.role === '父亲' || n.role === '母亲' || n.role === '配偶') {
+          g.deathQueue = g.deathQueue || [];
+          g.deathQueue.push({
+            id: n.id, role: n.role, name: n.name, year: g.year,
+            cause: n.health <= 0 ? '久病之后，身体撑不住了'
+              : (n.age >= 85 ? '在睡梦里走的，很安静'
+              : (n.role === '父亲' ? '肺上的老毛病反复，最后没能熬过这个冬天'
+              : (n.role === '母亲' ? '一次摔倒后再没站起来' : '年老体衰')))
+          });
+        }
         g.npcArc[n.id] = { stage: arcNow, lastAge: g.age, dead: true, nodes: (g.npcArc[n.id] || {}).nodes || [] };
         var drop = 0;
         if (n.role === '父亲' || n.role === '母亲') drop = 16;
