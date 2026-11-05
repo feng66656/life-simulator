@@ -64,7 +64,7 @@
       dilemma: {
         abandon: { role: role, tag: tag, drop: drop },
         cost: cost || {},
-        promise: { who: role, text: promiseText || ('那次你答应了' + role + '，最后没去'), dueYears: 2, consequence: tag },
+        promise: { who: role, text: promiseText || label, dueYears: 2, consequence: tag },
         echo: { afterYears: 5 + (n(drop) % 4), text: echoText || (role + '没说什么，但你一直记得' + tag + '那两个字。') }
       },
       outcomes: [{ w: 1, label: '', text: outText, fx: fx || {} }]
@@ -73,7 +73,7 @@
 
   function D(id, title, text, stages, need, a, b, extra) {
     extra = extra || {};
-    return {
+    var ev = {
       id: id, type: 'dilemma', stage: stages, tier: 'crossroad', theme: '两难',
       weight: n(extra.weight, 8), family: id, title: title, text: text,
       cond: function (g) {
@@ -84,6 +84,9 @@
       },
       opts: [a, b]
     };
+    /* 两难事件的年龄下限要显式落在事件对象上，选择器与审计都读它 */
+    if (extra.minAge) ev.ageMin = extra.minAge;
+    return ev;
   }
 
   var YOUTH = ['青年', '中年'];
@@ -154,7 +157,7 @@
     D('dil_mom_chemo', '第六次化疗', '母亲第六次化疗，反应比前几次都重。同一天下午是你的晋升答辩，准备了三个月。病房里她吐完靠在枕头上，说“你去吧，我没事”，手却一直抓着你的袖口。', MID, ['母亲'],
       o('陪她做完这一轮', '听说这次最难受', '母亲', '缺席', 15, { relation: 0, career: -12, money: -6000, health: -5 },
         '你留下来，给她擦脸、换衣服、叫护士。答辩改成了书面材料，评审说“下次吧”。', { at: { stress: 11, health: -5, happiness: 1 }, money: { cash: -6000 } },
-        '母亲那次挺过来了。她说“你那天没走，我记着”。'),
+        '母亲挺过来了。她说“你那天没走，我记着”。'),
       o('去答辩', '那边应该能理解', '母亲', '失望', 18, { relation: -18, career: 12, money: 8000, health: -2 },
         '你答得很漂亮，评审全票通过。回到病房时，母亲已经睡了，床头柜上是没动过的粥。', { at: { stress: 9, happiness: -5 }, money: { cash: 8000 } },
         '她后来跟病友说“我儿子有出息”。你听见了，没敢进去。')),
@@ -166,7 +169,7 @@
         '伴侣退烧后给你煮了面。老板在年终会上说“有些人不够拼”。'),
       o('回公司改稿', '听说甲方很难缠', '配偶', '失望', 16, { relation: -16, career: 6, money: 3000, health: -2 },
         '你走的时候伴侣背对着你，没说话。提案过了，老板拍了拍你的肩。凌晨回家，桌上只有一只空杯子。', { at: { stress: 7, health: -2 }, money: { cash: 3000 } },
-        '伴侣后来病好了，只是再发烧时，不再给你打电话。')),
+        '伴侣后来病好了，只是再发烧时，不再给你打电话。'), { minAge: 20 }),
 
     D('dil_partner_surgery', '候诊区的两把椅子', '伴侣做一个小手术，医生说“很快，半小时”。同一时间，老板在群里点名要你参加客户饭局。伴侣说“你去吧，我能行”，可护士叫号时，候诊区只有两把椅子。', MID, ['配偶'],
       o('陪她/他做完', '听说只是小手术', '配偶', '缺席', 11, { relation: 0, career: -6, money: -900, health: -1 },
@@ -199,7 +202,7 @@
         '两年后发小还了钱，房价已经涨了一大截。你没怪他，只是偶尔算那笔账。'),
       o('先交首付', '听说病没那么急', '发小', '记恨', 18, { relation: -18, money: 0, career: 0, health: 0 },
         '你交了定金，给发小转了两千，说“先应急”。他回了句“不用了”，把你删了。', { at: { stress: 6, happiness: -4 }, money: { cash: -2000 } },
-        '你搬进新房那天，听说他母亲的手术拖了两个月。')),
+        '你搬进新房那天，听说他母亲的手术拖了两个月。'), { minAge: 20 }),
 
     D('dil_loan_business', '他要开第二家店', '发小想盘下隔壁店面，差十二万，说“这次肯定成”。你手里刚好有十二万，是准备给孩子换学区房的首付。他坐在你店里，眼睛发亮，像二十年前说要一起去远方。', MID, ['发小'],
       o('借给他', '那人看着挺靠谱', '发小', '缺席', 13, { relation: 0, money: -120000, career: -2, health: -2 },
@@ -223,7 +226,7 @@
         '他婚后第二年才还清。你收钱那天，他已经有了孩子。'),
       o('留着首付', '听说婚礼可以简办', '发小', '失望', 15, { relation: -15, money: 0, career: 0, health: 0 },
         '你说“真挪不开”。他婚礼还是办了，只是酒席少了几桌。你随了份子，坐在角落里。', { at: { stress: 3, happiness: -2 }, money: { cash: -1000 } },
-        '他敬酒时绕过了你那一桌。你当成没看见。')),
+        '他敬酒时绕过了你那一桌。你当成没看见。'), { minAge: 20 }),
 
     /* 5. 孩子升学 vs 晋升外派 */
     D('dil_kid_school', '升学宴与调令', '孩子中考出分，刚好够上重点线，要交一笔择校费。同一天，公司发文：晋升名单有你，但要去外地驻场两年。孩子妈妈说“你去吧，家里我来”，孩子却在你书房门口站了很久。', MID, ['子女'],
@@ -240,7 +243,7 @@
         '孩子考得不错。查分那晚，他/她第一个抱住的是你。'),
       o('去总部', '听说孩子很独立', '子女', '失望', 16, { relation: -16, career: 12, money: 15000, health: 0 },
         '你在总部开会时，孩子正在考场。成绩出来那天，你只收到一条短信：“还行。”', { money: { cash: 15000 }, at: { stress: 5, happiness: -4 } },
-        '很多年后孩子说“我高考那年你不在”，语气很轻。')),
+        '很多年后孩子说“我高考那年你不在”，语气很轻。'), { minAge: 37 }),
 
     D('dil_kid_transfer', '转学与升职', '孩子被重点学校录取，但要搬到城另一头陪读。你刚拿到升职机会，新岗位需要你常驻公司。搬家那天，孩子在旧书桌上刻了一行小字。', MID, ['子女'],
       o('搬家陪读', '听说那学校很好', '子女', '缺席', 11, { relation: 0, career: -12, money: -30000, health: -3 },
@@ -404,6 +407,7 @@
           text: dm.echo.text,
           role: role,
           fromAge: g.age,
+          fromYear: g.year,
           fromTitle: ev.title,
           fromChoice: opt.label,
           fired: false
@@ -423,7 +427,7 @@
       var r = '';
       if (opt.fx.npc) for (var k in opt.fx.npc) { r = k; break; }
       if (!r && ev.npcRole) r = ev.npcRole;
-      if (r) V.addPromise(g, { npcRole: r, who: r, text: '你点头答应了' + r, dueYears: 2, consequence: '答应过的事' });
+      if (r) V.addPromise(g, { npcRole: r, who: r, text: (opt.label || ''), dueYears: 2, consequence: '答应过的事' });
     }
   };
 
@@ -483,12 +487,13 @@
       });
       return;
     }
-    /* 兜底：没有具体角色时，给自己许一条 */
+    /* 兜底：没有具体角色时，只记一条自我目标，不生成无对象的 NPC 承诺 */
     if (g.promises.length < 3) {
-      V.addPromise(g, {
-        npcRole: '', who: '自己', text: '今年把身体检查做了', dueYears: 2,
-        consequence: '你对自己说过'
-      });
+      g.selfGoals = g.selfGoals || [];
+      if (g.selfGoals.indexOf('今年把身体检查做了') < 0) {
+        g.selfGoals.push('今年把身体检查做了');
+        L.addMemory(g, '你给自己定了个目标：今年把身体检查做了。', 'promise');
+      }
     }
   };
 
@@ -523,8 +528,32 @@
     }
   ];
 
+  /* 事件主题：与老地方主题白名单比对，避免“校园事件配工厂门口”式的背景掺水 */
+  V.overlayTheme = function (e) {
+    var t = ((e && e.title) || '') + ' ' + String((e && e.text) || '').split('\n\n')[0];
+    if (/房|钱|债|贷|工资|加班|升职|创业|投资|合同|项目|账/.test(t)) return 'money';
+    if (/父|母|妻|夫|子|女|家|婚|丧|生日|病/.test(t)) return 'family';
+    if (/学校|老师|同学|考|毕业|课|班|同桌/.test(t)) return 'school';
+    if (/医院|手术|体检|药|病/.test(t)) return 'health';
+    if (/恋|约会|相亲|表白|暗恋/.test(t)) return 'love';
+    if (/工作|公司|同事|领导|面试|部门|单位/.test(t)) return 'work';
+    return 'other';
+  };
+  var PLACE_THEME_FIT = {
+    old_threshold: 'family', school_shop: 'school',
+    mother_market: 'family', factory_gate: 'family'
+  };
+  V.placeFits = function (p, g, e) {
+    if (!e) return true;
+    var theme = V.overlayTheme(e);
+    var want = PLACE_THEME_FIT[p.id];
+    if (!want) return true; /* 江边堤岸可出现在多数人生场景 */
+    if (p.id === 'school_shop' && g.age < 6) return false;
+    return theme === want;
+  };
+
   /* 老地方：作为“叠加叙事”挂在当年事件正文后，不单独占用回合 */
-  V.rollPlace = function (g) {
+  V.rollPlace = function (g, e) {
     if (!g) return null;
     if (g.placeYear === g.year) return null;
     if (!L.chance(0.15)) return null;
@@ -532,13 +561,14 @@
     var pool = [];
     for (var i = 0; i < V.PLACES.length; i++) {
       var p = V.PLACES[i];
+      if (!V.placeFits(p, g, e)) continue;
       var recent = false;
       for (var j = 0; j < g.placeLog.length; j++) {
         if (g.placeLog[j].id === p.id && g.year - g.placeLog[j].year < 4) { recent = true; break; }
       }
       if (!recent) pool.push(p);
     }
-    if (!pool.length) pool = V.PLACES.slice();
+    if (!pool.length) return null; /* 没有契合主题的老地方就跳过这段背景 */
     var picked = pool[Math.floor(L.rand() * pool.length)] || pool[0];
     var someAlive = false;
     for (var r = 0; r < picked.roles.length; r++) if (V.roleAlive(g, picked.roles[r])) { someAlive = true; break; }
@@ -548,29 +578,10 @@
     return { id: picked.id, name: picked.name, empty: !someAlive, text: someAlive ? picked.aliveText : picked.deadText };
   };
 
-  /* 时代锚点：命中真实年份时并入正文，保证 6 个年份都能看见 */
-  V.eraOverlay = function (g) {
-    if (!g) return null;
-    g.eraFired = g.eraFired || {};
-    for (var i = 0; i < V.ERA_ANCHORS.length; i++) {
-      var a = V.ERA_ANCHORS[i];
-      if (g.year !== a.year) continue;
-      if (g.eraFired[a.year]) continue;
-      g.eraFired[a.year] = true;
-      return { year: a.year, title: a.title, text: a.text };
-    }
-    return null;
-  };
-
+  /* 时代锚点只作为独立事件出现（V.eraAnchor），不再并入任何事件的正文 */
   V.attachOverlays = function (g, e) {
     if (!g || !e) return e;
-    var era = V.eraOverlay(g);
-    if (era) {
-      e.eraNote = era;
-      e.text = (e.text || '') + '\n\n【' + era.title + '】' + era.text;
-      L.addMemory(g, era.title + '，那一年世界在变，你也长了一岁。', 'era');
-    }
-    var pl = V.rollPlace(g);
+    var pl = V.rollPlace(g, e);
     if (pl) {
       e.placeNote = pl;
       e.text = (e.text || '') + '\n\n【' + (pl.empty ? pl.name + '（空了）' : pl.name) + '】' + pl.text;
@@ -647,6 +658,16 @@
     }
   ];
 
+  /* 只查当年是否还有未展示的时代锚点（不写 eraFired） */
+  V.eraDue = function (g) {
+    if (!g || !V.ERA_ANCHORS) return false;
+    var f = g.eraFired || {};
+    for (var i = 0; i < V.ERA_ANCHORS.length; i++) {
+      if (V.ERA_ANCHORS[i].year === g.year && !f[V.ERA_ANCHORS[i].year]) return true;
+    }
+    return false;
+  };
+
   V.eraAnchor = function (g) {
     if (!g) return null;
     g.eraFired = g.eraFired || {};
@@ -666,7 +687,9 @@
       return {
         id: 'v36_era_' + a.year, type: 'random', stage: g.stage, tier: 'daily', layer: 'era',
         weight: 0, family: 'v36_era', prio: 92, theme: a.theme,
-        title: a.title, text: a.text, opts: opts
+        title: a.title, text: a.text, opts: opts,
+        /* eraNote 仅作「必须展示、不得平淡合并」的标记，不拼进任何事件正文 */
+        eraNote: { year: a.year, title: a.title, text: a.text }
       };
     }
     return null;
@@ -689,12 +712,12 @@
             id: id, type: 'random', stage: null, tier: 'crossroad', layer: 'chain',
             weight: 0, family: 'v36_echo', prio: 70,
             title: '他记得那天',
-            text: '那年你以为事情过去了。' + (ee.text || ''),
+            text: (ee.fromYear ? ee.fromYear + '年' : '') + '你以为' + (ee.role || '对方') + '已经把「' + (ee.fromTitle || '旧事') + '」放下了。' + (ee.text || ''),
             opts: [
               {
                 label: '承认', hint: '有些账躲不掉', tone: 'risk',
                 apply: function (g2) {
-                  L.addMemory(g2, ee.text || '你想起那件事。', 'echo');
+                  L.addMemory(g2, ee.text || ((ee.fromYear ? ee.fromYear + '年' : '') + '你对' + (ee.role || '对方') + '选了「' + (ee.fromChoice || '') + '」'), 'echo');
                   g2.attrs.happiness = clamp(n(g2.attrs.happiness, 50) - 3, 0, 100);
                   return '你说“是我不好”。对方愣了一下，没接话。';
                 }
@@ -703,7 +726,7 @@
                 label: '什么也不说', hint: '沉默也是一种回答', tone: 'switch',
                 apply: function (g2) {
                   L.addMemory(g2, ee.text || '你什么也没说。', 'echo');
-                  return '你张了张嘴，最后什么也没说。那件事又沉回去了。';
+                  return '你张了张嘴，最后什么也没说。' + (ee.fromTitle || '那一次') + '又沉回去了。';
                 }
               }
             ],
@@ -714,11 +737,12 @@
       g.pending.push({
         event: id, dueAge: g.age, choiceId: '', choiceAge: e.fromAge || g.age,
         choiceTitle: e.fromTitle || '', choiceLabel: e.fromChoice || '',
-        choiceScene: '那年你以为……'
+        choiceScene: (e.fromYear ? e.fromYear + '年' : '') + '，' + (e.role || '对方') + '记得「' + (e.fromTitle || '') + '」'
       });
     }
     g.echoQueue = g.echoQueue.filter(function (x) { return !x.fired; });
-    V.ensurePromises(g);
+    /* 0–15 岁不补承诺种子：避免「2 岁答应帮父亲修水管」这类超龄承诺 */
+    if (g.age >= 16) V.ensurePromises(g);
   };
 
   /* =========================================================

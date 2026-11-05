@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>人生模拟器 · Life Simulator</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/fx.css">
 </head>
 <body>
 <div id="app">
@@ -14,7 +15,7 @@
     <div class="welcome-inner">
       <div class="welcome-kicker">A LOCAL LIFE SIMULATION</div>
       <h1 class="welcome-title">人生模拟器</h1>
-      <div class="welcome-ver">v3.6.1 · 本地单机版</div>
+      <div class="welcome-ver">v3.7.0 · 本地单机版</div>
       <p class="welcome-line">一年一回合。你不点选项，时间就不会向前走。</p>
       <p class="welcome-line dim">从 2005 年的一声啼哭开始，走到你人生的终点。</p>
       <div class="life-quote welcome-quote" id="welcomeQuote"></div>
@@ -117,7 +118,7 @@
     <header class="statusbar" id="statusbar">
       <div class="sb-left">
         <div class="sb-time" id="sbTime">2005 年</div>
-        <div class="sb-sub"><span id="sbAge">0 岁</span><i></i><span id="sbStage">婴幼儿</span></div>
+        <div class="sb-sub"><span id="sbAge">0 岁</span><i></i><span id="sbStage">婴幼儿</span><span class="half-badge" id="sbHalf" hidden>上半年</span></div>
       </div>
       <div class="sb-attrs" id="sbAttrs"></div>
       <div class="sb-right">
@@ -159,6 +160,7 @@
     </main>
 
     <div class="corner-actions" id="cornerActions">
+      <button id="btnSkipStage" class="btn corner" hidden>跳过本阶段</button>
       <button id="btnSave" class="btn corner">存档</button>
       <button id="btnLoad" class="btn corner">读档</button>
       <button id="btnMemoir" class="btn corner">回忆录</button>
@@ -208,6 +210,7 @@
 <div id="moodVignette" aria-hidden="true"><div id="moodHint" class="mood-hint"></div></div>
 
 <script src="js/state.js"></script>
+<script src="js/replay.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/social.js"></script>
 <script src="js/events.js"></script>
@@ -221,9 +224,15 @@
 <script src="js/lines.js"></script>
 <script src="js/v35.js"></script>
 <script src="js/v36.js"></script>
+<script src="js/v37.js"></script>
+<script src="js/endings_v38.js"></script>
+<script src="js/careers.js"></script>
+<script src="js/events_career.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/art.js"></script>
 <script src="js/save.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/export_card.js"></script>
+<script src="js/fx.js"></script>
 </body>
 </html>

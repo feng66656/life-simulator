@@ -538,14 +538,14 @@
       ]
     }),
     ev({
-      id: 'f_retire_plan54', type: 'forced', stage: '中年', age: 54, prio: 80,
+      id: 'f_retire_plan54', type: 'forced', stage: '中年', age: 55, prio: 80,
       cond: hasJob,
       title: '退休规划',
       text: '单位开始统计退休意向。人事说，按现在的缴费年限，退休金大概够基本生活，想过得体面还得自己有积蓄。银行客户经理推荐了一款商业养老保险。',
       opts: [
-        o('买商业养老保险', { money: { cash: -120000 }, at: { stress: -4, happiness: 4 }, set: { pension: true }, tag: '五十四岁买了商业养老保险' }, { hint: '一次性投入很大' }),
+        o('买商业养老保险', { money: { cash: -120000 }, at: { stress: -4, happiness: 4 }, set: { pension: true }, tag: '五十五岁买了商业养老保险' }, { hint: '一次性投入很大' }),
         o('继续攒钱，不乱花', { at: { happiness: -3, stress: 2 }, money: { cash: 20000 }, tag: '为退休继续攒钱' }),
-        o('提前内退，回老家生活', { retire: true, money: { cash: -20000 }, at: { stress: -8, happiness: 3, health: 2 }, npc: { '母亲': { favor: 4 } }, tag: '五十四岁提前内退' })
+        o('提前内退，回老家生活', { retire: true, money: { cash: -20000 }, at: { stress: -8, happiness: 3, health: 2 }, npc: { '母亲': { favor: 4 } }, tag: '五十五岁提前内退' })
       ]
     })
   ]);
@@ -712,6 +712,7 @@
   add([
     ev({
       id: 'c_sleep', type: 'causal', prio: 95,
+      ageMin: 24, ageMax: 75,
       cond: function (g) { return g.age >= 24; },
       title: '熬夜的账',
       text: '这几年你习惯了凌晨一点以后睡。最近体检，肝功能有几项异常，血压也偏高。医生问作息，你说“工作没办法”。他把笔放下，看了你一眼，没再多说。',
@@ -723,6 +724,7 @@
     }),
     ev({
       id: 'c_wrongmajor', type: 'causal', prio: 96,
+      ageMin: 26, ageMax: 70,
       cond: function (g) { return g.age >= 26; },
       title: '专业的天花板',
       text: '工作几年后，你发现当年填志愿时的选择一直在收利息。同届的人有的进了核心岗位，你的简历总在某个环节被卡住。招聘要求上写着“相关专业”，这四个字像一道看不见的墙。',
@@ -734,6 +736,7 @@
     }),
     ev({
       id: 'c_promise', type: 'causal', prio: 94,
+      ageMin: 25, ageMax: 65,
       cond: function (g) { return g.age >= 25; },
       title: '人脉断裂',
       text: '几年前你向朋友借了一笔钱，说好半年还，后来一直拖。今天对方在微信上发来一段很客气的话，最后一句是“我也有难处”。你想了半天，不知道该怎么回。',
@@ -745,6 +748,7 @@
     }),
     ev({
       id: 'c_smoke', type: 'causal', prio: 90,
+      ageMin: 30, ageMax: 75,
       cond: function (g) { return g.age >= 30; },
       title: '肺结节',
       text: '单位体检查出肺部有个小结节，医生说不一定有事，但建议三个月后复查。你想起这些年抽掉的烟，还有办公室里永远散不掉的二手烟。',
@@ -756,6 +760,7 @@
     }),
     ev({
       id: 'c_drink', type: 'causal', prio: 88,
+      ageMin: 28, ageMax: 75,
       cond: function (g) { return g.age >= 28; },
       title: '脂肪肝',
       text: '体检报告上写着“中度脂肪肝”，医生问一周喝几次酒。你想起这些年陪客户、陪领导、陪朋友的饭局，白酒一杯接一杯，最后都变成了报告上的数字。',
@@ -767,6 +772,7 @@
     }),
     ev({
       id: 'c_sedentary', type: 'causal', prio: 86,
+      ageMin: 28, ageMax: 70,
       cond: function (g) { return g.age >= 28; },
       title: '腰不行了',
       text: '连续加班三个月后，你在工位上站不起来。医院拍片说是腰椎间盘突出，建议卧床休息，别再久坐。你想到项目节点，想到请假要扣的钱。',
@@ -778,9 +784,10 @@
     }),
     ev({
       id: 'c_bully', type: 'causal', prio: 84,
+      ageMin: 18, ageMax: 65,
       cond: function (g) { return g.age >= 18; },
       title: '人多的时候会紧张',
-      text: '部门聚餐，轮到你敬酒，你忽然说不出话。那种被堵在楼道里的感觉又回来了。同事以为你只是内向，只有你知道，有些东西从小学一直带到了现在。',
+      text: '部门聚餐，轮到你敬酒，你忽然说不出话。那种被堵在楼道里的感觉又回来了。同事以为你只是内向，只有你知道，有些东西从很小的时候就一直带到了现在。',
       opts: [
         o('找心理咨询，认真处理', { money: { cash: -10000 }, at: { happiness: 5, stress: -5, charm: 3 }, set: { therapy: true }, tag: '为少年时的阴影做了心理咨询' }, { hint: '要花钱，也要面对' }),
         o('逼自己多社交', { at: { charm: 4, stress: 4, happiness: 1 }, rep: { society: 2 }, tag: '强迫自己多参加社交' }),
@@ -789,7 +796,11 @@
     }),
     ev({
       id: 'c_leftbehind', type: 'causal', prio: 84,
-      cond: function (g) { return g.age >= 20; },
+      ageMin: 20, ageMax: 60,
+      cond: function (g) {
+        var m = LS.getNpc(g, '母亲');
+        return !!(m && m.alive) && g.age >= 20;
+      },
       title: '和父母的距离',
       text: '母亲在电话里问你什么时候回家，你说最近忙。其实不是没时间，是不知道回去该聊什么。小时候被留在村里那几年，像一层看不见的膜，隔在你们中间。',
       opts: [
@@ -800,6 +811,7 @@
     }),
     ev({
       id: 'c_stock', type: 'causal', prio: 85,
+      ageMin: 25, ageMax: 70,
       cond: function (g) { return g.age >= 25; },
       title: '账户里的亏损',
       text: '你当年跟风买的股票已经跌去一半。群里有人说“补仓摊低成本”，也有人说“割肉离场”。你盯着手机上的曲线，想起那笔钱本来打算用来做什么。',
@@ -811,6 +823,7 @@
     }),
     ev({
       id: 'c_housegain', type: 'causal', prio: 82,
+      ageMin: 26, ageMax: 75,
       cond: function (g) { return g.house.owned; },
       title: '房子涨了',
       text: '中介打电话来，说你那套房现在的挂牌价比买时高了不少，问要不要出手。妻子/丈夫算了一笔账，说卖了可以换套小的，剩下的钱做点别的。',
@@ -822,6 +835,7 @@
     }),
     ev({
       id: 'c_startupfail', type: 'causal', prio: 96,
+      ageMin: 22, ageMax: 60,
       cond: function (g) { return g.stats.startupFail > 0; },
       title: '创业留下的债',
       text: '项目关了，办公室退租，合伙人各奔东西。供应商的货款还欠着，员工工资结了一半。手机里每天都有催款消息，你把号码一个个拉黑，又一个个放出来。',
@@ -833,6 +847,7 @@
     }),
     ev({
       id: 'c_mentor_return', type: 'causal', prio: 80,
+      ageMin: 30, ageMax: 65,
       cond: function (g) { return g.age >= 30; },
       title: '当年帮过你的人',
       text: '一个很久没联系的前辈发来消息，说他现在有个项目，想找个信得过的人搭把手。你想起当年刚入行时，是他带你跑的第一个客户。',
@@ -844,6 +859,7 @@
     }),
     ev({
       id: 'c_debtcollect', type: 'causal', prio: 98, urgent: true,
+      ageMin: 22, ageMax: 70,
       cond: function (g) { return g.money.debt > 80000; },
       title: '催收电话',
       text: '银行的催收电话从每周一次变成每天一次。短信里写着逾期记录会影响征信，语气客气但不容商量。你翻遍账户，发现能动用的钱只够还一部分。',
@@ -855,6 +871,7 @@
     }),
     ev({
       id: 'c_hospital', type: 'causal', prio: 99, urgent: true,
+      ageMin: 18, ageMax: 90,
       cond: function (g) { return g.attrs.health < 30; },
       title: '住院',
       text: '身体终于撑不住了。你在会议上眼前一黑，醒来时已经在医院。医生要求住院观察，押金先交一万。工作群还在跳消息，你把手机扣在床头柜上。',
@@ -866,6 +883,7 @@
     }),
     ev({
       id: 'c_breakdown', type: 'causal', prio: 99, urgent: true,
+      ageMin: 18, ageMax: 75,
       cond: function (g) { return g.attrs.stress > 85; },
       title: '撑不住了',
       text: '你开始整夜睡不着，白天靠咖啡硬撑。开会时听不进别人说话，回家路上会突然想哭。心理热线打了三次没接通，你在楼道里坐了很久。',
@@ -877,6 +895,7 @@
     }),
     ev({
       id: 'c_depression', type: 'causal', prio: 98, urgent: true,
+      ageMin: 16, ageMax: 85,
       cond: function (g) { return g.attrs.happiness < 22; },
       title: '高兴不起来',
       text: '没有什么特别的事发生，但你对什么都提不起兴趣。饭照吃，班照上，话越来越少。朋友约你出去，你编了个理由推掉。夜里醒着的时候，觉得时间过得很慢。',
@@ -888,6 +907,7 @@
     }),
     ev({
       id: 'c_marriage_crisis', type: 'causal', prio: 96, urgent: true,
+      ageMin: 28, ageMax: 60,
       cond: function (g) { var s = spouseOf(g); return married(g) && s && s.alive && s.favor < 28; },
       title: '婚姻里的沉默',
       text: '你们已经很久没有认真说过话了。饭桌上各看各的手机，孩子的事说两句就吵。对方提出“要不分开一段时间”，你一时分不清是气话还是决定。',
@@ -902,6 +922,7 @@
     }),
     ev({
       id: 'c_parent_sick', type: 'causal', prio: 95,
+      ageMin: 25, ageMax: 60,
       cond: parentSick,
       title: '父母的身体',
       text: '母亲打电话来，声音压得很低，说父亲最近吃不下饭，让她别告诉你。你追问了几句，她才说已经去过镇上的诊所，医生建议去市里查。',
@@ -913,6 +934,7 @@
     }),
     ev({
       id: 'c_child_rebel', type: 'causal', prio: 92,
+      ageMin: 30, ageMax: 60,
       cond: function (g) { return childInAge(g, 12, 18) && (firstChild(g) ? firstChild(g).favor < 35 : false); },
       title: '孩子不听话了',
       text: '孩子把房门关得很响，说“你根本不懂”。你站在门外，想起自己当年也是这样对父母说话的。成绩单在桌上，几门课都亮了红灯。',
@@ -924,6 +946,7 @@
     }),
     ev({
       id: 'c_conflict', type: 'causal', prio: 90,
+      ageMin: 16, ageMax: 80,
       cond: anyNpcLow,
       title: '关系降到冰点',
       text: '你和一个人的关系已经很久没有缓和了。见面时客气得像陌生人，背后却都有一肚子话。共同的朋友传话说，对方觉得你“变了”。',
@@ -935,6 +958,7 @@
     }),
     ev({
       id: 'c_public', type: 'causal', prio: 86,
+      ageMin: 25, ageMax: 70,
       cond: function (g) { return LS.repTotal(g) > 65; },
       title: '被议论',
       text: '你在本地行业里有了点名气，随之而来的是各种说法。有人把你几年前的一段话截图发到群里，配上“看看这人”。朋友问你要不要回应，你盯着屏幕想了很久。',
@@ -946,6 +970,7 @@
     }),
     ev({
       id: 'c_headhunt', type: 'causal', prio: 88,
+      ageMin: 30, ageMax: 48,
       cond: function (g) { return g.age >= 30 && g.age <= 48 && g.attrs.knowledge > 80 && hasJob(g); },
       title: '猎头的电话',
       text: '一个陌生号码打进来，对方说在行业内看过你的项目，问你有没有兴趣换个平台。开出的薪资比现在高四成，但要去另一个城市，试用期六个月。',
@@ -957,6 +982,7 @@
     }),
     ev({
       id: 'c_layoff35', type: 'causal', prio: 93,
+      ageMin: 33, ageMax: 48,
       cond: function (g) { return g.age >= 33 && g.age <= 48 && g.edu.level <= 3 && hasJob(g); },
       title: '学历的门槛',
       text: '公司换了新的人力系统，晋升和调岗都开始卡学历。你的经验足够，但表格里“本科及以上”那一栏始终填不上。领导说“再等等”，你知道等的意思。',
@@ -968,6 +994,7 @@
     }),
     ev({
       id: 'c_job_hunt', type: 'causal', prio: 92, repeatable: true, cooldown: 2,
+      ageMin: 21, ageMax: 52,
       cond: function (g) { return !g.job.id && !g.marks.retired && g.age >= 21 && g.age <= 52; },
       title: '找工作',
       text: '招聘软件上的岗位大多已读不回。你把简历里的项目经历改得更具体，又投了十几家。下午有一场群面，等候区坐满了和你年纪差不多的人，没人说话，都在看手机。',
@@ -1007,6 +1034,7 @@
     }),
     ev({
       id: 'c_unemployed', type: 'causal', prio: 96, urgent: true, repeatable: true, cooldown: 3,
+      ageMin: 23, ageMax: 55,
       cond: function (g) { return g.age >= 23 && g.age <= 55 && !g.job.id && (g.money.cash < 20000 || g.money.debt > 30000); },
       title: '待业的日子',
       text: '简历投出去几十份，回音越来越少。房租快到期，社保断缴的提醒也来了。你开始怀疑是不是简历写得不对，又改了一遍，还是没人看。',
@@ -1018,6 +1046,7 @@
     }),
     ev({
       id: 'c_civil_tempt', type: 'causal', prio: 90,
+      ageMin: 35, ageMax: 60,
       cond: function (g) { return g.job.id === 'civil' && g.age >= 35; },
       title: '一份“心意”',
       text: '有人把一张卡塞进你的抽屉，说是“过节的心意”，事情不大，签个字就行。你把抽屉关上，手心有点出汗。办公室里没有人看见，但你知道这件事不会只有一次。',
@@ -1029,6 +1058,7 @@
     }),
     ev({
       id: 'c_teacher_tutor', type: 'causal', prio: 86,
+      ageMin: 22, ageMax: 60,
       cond: function (g) { return g.job.id === 'teacher'; },
       title: '补课的诱惑',
       text: '家长在微信上问能不能“单独辅导”，一小时两百，现金结算。学校刚开过会，明令禁止有偿补课。你算了一笔账，这笔钱抵得上大半个月工资。',
@@ -1040,6 +1070,7 @@
     }),
     ev({
       id: 'c_doctor_dispute', type: 'causal', prio: 88,
+      ageMin: 25, ageMax: 65,
       cond: function (g) { return g.job.id === 'doctor'; },
       title: '医患纠纷',
       text: '一位病人的家属在办公室拍了桌子，说治疗方案有问题，要求赔偿。病历和知情同意书都在，但对方不听解释。科室主任让你先回避，医务科介入了调查。',
@@ -1051,6 +1082,7 @@
     }),
     ev({
       id: 'c_freelance_dry', type: 'causal', prio: 90,
+      ageMin: 30, ageMax: 60,
       cond: function (g) { return g.job.id === 'freelance' && g.age >= 30; },
       title: '接不到单了',
       text: '连续两个月没有新项目，老客户的预算也砍了。你在几个平台上刷新消息，报价一降再降。社保要自己交，房租不会等你。自由职业的自由，忽然变得很贵。',
@@ -1062,6 +1094,7 @@
     }),
     ev({
       id: 'c_startup_tension', type: 'causal', prio: 92,
+      ageMin: 22, ageMax: 55,
       cond: function (g) { return g.job.id === 'startup'; },
       title: '合伙人分歧',
       text: '公司账上的钱只够三个月。你想继续投入，合伙人想止损退出。会议从下午开到晚上，白板上写满了数字，谁也没说服谁。最后有人说了一句“要不散了吧”。',
@@ -1073,6 +1106,7 @@
     }),
     ev({
       id: 'c_child_gaokao', type: 'causal', prio: 96,
+      ageMin: 37, ageMax: 60,
       cond: function (g) { return childInAge(g, 17, 19); },
       title: '孩子高考',
       text: '孩子高考那两天，你在考场外站了很久。太阳很大，家长们都拎着水和小板凳。你想起自己当年高考时的样子，忽然觉得时间过得比想象中快。',
@@ -1084,6 +1118,7 @@
     }),
     ev({
       id: 'c_childless_old', type: 'causal', prio: 88,
+      ageMin: 65, ageMax: 90,
       cond: function (g) { return g.age >= 65 && g.family.childrenIds.length === 0; },
       title: '没有子女的晚年',
       text: '社区登记紧急联系人，你在表格前停了很久。最后填了外甥的电话，又划掉，改成自己的。工作人员抬头看了你一眼，什么也没问。',
@@ -1095,6 +1130,7 @@
     }),
     ev({
       id: 'c_bankrupt', type: 'causal', prio: 99, urgent: true, repeatable: true, cooldown: 5,
+      ageMin: 25, ageMax: 70,
       cond: function (g) { return g.money.debt > 120000 && g.money.cash < 8000; },
       title: '债务压顶',
       text: '所有账户加起来不够还这个月的利息。催收电话打到了单位，也打给了你的家人。你坐在银行大厅的塑料椅上，看着叫号屏幕，第一次认真考虑“破产”这两个字。',
@@ -1106,7 +1142,11 @@
     }),
     ev({
       id: 'c_relative_borrow', type: 'causal', prio: 84,
-      cond: function (g) { return g.age >= 30 && g.money.cash > 300000; },
+      ageMin: 30, ageMax: 65,
+      cond: function (g) {
+        var m = LS.getNpc(g, '母亲');
+        return !!(m && m.alive) && g.age >= 30 && g.money.cash > 300000;
+      },
       title: '亲戚来借钱',
       text: '表弟提着水果上门，坐下先聊了半小时家常，最后说想借二十万周转，半年就还。你想起他前几年做过几次生意，都没成。母亲在旁边打圆场，说“都是一家人”。',
       opts: [
@@ -1117,6 +1157,7 @@
     }),
     ev({
       id: 'c_oldlove', type: 'causal', prio: 80,
+      ageMin: 40, ageMax: 58,
       cond: function (g) { return g.age >= 40 && g.age <= 58 && !!g.marks.firstlove; },
       title: '旧人重逢',
       text: '同学群里有人发了聚会的照片，你在角落里看见了当年那个同桌。有人私信问你，要不要单独约出来喝杯茶。你看着通讯录里的名字，想了很久。',
@@ -1128,6 +1169,7 @@
     }),
     ev({
       id: 'c_health_check', type: 'causal', prio: 93,
+      ageMin: 45, ageMax: 85,
       cond: function (g) { return g.age >= 45 && g.attrs.health < 58; },
       title: '该复查了',
       text: '几年前体检的异常指标一直没管。最近爬两层楼就喘，夜里偶尔心慌。社区卫生站打电话来提醒建档，你才发现上一次体检已经是好几年前。',
@@ -1139,6 +1181,7 @@
     }),
     ev({
       id: 'c_gig_injury', type: 'causal', prio: 92,
+      ageMin: 18, ageMax: 60,
       cond: function (g) { return g.job.id === 'gig'; },
       title: '工伤',
       text: '在工地上被掉下来的钢管砸到脚，去医院拍片说是骨裂。包工头给了两千块，说“先回家养着，好了再来”。你没有合同，也没有社保。',
@@ -1150,6 +1193,7 @@
     }),
     ev({
       id: 'c_inflation_pressure', type: 'causal', prio: 88,
+      ageMin: 55, ageMax: 90,
       cond: function (g) { return g.age >= 55 && g.money.cash < 30000; },
       title: '钱不经花了',
       text: '去一趟菜市场，同样的东西比去年贵了不少。退休金涨了一点，但水电、药费、人情往来都在涨。你把想买的东西放回货架，假装只是忘了。',
@@ -1161,6 +1205,7 @@
     }),
     ev({
       id: 'c_depression2', type: 'causal', prio: 97, urgent: true,
+      ageMin: 16, ageMax: 80,
       cond: function (g) { return g.attrs.happiness < 18; },
       title: '看不见底',
       text: '情况没有变好。你开始回避所有需要说话的场合，连最亲近的人也觉得远。有一天你在阳台上站了很久，风很冷，楼下有人喊孩子回家吃饭。',
@@ -1172,6 +1217,7 @@
     }),
     ev({
       id: 'c_liver', type: 'causal', prio: 95,
+      ageMin: 32, ageMax: 75,
       cond: function (g) { return g.age >= 32; },
       title: '肝的警告',
       text: '转氨酶高得离谱，医生要求立刻停掉所有保健品，住院观察。你想起那些凌晨两点的夜、酒桌上的杯子，还有抽屉里越吃越多的护肝片。',
@@ -1183,6 +1229,7 @@
     }),
     ev({
       id: 'c_lung', type: 'causal', prio: 94,
+      ageMin: 35, ageMax: 80,
       cond: function (g) { return g.age >= 35; },
       title: '复查结果',
       text: '拖了几年的肺结节这次变大了。医生建议做进一步检查，语气比上次严肃。你在医院走廊里坐了一会儿，给家里人打了个电话，只说“没什么大事”。',
@@ -1194,6 +1241,7 @@
     }),
     ev({
       id: 'c_back', type: 'causal', prio: 90,
+      ageMin: 30, ageMax: 75,
       cond: function (g) { return g.age >= 30; },
       title: '腰突复发',
       text: '一个弯腰的动作，腰像被电了一下。你扶着桌子站了很久才缓过来。医生说这次比上次严重，建议手术，也可以保守治疗，但不能再久坐。',
@@ -1205,6 +1253,7 @@
     }),
     ev({
       id: 'c_stock2', type: 'causal', prio: 92,
+      ageMin: 28, ageMax: 70,
       cond: function (g) { return g.age >= 28; },
       title: '越补越亏',
       text: '补仓的钱又被套住了。账户里的数字让你不敢打开软件，但每天还是会点进去看。妻子/丈夫问起这笔钱，你说“再等等就回本”。',
@@ -1216,6 +1265,7 @@
     }),
     ev({
       id: 'c_quack', type: 'causal', prio: 93,
+      ageMin: 55, ageMax: 90,
       cond: function (g) { return g.age >= 55; },
       title: '保健品',
       text: '小区里来了个“健康讲座”，送鸡蛋和面条，讲课的人穿白大褂，说他们的产品能“调理三高”。你去了三次，最后花八千八买了一个疗程。',
@@ -1227,6 +1277,7 @@
     }),
     ev({
       id: 'c_corruption', type: 'causal', prio: 98, urgent: true,
+      ageMin: 30, ageMax: 70,
       cond: function (g) { return !!g.marks.took_bribe; },
       title: '调查来了',
       text: '单位开始核查几年前的几个项目，有人被叫去谈话。你想起那张卡和签过的字，细节像潮水一样涌回来。手机响的时候，你会先看一眼来电号码。',
@@ -1238,6 +1289,7 @@
     }),
     ev({
       id: 'c_corruption2', type: 'causal', prio: 99, urgent: true,
+      ageMin: 30, ageMax: 70,
       cond: function (g) { return !!g.marks.coverup; },
       title: '纸包不住火',
       text: '调查组找上门，谈话从上午持续到下午。你曾经托的人先一步撇清了关系。走出办公楼时，天已经黑了，门口有同事在假装打电话。',
@@ -1249,6 +1301,7 @@
     }),
     ev({
       id: 'c_tutor_exposed', type: 'causal', prio: 95,
+      ageMin: 22, ageMax: 60,
       cond: function (g) { return !!g.marks.illegal_tutor; },
       title: '补课被举报',
       text: '家长群里有人把补课记录发给了教育局。学校找你谈话，要求写检查，退回收取的费用。你坐在办公室里，看着窗外来接孩子的家长，觉得很累。',
@@ -1260,6 +1313,7 @@
     }),
     ev({
       id: 'c_startupfail2', type: 'causal', prio: 97,
+      ageMin: 22, ageMax: 55,
       cond: function (g) { return !!g.marks.startup_strain; },
       title: '资金链断了',
       text: '员工工资发不出来，办公室房东来催租，供应商停止发货。你把最后一点钱转进公司账户，还是差一大截。合伙人说，到此为止吧。',
@@ -1271,6 +1325,7 @@
     }),
     ev({
       id: 'c_promise2', type: 'causal', prio: 94,
+      ageMin: 25, ageMax: 60,
       cond: function (g) { return !!g.marks.lent_relative; },
       title: '借出去的钱',
       text: '半年早就过去了，表弟没有提还钱的事。你在家族群里看见他换了新手机，又发了一张自驾游的照片。母亲说“再等等”，你知道这笔钱大概率回不来了。',
@@ -1282,6 +1337,7 @@
     }),
     ev({
       id: 'c_leverage', type: 'causal', prio: 93,
+      ageMin: 26, ageMax: 65,
       cond: function (g) { return !!g.marks.leveraged; },
       title: '抵押贷款到期',
       text: '那笔用房子抵押出来的钱，投的项目没有起色。银行通知续贷需要重新评估，利率也涨了。你算了一下，如果现在卖房，剩下的钱还够不够租房。',
@@ -1293,6 +1349,7 @@
     }),
     ev({
       id: 'c_child_late', type: 'causal', prio: 87, repeatable: true, cooldown: 3,
+      ageMin: 34, ageMax: 42,
       cond: function (g) { return married(g) && g.family.childrenIds.length === 0 && !g.marks.dink && g.age >= 34 && g.age <= 42; },
       title: '还要不要孩子',
       text: '同龄人的孩子已经上小学，你们的家里还是很安静。双方父母不再明说，只是把亲戚家小孩的视频转过来。医院的检查单上，几项指标被圈了出来，医生建议尽快决定。',
@@ -1307,6 +1364,7 @@
     }),
     ev({
       id: 'c_late_love', type: 'causal', prio: 79, repeatable: true, cooldown: 4,
+      ageMin: 31, ageMax: 48,
       cond: function (g) { return !married(g) && g.age >= 31 && g.age <= 48 && !g.marks.single_by_choice; },
       title: '朋友介绍的人',
       text: '同事说你该见一个人，条件普通，离过一次婚，工作稳定。周末约在商场四楼的餐厅，对方比照片上瘦，说话不急。吃完饭各自回家，手机里多了一个不会再主动亮起的对话框。',
@@ -1321,6 +1379,7 @@
     }),
     ev({
       id: 'c_depression3', type: 'causal', prio: 99, urgent: true,
+      ageMin: 22, ageMax: 85,
       cond: function (g) { return !!g.marks.deep_depression; },
       title: '长期低落',
       text: '这种状态已经持续了几年。你习惯了在人群里假装正常，回家后一个人坐着。体检医生说，长期情绪问题也在消耗身体。你点了点头，没有反驳。',
@@ -3637,7 +3696,7 @@
   add({
     id: 'v3_echo_stage_risk',
     type: 'forced', layer: 'chain', tier: 'echo', stage: '中年',
-    age: 30, prio: 96, weight: 1, art: 'clinic',
+    age: 31, prio: 96, weight: 1, art: 'clinic',
     cond: function (g) {
       if (!g || !LS.engine || g.age < 30) return false;
       var ks = LS.RISK_KEYS || [];

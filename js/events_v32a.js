@@ -1138,11 +1138,11 @@
             oc(30, '你偶尔也偷偷破例，被奶奶发现后罚站。', '罚站', { at: { happiness: -1 }, npc: { '奶奶': { favor: 2 } } })
           ]
         }),
-        o('当面答应，背后照旧', { npc: { '奶奶': { favor: -2 } }, at: { happiness: 2, charm: -1 }, tag: '跟奶奶当面一套背后一套' }, {
-          hint: '迟早会被发现', tone: 'switch',
+        o('在旁边看奶奶怎么管别的孩子', { npc: { '奶奶': { favor: 1 } }, at: { happiness: 1, knowledge: 1 }, tag: '小时候看奶奶管教别的孩子' }, {
+          tone: 'safe',
           outcomes: [
-            oc(55, '奶奶其实早就知道，只是一直没说。', '被看穿', { at: { happiness: -1 }, npc: { '奶奶': { favor: -1 } } }),
-            oc(45, '你被抓住一次，奶奶气了很久，之后管得更严。', '被抓住', { at: { charm: -1, happiness: -2 }, npc: { '奶奶': { favor: -3 } } })
+            oc(60, '邻家孩子不守规矩，奶奶只说了一句，他就红了眼圈。', '在一旁看', { at: { knowledge: 1, happiness: 1 } }),
+            oc(40, '你心想，自己可千万不能落到她手里。', '心里发怵', { at: { happiness: -1 }, npc: { '奶奶': { favor: 2 } } })
           ]
         }),
         o('跑去问父母，能不能不守这些', { npc: { '母亲': { favor: 3 }, '奶奶': { favor: -3 } }, at: { happiness: -1 }, tag: '小时候因为奶奶的规矩找过父母' }, {

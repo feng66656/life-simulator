@@ -167,7 +167,7 @@
 
   add({
     id: 'v32_soc_tongxue_cheat', type: 'random', layer: 'random', stage: '童年',
-    weight: 2, art: 'exam', cond: A(9, 12),
+    ageMin: 9, weight: 2, art: 'exam', cond: A(9, 12),
     title: '同桌想抄你的答案',
     text: '随堂测验，同桌把卷子往你这边挪了挪，用笔尖点了点最后一道大题。监考的老师正在讲台后面改作业，教室里只有翻纸的声音。',
     opts: [
@@ -258,18 +258,18 @@
   add({
     id: 'v32_soc_friend_secret', type: 'random', layer: 'random', stage: '少年',
     weight: 2, art: 'home', cond: A(14, 18),
-    title: '朋友把秘密告诉了你',
-    text: '晚自习后，朋友把你拉到操场边，说他家里出了事，让你千万别跟别人讲。风很大，他说话时一直看着地面。',
+    title: '发小把秘密告诉了你',
+    text: '晚自习后，发小把你拉到操场边，说他家里出了事，让你千万别跟别人讲。风很大，他说话时一直看着地面。',
     opts: [
-      o2('答应他，一个字都不说', { ensureNpc: EN.friend, at: { happiness: 3, stress: 1 }, tag: '少年时替朋友守住过秘密' },
-        W('很多年后他还记得那天晚上，说你是唯一没拿这事当谈资的人。', { npc: { '朋友': { intimacy: 9, anchor: { kind: 'secret', text: '你把他的秘密守了很多年' } } } }),
-        W('你无意中说漏了半句，话传回他耳朵里，他很久没理你。', { npc: { '朋友': { intimacy: -7, favor: -1 } }, at: { happiness: -2 } }, 35)),
-      o2('劝他告诉老师或家里人', { ensureNpc: EN.friend, at: { charm: 3, happiness: 1 }, tag: '少年时劝朋友向家里求助' },
-        W('他照做了，事情没有变好，但至少不再一个人扛。', { npc: { '朋友': { intimacy: 6 } } }),
-        W('他觉得你不懂，甩下一句“算了”就走了。', { npc: { '朋友': { intimacy: -4 } }, at: { happiness: -1 } }, 40)),
-      o2('装作没听见，不想惹事', { ensureNpc: EN.friend, at: { stress: 2 }, tag: '少年时装作没听见朋友的秘密' },
-        W('他没再提过，你们的关系也没变，只是中间隔了一层。', { npc: { '朋友': { intimacy: 2 } } }),
-        W('后来他出了事，你总觉得自己当时应该说点什么。', { npc: { '朋友': { intimacy: -3 } }, at: { happiness: -4 } }, 40))
+      o2('答应发小，一个字都不说', { ensureNpc: EN.faxiao, npc: { '发小': { intimacy: 0 } }, at: { happiness: 3, stress: 1 }, tag: '少年时替发小守住过秘密' },
+        W('很多年后他还记得那天晚上，说你是唯一没拿这事当谈资的人。', { npc: { '发小': { intimacy: 9, anchor: { kind: 'secret', text: '你把他的秘密守了很多年' } } } }),
+        W('你无意中说漏了半句，话传回他耳朵里，他很久没理你。', { npc: { '发小': { intimacy: -7, favor: -1 } }, at: { happiness: -2 } }, 35)),
+      o2('劝发小告诉老师或家里人', { ensureNpc: EN.faxiao, npc: { '发小': { intimacy: 0 } }, at: { charm: 3, happiness: 1 }, tag: '少年时劝发小向家里求助' },
+        W('他照做了，事情没有变好，但至少不再一个人扛。', { npc: { '发小': { intimacy: 6 } } }),
+        W('他觉得你不懂，甩下一句“算了”就走了。', { npc: { '发小': { intimacy: -4 } }, at: { happiness: -1 } }, 40)),
+      o2('装作没听见，不想惹事', { ensureNpc: EN.faxiao, npc: { '发小': { intimacy: 0 } }, at: { stress: 2 }, tag: '少年时装作没听见发小的秘密' },
+        W('他没再提过，你们的关系也没变，只是中间隔了一层。', { npc: { '发小': { intimacy: 2 } } }),
+        W('后来他出了事，你总觉得自己当时应该说点什么。', { npc: { '发小': { intimacy: -3 } }, at: { happiness: -4 } }, 40))
     ]
   });
 
@@ -656,7 +656,9 @@
 
   add({
     id: 'v32_soc_faxiao_old', type: 'random', layer: 'random', stage: '中老年',
-    weight: 3, art: 'home', cond: A(55, 78, function (g) { return alive(g, '发小'); }),
+    weight: 3, art: 'home', ageMin: 55, ageMax: 78, cond: function (g) {
+      return g.age >= 55 && g.age <= 78 && alive(g, '发小');
+    },
     title: '和{{npc:发小}}坐在老巷口',
     text: '老巷子要拆了，发小约你回去看看。两个人坐在已经关了门的杂货铺台阶上，一人一瓶啤酒，聊着谁家孩子结婚了。',
     opts: [
@@ -862,7 +864,7 @@
     title: '{{npc:同事}}求你顶个班',
     text: '同事家里临时出了事，问你能不能替他值这个周末的班。他说就这一次，回头一定还你。你周末本来也没安排，只是连着上了六天。',
     opts: [
-      o2('答应替他值', { at: { stress: 4, health: -2 }, kindness: { role: '同事', kind: 'cover', text: '他家里出事时，你替他值了周末的班', intimacy: 7, favor: 1 }, tag: '同事有难时你替他顶过班' },
+      o2('答应同事，替他值这个周末的班', { at: { stress: 4, health: -2 }, npc: { '同事': { intimacy: 0 } }, kindness: { role: '同事', kind: 'cover', text: '他家里出事时，你替他值了周末的班', intimacy: 7, favor: 1 }, tag: '同事有难时你替他顶过班' },
         W('他回来后请你吃了饭，之后你忙的时候他主动接过两次。', { npc: { '同事': { intimacy: 9, favor: 2, anchor: { kind: 'cover', text: '你替他顶过一个周末的班' } } } }),
         W('他家里的事一直没完，后来又找你替了两次。', { npc: { '同事': { intimacy: 3 } }, at: { stress: 6, health: -3 } }, 40)),
       o2('跟他换班，而不是白替', { at: { stress: 2, charm: 2 }, npc: { '同事': { intimacy: 4 } }, tag: '同事求顶班时你跟他换了班' },
@@ -1063,7 +1065,7 @@
   /* ---- 同学：7 岁同桌 → 13 岁竞争 → 18 岁散场 → 30 岁同学会 ---- */
   add({
     id: 'v32_arc_tongxue_7', type: 'causal', layer: 'chain', tier: 'echo', family: 'arc_tongxue',
-    stage: '童年', weight: 3, art: 'exam', cond: A(7, 9),
+    stage: '童年', ageMin: 7, weight: 3, art: 'exam', cond: A(7, 9),
     title: '老师安排的新同桌',
     text: '新学期排座位，老师把你和一个新转来的同学安排在一起。他把书包往桌上一放，橡皮滚到了你脚边。',
     opts: [
@@ -1284,10 +1286,10 @@
      ========================================================= */
   add({
     id: 'v32_echo_s_faxiao', type: 'causal', layer: 'chain', tier: 'echo',
-    weight: 3, art: 'home', cond: A(30, 72, function (g) {
+    weight: 3, art: 'home', ageMin: 30, ageMax: 72, cond: function (g) {
       var n = npc(g, '发小');
-      return !!(n && n.alive && Number(n.favor) >= 2 && n.anchors && n.anchors.length);
-    }),
+      return g.age >= 30 && g.age <= 72 && !!(n && n.alive && Number(n.favor) >= 2 && n.anchors && n.anchors.length);
+    },
     title: '旧照片里的{{npc:发小}}',
     text: '收拾柜子时翻出一张旧照片。{{anchor:发小}}。照片背面写着一个褪色的日期，你算了算，已经过去很多年。',
     opts: [
@@ -1302,10 +1304,10 @@
 
   add({
     id: 'v32_echo_s_parent', type: 'causal', layer: 'chain', tier: 'echo',
-    weight: 3, art: 'home', cond: A(35, 78, function (g) {
+    weight: 3, art: 'home', ageMin: 35, ageMax: 78, cond: function (g) {
       var n = npc(g, '母亲') || npc(g, '父亲');
-      return !!(n && n.alive && Number(n.intimacy) >= 65);
-    }),
+      return g.age >= 35 && g.age <= 78 && !!(n && n.alive && Number(n.intimacy) >= 65);
+    },
     title: '母亲又提起那一年',
     text: '母亲在电话里又提起那一年：{{anchor:母亲}}。她说了很多遍，你还是应着。挂电话前她问你什么时候回来吃饭。',
     opts: [
@@ -1320,7 +1322,7 @@
 
   add({
     id: 'v32_echo_s_tongxue', type: 'causal', layer: 'chain', tier: 'echo',
-    weight: 2, art: 'exam', cond: A(30, 68, function (g) {
+    weight: 2, art: 'exam', ageMin: 30, ageMax: 68, cond: A(30, 68, function (g) {
       var n = npc(g, '同学');
       return !!(n && n.alive && Number(n.favor) >= 2);
     }),
@@ -1341,7 +1343,7 @@
 
   add({
     id: 'v32_echo_s_boss', type: 'causal', layer: 'chain', tier: 'echo',
-    weight: 2, art: 'office', cond: A(30, 62, function (g) {
+    weight: 2, art: 'office', ageMin: 30, ageMax: 62, cond: A(30, 62, function (g) {
       var n = bossOf(g);
       return !!(n && n.alive && Number(n.intimacy) >= 60);
     }),
@@ -1349,7 +1351,7 @@
     text: '很久没联系的老上司发来一条语音，只有十几秒。{{anchor:上司}}。他说自己现在不管事了，有些话反而敢说。',
     opts: [
       o2('回电话，认真听他说完', { at: { happiness: 3, stress: 1 }, npc: { '上司': { intimacy: 6 } }, tag: '老上司发来语音时你回电话听他说完' },
-        W('他讲了半个钟头，最后说当年那件事，他一直觉得亏欠你。', { npc: { '上司': { intimacy: 8, favor: 1, anchor: { kind: 'call', text: '他退下来后给你打过电话，说当年亏欠你' } } } }),
+        W('他讲了半个钟头，最后说起 2003 年项目验收，他把责任推给了你，这位老上司一直觉得亏欠你。', { npc: { '上司': { intimacy: 8, favor: 1, anchor: { kind: 'call', text: '他退下来后给你打过电话，说当年亏欠你' } } } }),
         W('他说的都是旧事，你听着，插不上话。', { npc: { '上司': { intimacy: 3 } }, at: { stress: 2 } }, 40)),
       o2('回一句“保重身体”', { at: { stress: -1 }, npc: { '上司': { intimacy: 2 } }, tag: '老上司发来语音你只回了保重' },
         W('他回了个大拇指，之后没再打扰你。', { npc: { '上司': { intimacy: 2 } } }),
@@ -1359,7 +1361,7 @@
 
   add({
     id: 'v32_echo_s_spouse', type: 'causal', layer: 'chain', tier: 'echo',
-    weight: 3, art: 'home', cond: A(35, 72, function (g) {
+    weight: 3, art: 'home', ageMin: 35, ageMax: 72, cond: A(35, 72, function (g) {
       var m = marriage(g);
       return !!(married(g) && m.year && (g.year - m.year) >= 12);
     }),
@@ -1380,7 +1382,7 @@
 
   add({
     id: 'v32_echo_s_child', type: 'causal', layer: 'chain', tier: 'echo',
-    weight: 2, art: 'nursery', cond: A(40, 72, function (g) {
+    weight: 2, art: 'nursery', ageMin: 40, ageMax: 72, cond: A(40, 72, function (g) {
       var c = firstChild(g);
       return !!(c && Number(c.age) >= 18);
     }),
@@ -1398,7 +1400,7 @@
 
   add({
     id: 'v32_echo_s_mentor', type: 'causal', layer: 'chain', tier: 'echo',
-    weight: 2, art: 'office', cond: A(30, 68, function (g) {
+    weight: 2, art: 'office', ageMin: 30, ageMax: 68, cond: A(30, 68, function (g) {
       var n = npc(g, '恩人');
       return !!(n && n.alive && Number(n.favor) >= 3);
     }),
@@ -1419,7 +1421,7 @@
 
   add({
     id: 'v32_echo_s_enemy', type: 'causal', layer: 'chain', tier: 'echo',
-    weight: 2, art: 'emptyHome', cond: A(30, 72, function (g) {
+    weight: 2, art: 'emptyHome', ageMin: 30, ageMax: 72, cond: A(30, 72, function (g) {
       var n = npc(g, '仇人');
       return !!(n && n.alive && Number(n.favor) <= -3);
     }),

@@ -5,7 +5,7 @@
   'use strict';
   var LS = window.LS = window.LS || {};
 
-  LS.VERSION = '3.6.1';
+  LS.VERSION = '3.7.0';
   LS.START_YEAR = 2005;
   LS.FREE_POINTS = 30;
   LS.SAVE_PREFIX = 'lifesim_v1_';
@@ -641,6 +641,30 @@
     return attrs;
   };
 
+  /* v3.7 P4：按初始健康与生活方式浮动寿数。
+     基础 72–92；初始健康 ≥75 再加 4–8 年；初始压力 ≥60（长期高压的起点）
+     先扣 4–8 年；硬上限 95，最低保底 56（极差开局仍可能中年早逝）。 */
+  LS.lifespanOf = function (health, stress) {
+    var base = 72 + LS.randInt(0, 20);
+    if ((Number(health) || 0) >= 75) base += LS.randInt(4, 8);
+    if ((Number(stress) || 0) >= 60) base -= LS.randInt(4, 8);
+    return LS.clamp(base, 56, 95);
+  };
+  /* 长期高压/熬夜的二次折寿：只降不升，总折寿不超过 8 年 */
+  LS.applyLifestyleLifespan = function (g) {
+    if (!g || g.lifePenalty >= 8) return 0;
+    var lateNight = Number(g.risks && g.risks.lateNight) || 0;
+    var highStress = Number(g.risks && g.risks.highStress) || 0;
+    var burden = Math.max(lateNight, highStress);
+    if (burden < 70) return 0;
+    var cut = 4 + Math.round(LS.clamp((burden - 70) / 20, 0, 1) * 4);
+    g.maxAge = LS.clamp(Number(g.maxAge) || 72, 50, 95);
+    if (g.maxAge <= 60 + cut) return 0;
+    g.maxAge -= cut;
+    g.lifePenalty = (g.lifePenalty || 0) + cut;
+    return cut;
+  };
+
   LS.createGame = function (cfg) {
     if (!cfg || !cfg.name) throw new Error('缺少角色姓名');
     var seed = cfg.seed || ((Date.now() % 2147483647) || 1);
@@ -762,7 +786,9 @@
         echoesSeen: 0,
         crossroadsSeen: 0
       },
-      maxAge: 72 + LS.randInt(0, 20),
+      maxAge: LS.lifespanOf(finalAttrs.health, stress),
+      maxAgeBase: 0,
+      lifePenalty: 0,
       current: null,
       lastOutcome: null,
       death: { dead: false, reason: '', year: null, age: null },
@@ -798,7 +824,20 @@
       socialQuota: { year: LS.START_YEAR, used: 0, max: 1 },
       legacy: { reputation: 0, cash: 0, source: null },
       achievementsV3: [],
-      lastSummaryAt: -99
+      lastSummaryAt: -99,
+      /* v3.7：中年上下半年回合、年度账本、年终小结 */
+      half: 'H1',
+      halfLedger: [],
+      pendingConsequence: null,
+      pendingYearSummary: null,
+      yearStartSnap: null,
+      consequenceLog: [],
+      yearSummaryLog: [],
+      /* v3.9：弹性阶段制——阶段回合预算、已走回合、未走完的链 */
+      stagePlan: null,
+      stageTurnLog: [],
+      stageSkips: [],
+      skippedChains: []
     };
 
     g.npcs.push(LS.makeNPC('父亲', {
@@ -827,6 +866,9 @@
       }));
     }
     g.socialQuota.max = 1 + (g.attrs.charm >= 60 ? 1 : 0);
+    /* v3.7 P4：寿数基准只在这里定一次，后续长期折寿只降不升 */
+    g.maxAgeBase = g.maxAge;
+    g.lifePenalty = 0;
 
     /* v3.6.1：新建档也补齐 NPC 死亡年份（父母为独立寿数） */
     if (LS.V35 && LS.V35.initNpcLifespans) LS.V35.initNpcLifespans(g);
@@ -841,6 +883,11 @@
           g.origin.secretId = cfg.origin.secretId;
           g.origin.name = (LS.LINES.secret(g) || {}).name || g.origin.name;
         }
+        /* v3.7：出身被指定后按最终出身重抽 1–2 条隐藏线 */
+        if (LS.LINES.ensureSelected) {
+          g.selectedLines = [];
+          LS.LINES.ensureSelected(g);
+        }
       }
     }
 
@@ -853,6 +900,8 @@
     });
     LS.snapshot(g);
     g.stageStart = LS.stageSnapshot(g);
+    /* v3.7：记录年度起点，供年终小结比较钱/健康/关系 */
+    if (LS.V37 && LS.V37.snapYear) g.yearStartSnap = LS.V37.snapYear(g);
     g.rngState = LS.RNG.state;
     return g;
   };
@@ -1024,13 +1073,19 @@
     log.forEach(function (x) {
       var tier = x.tier || 'daily';
       var text;
-      var linked = false;
       if (tier === 'sys') {
         text = x.resultText || x.title;
       } else if (tier === 'echo') {
-        linked = !!(x.echoOf && hasChoice[x.echoOf]);
-        text = linked ? ('因果回响：' + (x.title || '') + (x.resultText ? '。' + x.resultText : '')) : '这一世没有留下记录（无法指回源选择）';
-        if (!linked) tier = 'legacy';
+        if (x.echoOf && !hasChoice[x.echoOf]) {
+          /* 有源头但源头选择已丢：降级为旧页，不伪造 */
+          text = '这一世没有留下记录（无法指回源选择）';
+          tier = 'legacy';
+        } else if (x.echoOf) {
+          text = '因果回响：' + (x.title || '') + (x.resultText ? '。' + x.resultText : '');
+        } else {
+          /* v3.7：因果事件本身没有源选择可指回（社会事件等），照实呈现 */
+          text = '因果：' + (x.title || '') + (x.resultText ? '。' + x.resultText : '');
+        }
       } else if (tier === 'crossroad') {
         text = '命运岔路：' + (x.title || '') + (x.choiceLabel ? '。你选择了「' + x.choiceLabel + '」' : '') + (x.resultText ? '。' + x.resultText : '');
       } else {

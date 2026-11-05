@@ -402,12 +402,15 @@
         var text = (FLAVOR[stage] || '') + sc.text.replace(/\{\{npc\}\}/g, c.role);
         var opts = roleOpts(c.role, c.nature, sc.key);
         /* 每条选项补上“在场 NPC”的亲密度变化（若模板没有显式 npc） */
-        L.EVENTS.push({
+        var evt = {
           id: id, type: 'random', stage: stage, tier: sc.tier === 'cross' ? 'crossroad' : (sc.tier === 'echo' ? 'echo' : 'daily'),
           weight: sc.tier === 'cross' ? 0.9 : 1.0, family: id, npcRole: c.role, npcEvent: true,
           title: title, text: text, opts: opts,
           cond: function (g) { return L.npcAlive(g, c.role); }
-        });
+        };
+        /* 配偶关系从 20 岁起才成立，避免 19 岁的青年段出现“配偶” */
+        if (c.role === '配偶' && stage === '青年') evt.ageMin = 20;
+        L.EVENTS.push(evt);
       });
     });
   });
@@ -536,9 +539,18 @@
     DAILY.forEach(function (d, i) {
       if ((si * 14 + i) % 3 === 2 && i > 11) return; /* 保留 100 条总量 */
       var id = 'v35_d_' + STAGE_KEY[stage] + '_' + (i + 1);
+      /* 第 4 条原为“加班的夜”，按学段/返聘/养老院改成各自场景，避免跨学段错位 */
+      var dTitle = d[0], dText = d[1];
+      if (i === 3) {
+        if (stage === '婴幼儿') { dTitle = '床头的小灯'; dText = '半夜醒来，床头的小灯还亮着。'; }
+        else if (stage === '童年') { dTitle = '写作业的夜'; dText = '作业写到很晚，台灯还亮着。'; }
+        else if (stage === '少年') { dTitle = '晚自习的教室'; dText = '晚自习下课，教室只剩你这一排灯还亮着。'; }
+        else if (stage === '中老年') { dTitle = '返聘的值班室'; dText = '退休返聘后，值班室只剩你这一盏灯还亮着。'; }
+        else if (stage === '晚年') { dTitle = '走廊尽头的灯'; dText = '走廊尽头还亮着一盏灯，护工查房的脚步很轻。'; }
+      }
       L.EVENTS.push({
         id: id, type: 'random', stage: stage, tier: 'daily', weight: 1.1, family: id,
-        title: d[0], text: (FLAVOR[stage] || '') + d[1],
+        title: dTitle, text: (FLAVOR[stage] || '') + dText,
         opts: [O('把这一天过完', '', '', [
           W(100, '日子继续', '没有什么特别的事发生。', fx({ happiness: 1 }, 0, null, {}))
         ])]

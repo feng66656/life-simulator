@@ -698,6 +698,7 @@
   function deceasedEvents() {
     pushEvent({
       id: 'v35h_tomb', type: 'random', tier: 'daily', weight: 1.6, family: 'v35h_tomb',
+      ageMin: 22, ageMax: 95,
       theme: '追忆', title: '清明',
       cond: function (g) { return g.age >= 22 && g.marks.father_dead; },
       requiresDeceased: ['父亲'], _deceasedOk: true,
@@ -715,10 +716,11 @@
     });
     pushEvent({
       id: 'v35h_relics', type: 'random', tier: 'daily', weight: 1.4, family: 'v35h_relics',
+      ageMin: 22, ageMax: 95,
       theme: '追忆', title: '整理遗物',
       cond: function (g) { return g.age >= 22 && (g.marks.father_dead || g.marks.mother_dead); },
       requiresDeceased: ['父亲'], _deceasedOk: true,
-      text: '衣柜最上层有个铁盒子，落满了灰。你打开，里面是一块停了的手表、几张粮票，还有你小学时得的一张奖状，折得很整齐。',
+      text: '衣柜最上层有个铁盒子，落满了灰。你打开，里面是一块停了的手表、几张粮票，还有你小时候得的一张奖状，折得很整齐。',
       opts: [
         O('手表留下，其余收起来', '表已经不走了', 'calm', [
           W2(65, '你把表上了弦，它居然又走了两天。你把它放在书桌边，再没戴过。', { at: { happiness: 1, stress: -2 }, tag: '父亲那块停过又走起来的手表' }),
@@ -732,6 +734,7 @@
     });
     pushEvent({
       id: 'v35h_dream', type: 'random', tier: 'daily', weight: 1.5, family: 'v35h_dream',
+      ageMin: 22, ageMax: 95,
       theme: '追忆', title: '梦见',
       cond: function (g) { return g.age >= 22 && g.marks.mother_dead; },
       requiresDeceased: ['母亲'], _deceasedOk: true,
@@ -749,6 +752,7 @@
     });
     pushEvent({
       id: 'v35h_anniversary', type: 'random', tier: 'daily', weight: 1.2, family: 'v35h_anniversary',
+      ageMin: 22, ageMax: 95,
       theme: '追忆', title: '忌日',
       cond: function (g) { return g.age >= 22 && g.marks.father_dead; },
       requiresDeceased: ['父亲'], _deceasedOk: true,
@@ -766,6 +770,7 @@
     });
     pushEvent({
       id: 'v35h_empty_chair', type: 'random', tier: 'daily', weight: 1.3, family: 'v35h_empty_chair',
+      ageMin: 30, ageMax: 95,
       theme: '追忆', title: '空椅子',
       cond: function (g) { return g.age >= 30 && g.marks.mother_dead; },
       requiresDeceased: ['母亲'], _deceasedOk: true,
@@ -783,6 +788,7 @@
     });
     pushEvent({
       id: 'v35h_photo', type: 'random', tier: 'daily', weight: 1.3, family: 'v35h_photo',
+      ageMin: 22, ageMax: 95,
       theme: '追忆', title: '旧照片',
       cond: function (g) { return g.age >= 22 && (g.marks.father_dead || g.marks.mother_dead); },
       requiresDeceased: ['父亲'], _deceasedOk: true,

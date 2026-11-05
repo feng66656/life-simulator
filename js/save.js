@@ -219,6 +219,59 @@
       if (n.deathEventDone === undefined) n.deathEventDone = false;
     });
     if (LS.V35 && LS.V35.initNpcLifespans) LS.V35.initNpcLifespans(g);
+    /* v3.7：半回合字段回填；旧档从任意回合恢复时默认上半年，不清 eventLog */
+    if (g.half !== 'H1' && g.half !== 'H2') g.half = 'H1';
+    /* v3.7 P4：旧档没有寿数时按健康回填（不消耗随机数，避免读档漂移） */
+    if (g.maxAge === undefined || isNaN(g.maxAge)) {
+      var healthNow = Number(g.attrs.health);
+      if (!isFinite(healthNow)) healthNow = 50;
+      g.maxAge = LS.clamp(72 + Math.round((healthNow - 50) * 0.15), 56, 95);
+    }
+    if (g.maxAgeBase === undefined || isNaN(g.maxAgeBase)) g.maxAgeBase = g.maxAge;
+    if (g.lifePenalty === undefined || isNaN(g.lifePenalty)) g.lifePenalty = 0;
+    /* v3.7 P4：职业系统状态回填，不清 eventLog */
+    if (LS.CAREER && LS.CAREER.init) LS.CAREER.init(g);
+    if (!Array.isArray(g.halfLedger)) g.halfLedger = [];
+    if (g.pendingConsequence === undefined) g.pendingConsequence = null;
+    if (g.pendingYearSummary === undefined) g.pendingYearSummary = null;
+    if (!Array.isArray(g.consequenceLog)) g.consequenceLog = [];
+    if (!Array.isArray(g.yearSummaryLog)) g.yearSummaryLog = [];
+    /* v3.9：弹性阶段制字段（旧档没有阶段预算时由引擎在下一回合自动补建） */
+    if (!g.stagePlan || typeof g.stagePlan !== 'object' || Array.isArray(g.stagePlan)) g.stagePlan = null;
+    else {
+      var sp = g.stagePlan;
+      if (typeof sp.budget !== 'number' || !isFinite(sp.budget)) sp.budget = 6;
+      if (typeof sp.played !== 'number' || !isFinite(sp.played)) sp.played = 0;
+      if (!Array.isArray(sp.ages)) sp.ages = [];
+      if (!Array.isArray(sp.undone)) sp.undone = [];
+      if (typeof sp.skipped !== 'boolean') sp.skipped = false;
+    }
+    if (!Array.isArray(g.stageTurnLog)) g.stageTurnLog = [];
+    if (!Array.isArray(g.stageSkips)) g.stageSkips = [];
+    if (!Array.isArray(g.skippedChains)) g.skippedChains = [];
+    /* v3.8：服刑与早终字段回填（旧档默认未服刑） */
+    if (!g.flags || typeof g.flags !== 'object') g.flags = {};
+    if (g.flags.jailed === undefined) g.flags.jailed = false;
+    if (g.jailYears === undefined) g.jailYears = 0;
+    if (g.jailUntilYear === undefined) g.jailUntilYear = 0;
+    g.jailHold = false;
+    g.eraPending = false;
+    /* v3.8：非自然终局包的整对象（含服刑/终局明细）随档往返，旧档补默认值 */
+    if (!g.marks || typeof g.marks !== 'object' || Array.isArray(g.marks)) g.marks = {};
+    if (!g.v38 || typeof g.v38 !== 'object' || Array.isArray(g.v38)) g.v38 = {};
+    var v38s = g.v38;
+    if (!v38s.seen || typeof v38s.seen !== 'object') v38s.seen = {};
+    if (!v38s.survived || typeof v38s.survived !== 'object') v38s.survived = {};
+    if (v38s.lastRollAge === undefined) v38s.lastRollAge = null;
+    if (v38s.prison === undefined) v38s.prison = null;
+    if (v38s.release === undefined) v38s.release = null;
+    if (v38s.stain === undefined) v38s.stain = null;
+    if (v38s.ending === undefined) v38s.ending = null;
+    if (g.v38Death === undefined) g.v38Death = null;
+    if (g.forceDeath === undefined) g.forceDeath = false;
+    if ((!g.yearStartSnap || typeof g.yearStartSnap !== 'object') && LS.V37 && LS.V37.snapYear) {
+      g.yearStartSnap = LS.V37.snapYear(g);
+    }
     g.migratedTo = LS.VERSION;
     return g;
   }

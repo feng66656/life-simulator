@@ -101,7 +101,7 @@
       ],
       full: '当年同一间产房里有两个男婴，护士交接时把两个孩子的手环系错了。你的亲生父母姓周，住在邻市。养父母其实早已隐约知道，只是一直不敢说。',
       partial: '档案里确实有一条改过的记录。医院只承认当年的交接有疏漏，再往下问，所有人就都闭了嘴。你知道自己不是在这个家长大的，却没能找到另一个家。',
-      fake: '你顺着一条错线查了两年，最后发现那个人只是同名同姓。被误认的一家人被你搅得不得安宁，母亲也因此住进了医院。'
+      fake: '你顺着一条错线查了两年，最后发现对方只是同名同姓。被误认的一家人被你搅得不得安宁，母亲也因此住进了医院。'
     },
     {
       id: 's2', name: '私生子',
@@ -123,7 +123,7 @@
       ],
       full: '你三个月大时被现在的父母从福利院抱回。亲生母亲当年十九岁，签了放弃抚养的纸，临走前把你抱了很久。她还活着，一直记得你的生日。',
       partial: '你是被收养的。但福利院的档案缺了一页，没人说得清你从哪里来。养父母只反复说一句：你是我们亲生的。',
-      fake: '你查到的那个人并不是你的生母，只是当年同院的一个护工。你的追问让一个无辜的老人被邻里议论了半年。'
+      fake: '你查到的那位并不是你的生母，只是当年同院的一个护工。你的追问让一个无辜的老人被邻里议论了半年。'
     },
     {
       id: 's4', name: '双胞胎分离',
@@ -143,9 +143,9 @@
         '父亲的体检血型和你矛盾，他看完报告只说了一句，机器也会错。',
         '舅舅喝醉时说，你妈当年不容易，你能长这么大不容易。'
       ],
-      full: '你的生父是母亲婚前的那个人，他在你出生前就出了事故。现在的父亲知道一切，还是把你抱回了家，户口本上写下自己的姓。',
-      partial: '父亲不是你的生父。母亲只肯说那个人“早就不在了”，再多一个字都不肯讲。你得到了答案的一半，另一半随她进了土。',
-      fake: '你怀疑的那个人只是母亲当年的同事。你拿着照片去问，他愣了很久，说那会儿他还在外地。'
+      full: '你的生父是母亲婚前的恋人，他在你出生前就出了事故。现在的父亲知道一切，还是把你抱回了家，户口本上写下自己的姓。',
+      partial: '父亲不是你的生父。母亲只肯说“他早就不在了”，再多一个字都不肯讲。你得到了答案的一半，另一半随她进了土。',
+      fake: '你怀疑的那位只是母亲当年的同事。你拿着照片去问，他愣了很久，说那会儿他还在外地。'
     },
     {
       id: 's6', name: '家族旧案',
@@ -237,7 +237,7 @@
       g.promises.push(p);
       pushLog(g, {
         eventId: 'promise_add_' + p.id, title: '许下承诺',
-        text: '你答应' + (o.who || '一个人') + '：' + p.text,
+        text: g.year + '年你答应了' + (o.who || o.npcRole || '一个人') + '：' + p.text,
         promiseId: p.id
       });
       return p;
@@ -270,13 +270,13 @@
       pushLog(g, {
         eventId: 'promise_' + status + '_' + p.id,
         title: kept ? '承诺兑现' : '承诺失约',
-        text: (note || ('关于「' + p.text + '」的约定')) + (kept ? '，你做到了。' : '，你没能做到。'),
+        text: (note || (p.madeYear + '年你答应了' + (p.npcRole || '一个人') + '「' + p.text + '」')) + (kept ? '，你做到了。' : '，你没能做到。'),
         promiseId: p.id, source: 'promise'
       });
       if (L.echoLog) {
         L.echoLog.push({
           year: g.year, age: g.age, lineId: p.lineId,
-          text: (kept ? '你兑现了承诺：' : '你失信了：') + p.text,
+          text: (kept ? p.madeYear + '年你兑现了答应' + (p.npcRole || '') + '的事：' : p.madeYear + '年你失信了，答应' + (p.npcRole || '') + '的事没做到：') + p.text,
           sourceTitle: kept ? '承诺兑现' : '承诺失约', sourceYear: p.madeYear
         });
       }
@@ -284,6 +284,8 @@
     },
     /* 到期 → 生成一张真正的“翻旧账”事件，强制执行 */
     tick: function (g) {
+      /* 12 岁前不渲染承诺到期：避免幼儿「兑现修水管」类超龄动作 */
+      if (g.age < 12) return;
       var due = (g.promises || []).filter(function (p) {
         return p.status === 'open' && !p.queued && g.year >= p.dueYear;
       });
@@ -297,7 +299,7 @@
             id: id, type: 'random', stage: null, tier: 'crossroad', layer: 'chain', weight: 0,
             family: id, prio: 68,
             title: '该兑现的一句话',
-            text: '你当年答应过：' + pp.text + '。期限到了。' +
+            text: pp.madeYear + '年你答应了' + (pp.npcRole || '一个人') + '：' + pp.text + '。' + g.year + '年，期限到了。' +
               (pp.consequence ? '（' + pp.consequence + '）' : ''),
             opts: [
               {
@@ -337,8 +339,8 @@
      三、九条线状态机
      ========================================================= */
   var DEFS = [
-    { id: 'l1', name: '那封没寄出的信', type: '情感暗线', window: [7, 14], start: 'st_l1_1' },
-    { id: 'l2', name: '父亲的账本', type: '家庭暗线', window: [8, 15], start: 'st_l2_1' },
+    { id: 'l1', name: '那封没寄出的信', type: '情感暗线', window: [20, 28], start: 'st_l1_1' },
+    { id: 'l2', name: '父亲的账本', type: '家庭暗线', window: [20, 30], start: 'st_l2_1' },
     { id: 'l5', name: '同桌的坠落', type: '友情线', window: [12, 18], start: 'st_l5_1' },
     { id: 'l3', name: '风口上的猪', type: '事业线', window: [20, 34], start: 'st_l3_1' },
     { id: 'l4', name: '楼下的老人', type: '温情线', window: [21, 38], start: 'st_l4_1' },
@@ -365,8 +367,163 @@
     return g.lines[id];
   }
 
+  /* ---------- v3.7 隐藏线收敛：一局只开 1–2 条 ---------- */
+  var LINE_IDS = ['l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'l7', 'l8', 'l9'];
+  /* v3.7：本轮只有完成 5 段弧线（≥4 节点、跨度 ≥10 年）的线可被抽中 */
+  var SELECTABLE = ['l1', 'l2', 'l6', 'l9'];
+
+  /* 独立伪随机：只吃 seed，不动 LS.RNG，老档/老测试的随机序列保持原样 */
+  function seedRng(seed) {
+    var s = ((Number(seed) || 1) ^ 0x9e3779b9) >>> 0;
+    if (!s) s = 1;
+    return function () {
+      s = (s + 0x6D2B79F5) >>> 0;
+      var t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function lineWeight(g, id) {
+    var w = 8;
+    var klass = (g.origin && g.origin.klass) || '';
+    var loc = (g.origin && g.origin.locale) || '';
+    var bp = g.birthplace || '';
+    var sec = (g.origin && g.origin.secretId) || '';
+    var health = Number(g.attrs && g.attrs.health);
+    if (isNaN(health)) health = 60;
+    var finance = Number(g.attrs && g.attrs.finance);
+    if (isNaN(finance)) finance = 40;
+    if (id === 'l1') {
+      w = 12;
+    } else if (id === 'l2') {
+      w = 9;
+      if (klass === '贫困') w = 28;
+      else if (klass === '工人' || klass === '农民') w = 16;
+    } else if (id === 'l3') {
+      w = 9;
+      if (finance >= 55) w *= 1.5;
+    } else if (id === 'l4') {
+      w = 8;
+      if (loc === '城市' || loc === '县城') w = 20;
+      if (/一线|二线/.test(bp)) w *= 1.2;
+    } else if (id === 'l5') {
+      w = 8;
+      if (klass === '贫困' || klass === '工人') w *= 1.3;
+    } else if (id === 'l6') {
+      w = 7;
+      if (health < 55) w = 22;
+      else if (health < 68) w = 13;
+    } else if (id === 'l7') {
+      w = 6;
+      if (loc === '农村' || loc === '乡镇') w *= 2.2;
+      else if (loc === '县城') w *= 1.4;
+    } else if (id === 'l8') {
+      w = 10;
+      if (klass === '富裕' || klass === '中产') w *= 1.3;
+    } else if (id === 'l9') {
+      w = 3;
+      if (sec === 's1' || sec === 's3' || sec === 's2') w = 15;
+      if (klass === '被收养') w *= 2;
+    }
+    return Math.max(0.5, w);
+  }
+
+  /* 加权抽 1–2 条：60% 一条，40% 两条 */
+  function selectLines(g) {
+    var rnd = seedRng((g.seed || 1) + 7717);
+    var count = rnd() < 0.6 ? 1 : 2;
+    var pool = [], i;
+    for (i = 0; i < SELECTABLE.length; i++) pool.push(SELECTABLE[i]);
+    var chosen = [];
+    for (var c = 0; c < count && pool.length; c++) {
+      var total = 0, ws = [], id;
+      for (i = 0; i < pool.length; i++) {
+        var w = lineWeight(g, pool[i]);
+        ws.push(w); total += w;
+      }
+      var r = rnd() * total, idx = pool.length - 1;
+      for (i = 0; i < pool.length; i++) {
+        r -= ws[i];
+        if (r <= 0) { idx = i; break; }
+      }
+      id = pool[idx];
+      chosen.push(id);
+      pool.splice(idx, 1);
+    }
+    return chosen;
+  }
+
+  function markSelected(g) {
+    var sel = Array.isArray(g.selectedLines) ? g.selectedLines : [];
+    for (var i = 0; i < DEFS.length; i++) {
+      var st = lineState(g, DEFS[i].id);
+      st.selected = sel.indexOf(DEFS[i].id) >= 0;
+    }
+  }
+
+  function matchLine(g, tag) {
+    if (!tag) return true;
+    var sel = g && g.selectedLines;
+    if (!Array.isArray(sel) || !sel.length) return true;
+    var parts = String(tag).split('+');
+    for (var i = 0; i < parts.length; i++) {
+      if (sel.indexOf(parts[i]) < 0) return false;
+    }
+    return true;
+  }
+
+  function isSelected(g, id) {
+    var sel = g && g.selectedLines;
+    if (!Array.isArray(sel) || !sel.length) return false;
+    return sel.indexOf(id) >= 0;
+  }
+
+  /* 旧档兼容：没有 selectedLines 时按当前进度推断，绝不删已开的线 */
+  function ensureSelected(g) {
+    if (!g) return g;
+    var valid = [], i;
+    if (Array.isArray(g.selectedLines)) {
+      for (i = 0; i < g.selectedLines.length && valid.length < 2; i++) {
+        var sid = g.selectedLines[i];
+        if (LINE_IDS.indexOf(sid) >= 0 && valid.indexOf(sid) < 0) valid.push(sid);
+      }
+    }
+    if (valid.length >= 1) {
+      g.selectedLines = valid;
+      markSelected(g);
+      return g;
+    }
+    /* 找出已 started 的线，优先推进更深的，最多保留 2 条 */
+    var started = [];
+    for (i = 0; i < DEFS.length; i++) {
+      var st = lineState(g, DEFS[i].id);
+      if (st.started) started.push({ id: DEFS[i].id, node: Number(st.node) || 0 });
+    }
+    started.sort(function (x, y) {
+      if (y.node !== x.node) return y.node - x.node;
+      return LINE_IDS.indexOf(x.id) - LINE_IDS.indexOf(y.id);
+    });
+    if (started.length >= 1) {
+      var keep = [];
+      for (i = 0; i < started.length && keep.length < 2; i++) keep.push(started[i].id);
+      g.selectedLines = keep;
+    } else {
+      var picked = selectLines(g);
+      /* 旧档（已推进过回合）只补 1 条，新建档按 60/40 抽 1–2 条（新档 turn=1、日志只有出生一条） */
+      var advanced = (Number(g.turn) > 1) || ((g.eventLog || []).length > 1);
+      g.selectedLines = advanced ? picked.slice(0, 1) : picked;
+    }
+    markSelected(g);
+    return g;
+  }
+
   L.LINES = {
     DEFS: DEFS,
+    select: selectLines,
+    match: matchLine,
+    selected: isSelected,
+    ensureSelected: ensureSelected,
     init: function (g) {
       if (!g) return g;
       if (!g.lines) g.lines = {};
@@ -382,12 +539,14 @@
       }
       if (!Array.isArray(g.clues)) g.clues = [];
       if (!Array.isArray(g.promises)) g.promises = [];
+      ensureSelected(g);
       resetAP(g);
       return g;
     },
     state: function (g, id) { return lineState(g, id); },
     at: function (g, id, n) {
       var st = lineState(g, id);
+      if (!st.selected) return false;
       return st.started && st.node >= (n - 1);
     },
     set: function (g, id, n) {
@@ -419,12 +578,16 @@
     /* 把后续节点压入 pending，带「当年选择」来源 */
     push: function (g, evId, delay, note, urgent) {
       if (!Array.isArray(g.pending)) g.pending = [];
+      var ev = IDX[evId];
+      /* v3.7：未选中的线不推 pending，事件永不进入可选池 */
+      if (ev && ev.line && !matchLine(g, ev.line)) return;
       /* 同一节点不重复排队：多条征兆/分支可能指向同一后续，重复会挤掉别的线 */
       for (var i = 0; i < g.pending.length; i++) {
         if (g.pending[i].event === evId) return;
       }
-      /* v3.6：一生只有 60 个事件位，链节点间隔压到 2 年内，保证多线并行也能走到后续 */
-      var d = Math.min(2, delay || 0);
+      /* v3.7：链节点间隔 2–4 年；0 表示“当年就要答复”（开场/撞车/承诺到期） */
+      var raw = Number(delay) || 0;
+      var d = raw > 0 ? Math.max(2, Math.min(4, raw)) : 0;
       var c = g._ctxChoice;
       g.pending.push({
         event: evId,
@@ -445,21 +608,23 @@
         out.push({
           id: DEFS[i].id, name: DEFS[i].name, type: DEFS[i].type,
           node: st.node, points: st.points, revealed: st.revealed,
-          started: st.started, dropped: st.dropped, truth: st.truth
+          started: st.started, dropped: st.dropped, truth: st.truth,
+          selected: !!st.selected, result: st.result || null
         });
       }
       return out;
     },
-    /* 未揭晓暗线 → 关系网灰点数据 */
+    /* 未揭晓暗线 → 关系网灰点数据（只有本局抽中的线才留灰点） */
     grayDots: function (g) {
       var out = [];
       for (var i = 0; i < DEFS.length; i++) {
         var d = DEFS[i], st = lineState(g, d.id);
+        if (!st.selected) continue;
         if (st.revealed || d.id === 'l9' && g.origin && g.origin.revealed) continue;
-        if (!st.started && !(d.id === 'l9' && (g.origin && g.origin.signsSeen.length))) continue;
+        if (!st.started && !(d.id === 'l9' && (g.origin && (g.origin.signsSeen || []).length))) continue;
         out.push({ id: d.id, label: '?', name: d.name, type: d.type });
       }
-      if (g.origin && !g.origin.revealed && (g.origin.signsSeen || []).length) {
+      if (isSelected(g, 'l9') && g.origin && !g.origin.revealed && (g.origin.signsSeen || []).length) {
         var has = false;
         for (var j = 0; j < out.length; j++) if (out[j].id === 'l9') has = true;
         if (!has) out.push({ id: 'l9', label: '?', name: '未解的出身', type: '身世线' });
@@ -471,23 +636,26 @@
   function lineTick(g) {
     L.LINES.init(g);
     resetAP(g);
-    /* 1) 启动窗口：不靠随机堆叠，到年份必开 */
+    /* v3.7：未选中的线既不推进也不排队，先把旧档里残留的 pending 清掉 */
+    prunePending(g);
+    /* 1) 启动窗口：只给本局抽中的线开线，到年份必开 */
     var pendingIds = {};
     (g.pending || []).forEach(function (p) { pendingIds[p.event] = true; });
+    var sel = g.selectedLines || [];
     for (var i = 0; i < DEFS.length; i++) {
       var d = DEFS[i];
       if (!d.start) continue;
+      if (sel.indexOf(d.id) < 0) continue;
       var st = lineState(g, d.id);
       if (st.started || st.dropped) continue;
       if (g.age < d.window[0] || g.age > d.window[1]) continue;
       if (pendingIds[d.start]) continue;
-      if (d.id === 'l8' && !partnerFallback(g)) continue;
       st.started = true;
       st.startedYear = g.year;
       L.LINES.push(g, d.start, 0, d.name + '开始了');
       pendingIds[d.start] = true;
     }
-    /* 2) 身世征兆与调查排期 */
+    /* 2) 身世征兆与调查排期（只在本局抽中 l9 时启动） */
     originTick(g);
     /* 3) 线索卡：每年最多 1 张 */
     clueTick(g);
@@ -495,6 +663,15 @@
     collisionTick(g);
     /* 5) 承诺到期翻旧账 */
     L.PROMISE.tick(g);
+  }
+
+  function prunePending(g) {
+    if (!Array.isArray(g.pending)) g.pending = [];
+    for (var i = g.pending.length - 1; i >= 0; i--) {
+      var it = g.pending[i];
+      var ev = it && IDX[it.event];
+      if (ev && ev.line && !matchLine(g, ev.line)) g.pending.splice(i, 1);
+    }
   }
   L.LINES.tick = lineTick;
   L.LINES.tickAll = lineTick;
@@ -507,44 +684,52 @@
   function originTick(g) {
     var o = g.origin;
     if (!o || o.revealed) return;
-    for (var si = 0; si < SIGN_AGES.length; si++) {
+    /* v3.7：l9 未抽中时，身世征兆一条也不出现 */
+    if (!isSelected(g, 'l9')) return;
+    /* 调查已经开始后不再补征兆，避免征兆插进调查节点之间打乱节奏 */
+    if (!(g.lines.l9 && g.lines.l9.node >= 2)) {
+    /* 成年后才有精力查出身：避开 6–19 岁的升学强制事件年 */
+    var signAges = [20, 28, 36];
+    for (var si = 0; si < signAges.length; si++) {
       var sid = 'origin_sign_' + o.secretId + '_' + (si + 1);
       if (o.signsSeen.indexOf(si + 1) >= 0) continue;
-      if (g.age < SIGN_AGES[si] || g.age > SIGN_AGES[si] + 3) continue;
+      if (g.age < signAges[si] || g.age > signAges[si] + 3) continue;
       var pids = (g.pending || []).map(function (p) { return p.event; });
       if (pids.indexOf(sid) >= 0) continue;
       var peek = IDX[sid];
-      /* 不保证每条征兆都出现：多数局能看到 2–3 次 */
+      /* 不保证每条征兆都出现：多数局能看到 2–3 次；第一次保证出现，线才开得起来 */
       if (!peek) continue;
-      if (!chance(si === 0 ? 0.92 : 0.8)) continue;
+      if (!chance(si === 0 ? 1 : 0.8)) continue;
       o.signsSeen.push(si + 1);
       L.LINES.push(g, sid, 0, '一件对不上的旧事');
+    }
     }
     /* 压下去的压力晚年爆开 */
     if (g.age >= 58 && !o.revealed && o.pressure >= 3 && !o.burst) {
       o.burst = true;
-      L.LINES.push(g, 'origin_burst', 0, '压了半辈子的那件事');
+      L.LINES.push(g, 'origin_burst', 0, '压了半辈子的身世之谜');
     }
   }
 
-  function makeSignEvent(sec, idx) {
+  function makeSignEvent(sec, idx, ageMin, ageMax) {
     var id = 'origin_sign_' + sec.id + '_' + (idx + 1);
     IDX[id] = {
-      id: id, type: 'random', stage: null, tier: 'echo', layer: 'chain',
-      weight: 0, family: id, prio: 68,
+      id: id, type: 'random', stage: null, tier: 'echo', layer: 'chain', line: 'l9', beat: '起',
+      weight: 0, family: id, prio: 68, ageMin: ageMin, ageMax: ageMax,
       title: '对不上的一件小事',
       text: sec.signs[idx] + ' 这件事很小，却在你心里留了一根刺。',
       opts: [
         {
           label: '追查下去', hint: '消耗 1 行动点 · 进入调查', tone: 'risk',
           apply: function (g) {
-            if (!spendAP(g, 1)) return '你这年实在腾不出手，线索只好先记在本子上。';
+            /* v3.7：已抽中的线必须能开起来，行动点不足也要把节点排上 */
+            var ok = spendAP(g, 1);
             g.origin.points += 1;
             var was = (g.lines.l9 && g.lines.l9.node) || 0;
             L.LINES.set(g, 'l9', was >= 2 ? was : 1);
             a(g, { stress: 3, happiness: -2 });
-            if (was < 2) L.LINES.push(g, 'origin_inv_1', 1, '你开始查自己的来路');
-            return '你把这件事记进本子，决定弄明白。';
+            if (was < 2) L.LINES.push(g, 'origin_inv_1', 2, '你开始查自己的来路');
+            return ok ? '你把这件事记进本子，决定弄明白。' : '这一年你腾不出手，但还是把这件事记进了本子。';
           }
         },
         {
@@ -552,7 +737,7 @@
           apply: function (g) {
             g.origin.pressure += 2;
             a(g, { stress: 4, happiness: -2 });
-            return '你告诉自己，有些事不知道更好。';
+            return '你告诉自己，有些答案不知道更好。';
           }
         },
         {
@@ -566,6 +751,7 @@
         }
       ],
       cond: function (g) {
+        if (!isSelected(g, 'l9')) return false;
         return !!g.origin && g.origin.secretId === sec.id && !g.origin.revealed;
       }
     };
@@ -593,7 +779,7 @@
 
   /* 调查链：4–6 节点，中断留尾巴 */
   IDX.origin_inv_1 = {
-    id: 'origin_inv_1', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', weight: 0, prio: 72,
+    id: 'origin_inv_1', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', line: 'l9', beat: '承', weight: 0, ageMin: 30, ageMax: 80, prio: 72,
     title: '翻旧物',
     text: '你把家里的旧箱子全拖了出来。樟脑味很重，最底下那只铁盒的锁已经锈住。',
     opts: [
@@ -627,7 +813,7 @@
   };
 
   IDX.origin_inv_2 = {
-    id: 'origin_inv_2', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', weight: 0, prio: 72,
+    id: 'origin_inv_2', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', line: 'l9', beat: '承', weight: 0, ageMin: 32, ageMax: 80, prio: 72,
     title: '问长辈',
     text: '你回了一趟老家，坐在堂屋里，问起自己小时候的事。屋子里的钟走得比平时慢。',
     opts: [
@@ -673,7 +859,7 @@
   };
 
   IDX.origin_inv_3 = {
-    id: 'origin_inv_3', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', weight: 0, prio: 72,
+    id: 'origin_inv_3', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', line: 'l9', beat: '转', weight: 0, ageMin: 34, ageMax: 80, prio: 72,
     title: '查档案',
     text: '你请了假，去当年那家医院和街道办。档案室的灯管一闪一闪，管理员让你填了三张表。',
     opts: [
@@ -711,7 +897,7 @@
   };
 
   IDX.origin_inv_4 = {
-    id: 'origin_inv_4', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', weight: 0, prio: 72,
+    id: 'origin_inv_4', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', line: 'l9', beat: '转', weight: 0, ageMin: 36, ageMax: 80, prio: 72,
     title: '对质',
     text: '所有线索最后都指向一个必须当面问清楚的人。你把那几张纸装进包里，站在门口。',
     opts: [
@@ -749,20 +935,21 @@
         L.LINES.reveal(g, 'l9', 'partial');
         g.identityTag = '远远看过的人';
         a(g, { stress: 4, happiness: -3 });
-        L.LINES.push(g, 'origin_tail', 3, '你只在街对面看了那个人一眼');
-        return '你隔着一条街看见那个人，没走过去。';
+        L.LINES.push(g, 'origin_tail', 3, '你只在街对面看了她一眼');
+        return '你隔着一条街看见她，没走过去。';
       }}
     ],
     cond: function (g) { return g.lines.l9.node >= 4 && !g.origin.revealed; }
   };
 
   IDX.origin_inv_5 = {
-    id: 'origin_inv_5', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', weight: 0, prio: 72,
+    id: 'origin_inv_5', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', line: 'l9', beat: '合', weight: 0, ageMin: 38, ageMax: 80, prio: 72,
     title: '认还是不认',
     text: '真相摆上桌以后，另一个问题才刚开始：那边的家，你要不要走进去。',
     opts: [
-      { label: '认下来', hint: '家庭重排 · 幸福感波动', tone: 'risk', apply: function (g) {
+      { label: '认下来，两边都走', hint: '家庭重排 · 幸福感波动', tone: 'risk', apply: function (g) {
         L.LINES.set(g, 'l9', 6);
+        g.lines.l9.result = 'good';
         npcTouch(g, '母亲', { intimacy: -16 });
         var n = ensureNpcRole(g, '亲生家庭', '那边的家人');
         if (n) n.intimacy = clamp(45 + (g.origin.truth === 'full' ? 20 : 0), 0, 100);
@@ -773,10 +960,12 @@
           dueYear: g.year + 4, consequence: '血缘与养育之间要选一次',
           lineId: 'l9'
         });
-        return '你叫了一声那边的称呼，也回头给养母打了个电话。';
+        pushNode(g, 'origin_echo', 3, '两边的门你都进得去了');
+        return '你在那边的饭桌上叫了一声称呼，回来又给养母打了电话。两个家都还在，只是你要跑得勤一些。';
       }},
       { label: '只认血缘，不认养育', hint: '亲情断裂', tone: 'cold', apply: function (g) {
         L.LINES.set(g, 'l9', 6);
+        g.lines.l9.result = 'bad';
         npcTouch(g, '母亲', { intimacy: -30 });
         npcTouch(g, '父亲', { intimacy: -26 });
         a(g, { happiness: -4, stress: 9 });
@@ -786,24 +975,44 @@
           text: '你走的时候没有回头',
           dueYear: g.year + 6, consequence: '养育之恩变成一笔旧账', lineId: 'l9'
         });
-        return '你把钥匙放在桌上，说以后不常回来了。';
+        pushNode(g, 'origin_echo', 3, '你把钥匙留在了桌上');
+        return '你把钥匙放在桌上，说以后不常回来了。养母追到楼道口，只看见电梯门合上。';
       }},
       { label: '不认，只把事放下', hint: '心结封存 · 压力下降', tone: 'switch', apply: function (g) {
         L.LINES.set(g, 'l9', 6);
+        g.lines.l9.result = 'bitter';
         a(g, { stress: -4, happiness: 2 });
         L.PROMISE.add(g, {
           npcRole: '亲生家庭', type: 'promise', who: '那边的人',
           text: '这件事到我这里为止，不再往下查',
           dueYear: g.year + 8, consequence: '对方可能等了你很多年', lineId: 'l9'
         });
-        return '你说，知道了就够了。';
+        pushNode(g, 'origin_echo', 3, '你说，知道了就够了');
+        return '你说，知道了就够了。那扇门你没有再敲，回来的路走得很慢。';
       }}
     ],
     cond: function (g) { return g.lines.l9.node >= 5 && g.origin.revealed; }
   };
 
+  IDX.origin_echo = {
+    id: 'origin_echo', type: 'random', stage: null, tier: 'echo', layer: 'chain', line: 'l9', beat: '余波',
+    weight: 0, family: 'origin_echo', ageMin: 42, ageMax: 95, prio: 74,
+    title: '户口本最后一页',
+    text: '清明那天，你带着户口本最后一页的复印件去了城郊的墓园。守墓的老人替你点了一支香，说：这里埋的人，姓和你一样。',
+    opts: [{ label: '把复印件烧掉，磕一个头', hint: '压力 -3 · 幸福感 +1', tone: 'switch', apply: function (g) {
+      a(g, { stress: -3, happiness: 1 });
+      return g.year + ' 年清明，纸灰被风吹起来，落回你自己的鞋面上。你盯着户口本最后一页上那个被划掉的名字，第一次没有移开眼睛。';
+    }}],
+    cond: function (g) { return g.lines.l9.node >= 6; }
+  };
+
+  /* 余波节点统一从这条入口排进 pending */
+  function pushNode(g, evId, delay, note) {
+    L.LINES.push(g, evId, delay, note, true);
+  }
+
   IDX.origin_tail = {
-    id: 'origin_tail', type: 'random', stage: null, tier: 'echo', layer: 'chain', weight: 0, family: 'origin_tail', prio: 74,
+    id: 'origin_tail', type: 'random', stage: null, tier: 'echo', layer: 'chain', line: 'l9', beat: '余波', weight: 0, family: 'origin_tail', ageMin: 55, ageMax: 90, prio: 74,
     title: '没有问出口的那句话',
     text: '很多年以后，你偶尔还会想起那只铁盒。它一直在柜子最里面，锁已经彻底锈死了。',
     opts: [{ label: '把日子过下去', hint: '', tone: 'switch', apply: function (g) {
@@ -814,8 +1023,8 @@
   };
 
   IDX.origin_burst = {
-    id: 'origin_burst', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', weight: 0, prio: 70,
-    title: '压了半辈子的那件事',
+    id: 'origin_burst', type: 'random', stage: null, tier: 'crossroad', layer: 'chain', line: 'l9', beat: '转', weight: 0, ageMin: 55, ageMax: 90, prio: 70,
+    title: '压了半辈子的身世之谜',
     text: '你退休后整理旧物，那只铁盒从柜顶掉下来，锁自己开了。里面的纸已经脆得发白。',
     opts: [
       { label: '打开看', hint: '晚年认知冲击', tone: 'risk', apply: function (g) {
@@ -842,18 +1051,20 @@
   /* =========================================================
      五、八条主线事件
      ========================================================= */
-  function node(id, lineId, n, title, text, opts, tier, prio) {
+  function node(id, lineId, n, title, text, opts, ageMin, ageMax, tier, prio, beat) {
     IDX[id] = {
       id: id, type: 'random', stage: null, tier: tier || 'crossroad',
-      layer: 'chain', weight: 0, family: id, prio: prio || 73,
-      title: title, text: text, opts: opts,
+      layer: 'chain', weight: 0, family: id, prio: prio || 73, line: lineId,
+      title: title, text: text, opts: opts, ageMin: ageMin, ageMax: ageMax,
+      beat: beat || '', n: n,
       cond: function (g) { return L.LINES.at(g, lineId, n); }
     };
   }
-  function tail(id, lineId, title, text, fn) {
+  function tail(id, lineId, title, text, fn, ageMin, ageMax) {
     IDX[id] = {
       id: id, type: 'random', stage: null, tier: 'echo', layer: 'chain',
-      weight: 0, family: id, prio: 74, title: title, text: text,
+      weight: 0, family: id, prio: 74, title: title, text: text, line: lineId,
+      ageMin: ageMin, ageMax: ageMax, beat: '余波',
       opts: [{ label: '把这件事收进回忆里', hint: '', tone: 'switch', apply: fn || function (g) {
         a(g, { stress: -1, happiness: 1 });
         return '日子继续往前。';
@@ -862,201 +1073,279 @@
     };
   }
 
-  /* ---------- 1《那封没寄出的信》 ---------- */
+  /* ---------- 1《那封没寄出的信》：起 → 承 → 承 → 转 → 合 → 余波 ---------- */
   node('st_l1_1', 'l1', 1, '没贴邮票的信',
-    '父亲书桌最里层压着一只牛皮纸信封。没有邮票，收信人是一个你没听过的女人名字，字迹是父亲的。', [
-      { label: '悄悄放回去', hint: '记住这个名字', tone: 'switch', apply: function (g) {
+    '父亲的书房，晚上九点。他还在楼下和邻居说话，母亲在厨房洗碗。你借着找作业本的名义拉开最下面那层抽屉，摸到一只牛皮纸信封：没有邮票，收信人是一个你没听过的女人名字，字是父亲的。', [
+      { label: '按原样压回去，记住名字', hint: '记住这个名字 · 压力 +2', tone: 'switch', apply: function (g) {
         L.LINES.set(g, 'l1', 2); g.lines.l1.points += 1;
         a(g, { stress: 2 });
-        L.LINES.push(g, 'st_l1_2', 5, '你记住了信封上的名字');
-        return '你把信封按原样压回去，连角度都摆正了。';
+        pushNode(g, 'st_l1_2', 3, '你记住了信封上的名字');
+        return '你把信封按原样压回去，连角度都摆正了。那个名字你在心里默念了三遍。';
       }},
-      { label: '拿去问母亲', hint: '亲情受损 · 得到一半答案', tone: 'risk', apply: function (g) {
+      { label: '拿到厨房问母亲', hint: '母亲回避 · 幸福感 -3', tone: 'risk', apply: function (g) {
         L.LINES.set(g, 'l1', 2); g.lines.l1.points += 2;
         npcTouch(g, '母亲', { intimacy: -8 });
         a(g, { happiness: -3, stress: 4 });
-        L.LINES.push(g, 'st_l1_2', 5, '母亲说那是一个很久以前的同事');
-        return '母亲看了一眼就把信压回去，说是旧同事。她那天晚饭没怎么说话。';
+        pushNode(g, 'st_l1_2', 3, '母亲说那是一个很久以前的同事');
+        return '母亲看了一眼就把信封压回抽屉，说是个旧同事。那天的碗她洗了很久。';
       }},
-      { label: '装作没看见', hint: '', tone: 'cold', apply: function (g) {
-        L.LINES.set(g, 'l1', 2);
-        a(g, { stress: 1 });
-        L.LINES.push(g, 'st_l1_2', 6, '你把抽屉关上了');
-        return '你把抽屉关上，去院子里站了一会儿。';
+      { label: '拿到楼下直接问父亲', hint: '父亲沉默 · 亲密度 -10', tone: 'cold', apply: function (g) {
+        L.LINES.set(g, 'l1', 2); g.lines.l1.points += 1;
+        npcTouch(g, '父亲', { intimacy: -10 });
+        a(g, { stress: 3, happiness: -2 });
+        pushNode(g, 'st_l1_2', 3, '父亲接过信封，一句话也没说');
+        return '父亲接过信封，捏在手里看了很久，只说了一句：放回去。';
       }}
-    ]);
+    ], 8, 18, 'crossroad', 73, '起');
 
-  node('st_l1_2', 'l1', 2, '第二封信',
-    '搬家那年，你又摸到那只信封。封口已经被拆开过，里面只剩半张纸，边角有烧过的痕迹。', [
-      { label: '读完剩下的半张', hint: '消耗 1 行动点', tone: 'risk', apply: function (g) {
+  node('st_l1_2', 'l1', 2, '半张烧过的纸',
+    '搬家那年，你在纸箱最底下又摸到那只信封。封口被拆开过，里面只剩半张纸，边角有烧过的痕迹。父亲那天加班，母亲在医院陪外婆，家里只有你一个人蹲在阳台上。', [
+      { label: '读完剩下的半张', hint: '消耗 1 行动点 · 压力 +4', tone: 'risk', apply: function (g) {
         spendAP(g, 1);
         L.LINES.set(g, 'l1', 3); g.lines.l1.points += 2;
         a(g, { stress: 4, happiness: -2 });
-        L.LINES.push(g, 'st_l1_3', 4, '你读完了那半张信');
-        return '纸上只有一句话：那年冬天我没敢去看你。';
+        pushNode(g, 'st_l1_3', 2, '你读完了那半张信');
+        return '纸上只剩一句话：那年冬天我没敢去看你。落款日期比你出生早两年。';
       }},
-      { label: '拿去问父亲', hint: '父亲沉默 · 亲密度下降', tone: 'cold', apply: function (g) {
+      { label: '打车去医院问母亲', hint: '花费 200 · 母亲亲密度 -10', tone: 'cold', apply: function (g) {
+        m(g, { cash: -200 });
         L.LINES.set(g, 'l1', 3); g.lines.l1.points += 1;
-        npcTouch(g, '父亲', { intimacy: -10 });
-        a(g, { stress: 5, happiness: -2 });
-        L.LINES.push(g, 'st_l1_3', 4, '父亲把信收走了');
-        return '父亲把信折好放进上衣口袋，说这不是你该问的事。';
+        npcTouch(g, '母亲', { intimacy: -10 });
+        a(g, { stress: 4, happiness: -3 });
+        pushNode(g, 'st_l1_3', 2, '母亲让你别再翻那只信封');
+        return '母亲在走廊长椅上听完，把外套披在你肩上，说：别翻了，那不是给你的。';
       }},
-      { label: '重新封好', hint: '中断 · 留一条尾巴', tone: 'switch', apply: function (g) {
-        L.LINES.drop(g, 'l1');
+      { label: '重新封好，放回纸箱', hint: '压力 +2 · 幸福感 +1', tone: 'switch', apply: function (g) {
+        L.LINES.set(g, 'l1', 3);
         a(g, { stress: 2, happiness: 1 });
-        L.LINES.push(g, 'st_l1_tail', 6, '你把信重新封好');
-        return '你找了张新胶纸，把信封重新粘上。';
+        pushNode(g, 'st_l1_3', 2, '你把信封重新粘好');
+        return '你找了张新胶纸把封口粘上，放回纸箱最底层，压上两本旧课本。';
       }}
-    ]);
+    ], 10, 30, 'crossroad', 73, '承');
 
   node('st_l1_3', 'l1', 3, '地址上的人',
-    '你按信上的地址找到那栋老楼。门牌已经换了人，楼下修鞋的老人说，那家人二十年前就搬走了。', [
-      { label: '花钱打听下落', hint: '花费 2000 · 消耗 1 行动点', tone: 'risk', apply: function (g) {
+    '信上的地址在邻市一条老街。你按门牌找过去，开门的是一个抱着孩子的年轻女人，说这房子她租了三年。楼下修鞋的老人还记得，二十年前那户人家搬走时，只有一个女人带着一个男孩。', [
+      { label: '花两千请老人打听', hint: '花费 2000 · 得到旧地址', tone: 'risk', apply: function (g) {
         m(g, { cash: -2000 }); spendAP(g, 1);
         L.LINES.set(g, 'l1', 4); g.lines.l1.points += 2;
-        L.LINES.push(g, 'st_l1_4', 2, '你找到了一个新地址');
-        return '修鞋的老人收下钱，翻出一个压在鞋盒底下的旧地址。';
+        a(g, { stress: 2 });
+        pushNode(g, 'st_l1_4', 3, '老人翻出一个压在鞋盒底下的地址');
+        return '老人收下钱，从鞋盒底下翻出一张写着你父亲名字的旧收据，背面是一行地址。';
       }},
-      { label: '在门口站一会儿', hint: '不推进', tone: 'switch', apply: function (g) {
-        a(g, { happiness: -1, stress: 1 });
-        L.LINES.drop(g, 'l1');
-        L.LINES.push(g, 'st_l1_tail', 5, '你在楼下站了很久');
-        return '你在楼下站到天黑，最后把信带回了家。';
-      }},
-      { label: '把信寄出去', hint: '不一定有人收', tone: 'safe', apply: function (g) {
+      { label: '在楼下站到天黑', hint: '压力 +3 · 幸福感 -2', tone: 'switch', apply: function (g) {
         L.LINES.set(g, 'l1', 4);
-        a(g, { stress: -2, happiness: 2 });
-        L.LINES.push(g, 'st_l1_4', 3, '你把信投进了邮筒');
-        return '你贴上邮票，把信投进了街角的邮筒。';
+        a(g, { stress: 3, happiness: -2 });
+        pushNode(g, 'st_l1_4', 3, '你在老街站到路灯亮起');
+        return '你在楼下站到路灯亮起。楼上有人开窗收衣服，不是你等的人。';
+      }},
+      { label: '把信寄到老地址，不留回邮', hint: '压力 -2 · 幸福感 +1', tone: 'safe', apply: function (g) {
+        L.LINES.set(g, 'l1', 4);
+        a(g, { stress: -2, happiness: 1 });
+        pushNode(g, 'st_l1_4', 3, '你把信投进了老街的邮筒');
+        return '你贴上邮票，把信投进老街口的邮筒。信封上没有写你的地址。';
       }}
-    ]);
+    ], 12, 34, 'crossroad', 73, '承');
 
   node('st_l1_4', 'l1', 4, '开门的人',
-    '一个和你年纪相仿的人开了门。他看了信封上的名字，又抬头看了你很久，说：你是他儿子吧。', [
-      { label: '坐下来听', hint: '揭晓 · 情绪重击', tone: 'risk', apply: function (g) {
+    '门开了一条缝，一个四十出头的男人把信封翻来覆去看了三遍。他说这是他母亲的字，然后抬头问你：你父亲是不是姓陈？客厅的电视还开着，桌上摆着两副碗筷。', [
+      { label: '坐下来听完整个下午', hint: '揭晓真相 · 压力 +7', tone: 'risk', apply: function (g) {
         L.LINES.set(g, 'l1', 5);
         L.LINES.reveal(g, 'l1', 'full');
         a(g, { happiness: 5, stress: 7, reputation: 2 });
         L.PROMISE.add(g, {
           npcRole: '父亲', type: 'promise', who: '父亲',
-          text: '这件事不告诉母亲',
-          dueYear: g.year + 5, consequence: '秘密压在你身上', lineId: 'l1'
+          text: '这个下午的事不告诉母亲',
+          dueYear: g.year + 5, consequence: '秘密压在你一个人身上', lineId: 'l1'
         });
-        L.LINES.push(g, 'st_l1_tail', 6, '你坐下来听完了一个下午');
-        return '他给你倒了一杯水，讲了一个很长的、关于两个家庭的下午。';
+        pushNode(g, 'st_l1_5', 2, '你坐下来听完了一个下午');
+        return '他母亲叫许素云。父亲年轻时和她订过婚，后来娶了你母亲，那只信封写了二十年，一封也没寄出去。';
       }},
-      { label: '转身走', hint: '保留悬念', tone: 'cold', apply: function (g) {
-        L.LINES.drop(g, 'l1');
+      { label: '只问一句：她还在吗', hint: '得到一半真相 · 压力 +5', tone: 'safe', apply: function (g) {
+        L.LINES.set(g, 'l1', 5);
         L.LINES.reveal(g, 'l1', 'partial');
-        a(g, { stress: 5, happiness: -4 });
-        L.LINES.push(g, 'st_l1_tail', 4, '你转身下了楼');
-        return '你说了句找错人了，转身下楼。他在门口站了很久。';
+        a(g, { stress: 5, happiness: -2 });
+        pushNode(g, 'st_l1_5', 2, '你只问了一句话');
+        return '他说：去年冬天走的。走之前还在整理一叠信，收信人全是你父亲的名字。';
+      }},
+      { label: '把信留下，转身下楼', hint: '压力 +4 · 幸福感 -4', tone: 'cold', apply: function (g) {
+        L.LINES.set(g, 'l1', 5);
+        L.LINES.reveal(g, 'l1', 'partial');
+        a(g, { stress: 4, happiness: -4 });
+        pushNode(g, 'st_l1_5', 2, '你把信留在了他家门口');
+        return '你把信封放在鞋柜上，说了一句打扰了，转身下楼。他在门口站了很久。';
       }}
-    ]);
-  tail('st_l1_tail', 'l1', '没有寄出的那封信',
-    '那只信封后来一直夹在你的旧书里。纸已经黄了，字迹也淡了。');
+    ], 14, 38, 'crossroad', 73, '转');
 
-  /* ---------- 2《父亲的账本》 ---------- */
-  node('st_l2_1', 'l2', 1, '一本记账簿',
-    '父亲的抽屉里有一本记账簿，记的不是收入，是一笔笔“还款”。最后一页写着：还欠三万二。', [
-      { label: '偷偷记住', hint: '掌握把柄', tone: 'switch', apply: function (g) {
+  node('st_l1_5', 'l1', 5, '母亲早就看过',
+    '你回家的那天，母亲把碗放下，说：那封信我三十年前就看过。她说她也写过一封，没敢寄，压在自己的嫁妆箱底。两个女人隔着一座城，替同一个男人守了半辈子。', [
+      { label: '两家的信都收好，带母亲去见他', hint: '压力 -2 · 幸福感 +6', tone: 'safe', apply: function (g) {
+        L.LINES.set(g, 'l1', 6); g.lines.l1.result = 'good';
+        npcTouch(g, '母亲', { intimacy: 6 });
+        npcTouch(g, '父亲', { intimacy: 4 });
+        a(g, { happiness: 6, stress: -2, reputation: 2 });
+        pushNode(g, 'st_l1_tail', 3, '母亲和那个男人在茶馆坐了一下午');
+        return '秋天，母亲和许素云的儿子在茶馆坐了一下午。回来的路上她说：你爸这辈子没欠过谁，就欠了这封信。';
+      }},
+      { label: '把信和那半张纸一起烧掉', hint: '幸福感 -4 · 母亲亲密度 -6', tone: 'cold', apply: function (g) {
+        L.LINES.set(g, 'l1', 6); g.lines.l1.result = 'bad';
+        npcTouch(g, '母亲', { intimacy: -6 });
+        a(g, { happiness: -4, stress: 3 });
+        pushNode(g, 'st_l1_tail', 3, '信封在铁桶里烧成了一小团灰');
+        return '你在楼下的铁桶里烧了那只信封。母亲站在阳台上看着，什么也没问。那年之后，父亲的书房你很少进去。';
+      }},
+      { label: '用父亲的笔迹抄一遍，寄出去', hint: '压力 +4 · 幸福感 +2', tone: 'risk', apply: function (g) {
+        L.LINES.set(g, 'l1', 6); g.lines.l1.result = 'bitter';
+        npcTouch(g, '母亲', { intimacy: -3 });
+        a(g, { stress: 4, happiness: 2 });
+        pushNode(g, 'st_l1_tail', 3, '信寄出去了，回信两年后才到');
+        return '你照着父亲的字迹抄了一遍，贴上邮票寄出。两年后回信只有一行字：他早该寄。母亲看完，把信折好放回了原来的抽屉。';
+      }}
+    ], 16, 42, 'crossroad', 73, '合');
+
+  tail('st_l1_tail', 'l1', '书柜最上层的十七封信',
+    '很多年以后，你在父亲的书柜最上层找到那叠信，一共十七封，收信人都是许素云。',
+    function (g) {
+      a(g, { stress: -1, happiness: 1 });
+      return g.year + ' 年清明，你母亲站在书柜前，说：留着吧，他写的时候我都在。';
+    }, 18, 90);
+
+  /* ---------- 2《父亲的账本》：起 → 承 → 承 → 转 → 合 → 余波 ---------- */
+  node('st_l2_1', 'l2', 1, '挂历纸包着的记账簿',
+    '夜里十一点，父亲还在楼下跟人打电话，声音压得很低。你替他找电费单，拉开中间那层抽屉，摸到一本用挂历纸包着的记账簿：记的不是收入，是一笔笔还款。最后一页只有一行字：还欠三万二。', [
+      { label: '记住几个名字，原样放回', hint: '压力 +3 · 线索 +1', tone: 'switch', apply: function (g) {
         L.LINES.set(g, 'l2', 2); g.lines.l2.moral += 1;
         a(g, { stress: 3 });
-        L.LINES.push(g, 'st_l2_2', 4, '你记住了账本上的名字');
-        return '你把那几个名字在心里念了两遍，又把账本放回原处。';
+        pushNode(g, 'st_l2_2', 3, '你记住了账本上的名字');
+        return '你把那几个名字在心里念了两遍，账本按原样放回，抽屉关得很轻。';
       }},
-      { label: '拿去问父亲', hint: '父亲发火 · 但说了实话', tone: 'risk', apply: function (g) {
+      { label: '拿下楼问父亲', hint: '父亲发火 · 亲密度 -12', tone: 'risk', apply: function (g) {
         L.LINES.set(g, 'l2', 2); g.lines.l2.moral += 2;
         npcTouch(g, '父亲', { intimacy: -12 });
         a(g, { stress: 4, happiness: -2 });
-        L.LINES.push(g, 'st_l2_2', 4, '父亲说那是年轻时欠下的');
-        return '父亲把账本夺过去，说小孩子别管大人的债。';
+        pushNode(g, 'st_l2_2', 3, '父亲说那是年轻时欠下的');
+        return '父亲一把把账本夺过去，说小孩别管大人的债，然后一个人坐到院子里的台阶上。';
       }},
-      { label: '放回原处', hint: '', tone: 'cold', apply: function (g) {
+      { label: '抄下最后三笔数字', hint: '知识 +2 · 压力 +2', tone: 'safe', apply: function (g) {
         L.LINES.set(g, 'l2', 2);
-        a(g, { stress: 1 });
-        L.LINES.push(g, 'st_l2_2', 5, '你把账本放回去');
-        return '你合上账本，抽屉关得很轻。';
+        a(g, { knowledge: 2, stress: 2 });
+        pushNode(g, 'st_l2_2', 3, '你抄下了最后三笔数字');
+        return '你把最后三笔的日期和金额抄在作业本背面，又撕下来夹进课本。';
       }}
-    ]);
+    ], 8, 18, 'crossroad', 73, '起');
 
-  node('st_l2_2', 'l2', 2, '门口的人',
-    '两个陌生男人站在门口，语气还算客气。他们说父亲欠的钱拖了太久，下周是最后期限。', [
-      { label: '替父亲还一部分', hint: '花费 8000 · 亲情上升', tone: 'safe', apply: function (g) {
-        m(g, { cash: -8000 });
-        L.LINES.set(g, 'l2', 3); npcTouch(g, '父亲', { intimacy: 10 });
-        a(g, { stress: 3, happiness: 2 });
-        L.LINES.push(g, 'st_l2_3', 3, '你先垫上了一部分');
-        return '你转过去八千，那两个人留下一个收条走了。';
+  node('st_l2_2', 'l2', 2, '门口的两个男人',
+    '半年后，两个男人站在家门口。父亲不在，母亲让你别开门。他们隔着防盗门说，你父亲欠的钱拖得太久，下周三之前要见到钱。你口袋里只有刚发的两千块工资。', [
+      { label: '先给两千，写下欠条', hint: '花费 2000 · 压力 +3', tone: 'risk', apply: function (g) {
+        m(g, { cash: -2000 });
+        L.LINES.set(g, 'l2', 3); npcTouch(g, '父亲', { intimacy: 4 });
+        a(g, { stress: 3 });
+        pushNode(g, 'st_l2_3', 2, '你先垫上了两千');
+        return '你把两千块从门缝递出去，在收条上签了字，下周三这个日子从此压在你心上。';
       }},
-      { label: '质问父亲', hint: '关系紧张 · 拿到账本细节', tone: 'risk', apply: function (g) {
-        L.LINES.set(g, 'l2', 3); g.lines.l2.moral += 2;
-        npcTouch(g, '父亲', { intimacy: -14 });
-        a(g, { stress: 6, happiness: -3 });
-        L.LINES.push(g, 'st_l2_3', 3, '父亲把整件事说了半截');
-        return '父亲坐在门槛上，说了一截，又停下不说了。';
+      { label: '打电话把父亲叫回来', hint: '父亲亲密度 -8 · 压力 +4', tone: 'switch', apply: function (g) {
+        L.LINES.set(g, 'l2', 3); g.lines.l2.moral += 1;
+        npcTouch(g, '父亲', { intimacy: -8 });
+        a(g, { stress: 4, happiness: -2 });
+        pushNode(g, 'st_l2_3', 2, '父亲回来后和他们站在楼道里说了很久');
+        return '父亲赶回来，在楼道里和他们说了四十分钟。门关上的时候，他谁也没看。';
       }},
-      { label: '装作不知道', hint: '压力累积', tone: 'cold', apply: function (g) {
+      { label: '站在门口说不清楚', hint: '压力 +5 · 幸福感 -2', tone: 'cold', apply: function (g) {
         L.LINES.set(g, 'l2', 3);
         a(g, { stress: 5, happiness: -2 });
-        L.LINES.push(g, 'st_l2_3', 4, '你躲开了那天');
-        return '你那几天都晚回家，钥匙插进锁孔时手很轻。';
+        pushNode(g, 'st_l2_3', 2, '你隔着门说自己不知道');
+        return '你隔着门说自己不知道这件事。他们走的时候踢了一脚楼道里的鞋柜。';
       }}
-    ]);
+    ], 10, 28, 'crossroad', 73, '承');
 
-  node('st_l2_3', 'l2', 3, '账本最后一页',
-    '账本最后一页夹着一张借条，借款人的名字和你的身世线索，可能有关系。', [
-      { label: '顺着名字查', hint: '消耗 1 行动点 · 与身世交叉', tone: 'risk', apply: function (g) {
-        spendAP(g, 1);
+  node('st_l2_3', 'l2', 3, '借条上的签名',
+    '你在账本最后一页的夹层里抽出一张借条，纸边已经发脆。借款人的签名是母亲的名字，日期在你出生前一年。父亲这十九年一笔一笔还的，是母亲年轻时替娘家借下的钱。', [
+      { label: '拿着借条去问母亲', hint: '母亲亲密度 -6 · 真相更近', tone: 'risk', apply: function (g) {
         L.LINES.set(g, 'l2', 4); g.lines.l2.points += 2;
-        if (g.origin) g.origin.points += 1;
-        a(g, { stress: 5 });
-        L.LINES.push(g, 'st_l2_4', 4, '你顺着借条上的名字查下去');
-        return '你把这个名字和旧档案里的一个名字放在了一起，它们很像。';
+        npcTouch(g, '母亲', { intimacy: -6 });
+        a(g, { stress: 4, happiness: -2 });
+        pushNode(g, 'st_l2_4', 3, '母亲第一次跟你提起那笔钱');
+        return '母亲把借条接过去，看了很久，说：那是我借的，你爸替我还了十九年。';
       }},
-      { label: '把借条收好', hint: '保留证据', tone: 'switch', apply: function (g) {
+      { label: '放回去，当没看见', hint: '压力 +3 · 什么都不说', tone: 'switch', apply: function (g) {
         L.LINES.set(g, 'l2', 4);
-        g.flags.l2_evidence = true;
-        L.LINES.push(g, 'st_l2_4', 5, '你把借条收进自己的抽屉');
-        return '你把借条复印了一份，原件放回原处。';
+        a(g, { stress: 3 });
+        pushNode(g, 'st_l2_4', 3, '你把借条塞回原处');
+        return '你把借条塞回夹层，账本合上，像什么也没发生过。';
       }},
-      { label: '烧掉，到此为止', hint: '中断 · 留尾巴', tone: 'cold', apply: function (g) {
-        L.LINES.drop(g, 'l2');
-        a(g, { stress: -2, happiness: -1 });
-        L.LINES.push(g, 'st_l2_tail', 3, '你把借条烧了');
-        return '纸灰在灶膛里卷了一下就没了。';
+      { label: '去银行查当年的流水', hint: '花费 500 · 消耗 1 行动点', tone: 'safe', apply: function (g) {
+        m(g, { cash: -500 }); spendAP(g, 1);
+        L.LINES.set(g, 'l2', 4); g.lines.l2.points += 2;
+        a(g, { knowledge: 2, stress: 2 });
+        pushNode(g, 'st_l2_4', 3, '你在流水里看到了十九年的汇款');
+        return '柜台打印出的流水有四页，每个月十五号，一笔三百，一笔不落。';
       }}
-    ]);
+    ], 12, 34, 'crossroad', 73, '承');
 
-  node('st_l2_4', 'l2', 4, '债落在我身上',
-    '父亲病了一场，债主开始打你的电话。账本上的最后一笔，落在了你的名字下面。', [
-      { label: '接过来，慢慢还', hint: '负债 · 亲情与责任', tone: 'safe', apply: function (g) {
+  node('st_l2_4', 'l2', 4, '押金三万',
+    '父亲在工地上晕倒，住院押金三万。同一天，债主把电话打到你的手机上，说人跑了债不能跑。母亲坐在医院走廊的长椅上，第一次把实话说完：那笔钱是她年轻时替娘家借的，父亲替她还了十九年。', [
+      { label: '在借条上签自己的名字', hint: '负债 20000 · 父亲亲密度 +8', tone: 'risk', apply: function (g) {
         m(g, { debt: 20000 });
         L.LINES.set(g, 'l2', 5); npcTouch(g, '父亲', { intimacy: 8 });
         a(g, { stress: 6, happiness: -2 });
-        return '你在借条上签了自己的名字。';
+        pushNode(g, 'st_l2_5', 2, '你把那笔债接到了自己名下');
+        return '你在借条背面签了自己的名字，护士来催押金，你把卡递过去，余额只剩三位数。';
       }},
-      { label: '跟债主谈条件', hint: '消耗 1 行动点 · 按魅力判定', tone: 'risk', apply: function (g) {
+      { label: '跟债主谈，把利息砍掉', hint: '消耗 1 行动点 · 按魅力判定', tone: 'risk', apply: function (g) {
         spendAP(g, 1);
         L.LINES.set(g, 'l2', 5);
         if (chance(0.45 + (g.attrs.charm || 0) / 250)) {
           m(g, { debt: 8000 });
           a(g, { stress: 3, happiness: 2, reputation: 2 });
-          return '你把利息砍掉了一半，分期写进了新协议。';
+          pushNode(g, 'st_l2_5', 2, '你把利息砍掉了一半');
+          return '你把利息砍掉一半，分期写进新协议。对方说看你是个讲理的。';
         }
         m(g, { debt: 26000 });
         a(g, { stress: 7 });
-        return '对方不吃这一套，利滚利又加了一笔。';
+        pushNode(g, 'st_l2_5', 2, '对方不吃这一套');
+        return '对方不吃这一套，利滚利又加了一笔。你在医院楼梯间坐了很久。';
       }},
-      { label: '让父亲自己处理', hint: '亲情下降 · 压力转移', tone: 'cold', apply: function (g) {
-        L.LINES.set(g, 'l2', 5); npcTouch(g, '父亲', { intimacy: -18 });
-        a(g, { happiness: -4, stress: -2 });
-        return '你把电话递回给父亲，说自己管不了。';
+      { label: '只付押金，让母亲自己处理', hint: '花费 3000 · 母亲亲密度 -12', tone: 'cold', apply: function (g) {
+        m(g, { cash: -3000 });
+        L.LINES.set(g, 'l2', 5); npcTouch(g, '母亲', { intimacy: -12 });
+        a(g, { happiness: -3, stress: 2 });
+        pushNode(g, 'st_l2_5', 2, '你把押金交了，剩下的没再问');
+        return '你交了三万押金，把收据放在母亲手里，说剩下的事你处理不了。';
       }}
-    ]);
-  tail('st_l2_tail', 'l2', '账本合上了',
-    '那本记账簿后来被塞进了纸箱。你偶尔会想起最后一页的数字，但不再去翻。');
+    ], 14, 38, 'crossroad', 73, '转');
+
+  node('st_l2_5', 'l2', 5, '账本上的新名字',
+    '父亲出院后把账本收进上衣口袋，谁也没再提。最后一页添了一行新字，是你的名字。母亲把饭菜端上桌，说了一句：这本账该有个头了。', [
+      { label: '把剩下的一次还清，烧掉账本', hint: '花费 20000 · 幸福感 +6', tone: 'safe', apply: function (g) {
+        m(g, { cash: -20000, debt: -20000 });
+        L.LINES.set(g, 'l2', 6); g.lines.l2.result = 'good';
+        npcTouch(g, '父亲', { intimacy: 10 });
+        a(g, { happiness: 6, stress: -4, reputation: 2 });
+        pushNode(g, 'st_l2_tail', 3, '最后一笔钱转过去了');
+        return '冬至那天，你把最后一笔钱转过去，父亲在灶台边看你烧了那本挂历纸包着的账本。他说：这下你妈能睡个好觉了。';
+      }},
+      { label: '把账本锁进抽屉，先顾自己的日子', hint: '父亲亲密度 -14 · 幸福感 -3', tone: 'cold', apply: function (g) {
+        L.LINES.set(g, 'l2', 6); g.lines.l2.result = 'bad';
+        npcTouch(g, '父亲', { intimacy: -14 });
+        a(g, { happiness: -3, stress: 4 });
+        pushNode(g, 'st_l2_tail', 3, '你搬去了另一个城市');
+        return '你把账本锁进抽屉，搬去了另一个城市。父亲一个人又还了四年，直到还不动为止。他走那年，抽屉里的账本还在。';
+      }},
+      { label: '复印一份，和父亲按月还', hint: '花费 8000 · 父亲亲密度 +5', tone: 'switch', apply: function (g) {
+        m(g, { cash: -8000, debt: -8000 });
+        L.LINES.set(g, 'l2', 6); g.lines.l2.result = 'bitter';
+        npcTouch(g, '父亲', { intimacy: 5 });
+        a(g, { stress: 2, happiness: 2 });
+        pushNode(g, 'st_l2_tail', 3, '你和父亲每月十五号去银行');
+        return '你和父亲每月十五号去银行，一次还三百。他走在前面，步子越来越慢。钱还完那天，他把账本给你，说留着吧，别学我。';
+      }}
+    ], 16, 42, 'crossroad', 73, '合');
+
+  tail('st_l2_tail', 'l2', '最后一页被划掉了',
+    '很多年以后，你在老屋的抽屉里翻出那本账本，最后一页的数字被父亲用铅笔划掉了。',
+    function (g) {
+      a(g, { stress: -1, happiness: 1 });
+      return g.year + ' 年清明，你在老屋收拾父亲的旧衣服，母亲站在门口说：他临走前还在算这笔账。';
+    }, 18, 90);
 
   /* ---------- 3《风口上的猪》 ---------- */
   node('st_l3_1', 'l3', 1, '拉你入伙的人',
@@ -1080,7 +1369,7 @@
         L.LINES.push(g, 'st_l3_tail', 6, '你没有上那趟车');
         return '你说自己不是做生意的料，他笑笑，没再劝。';
       }}
-    ]);
+    ], 20, 40);
 
   node('st_l3_2', 'l3', 2, '辞不辞职',
     '项目要全身心投入。辞职意味着断了退路，不辞只能做半个合伙人。家里人都在等你的决定。', [
@@ -1104,7 +1393,7 @@
         L.LINES.push(g, 'st_l3_tail', 6, '你留在了原来的位置上');
         return '你留在了原来的工位，偶尔帮他们看一眼方案。';
       }}
-    ]);
+    ], 22, 42);
 
   node('st_l3_3', 'l3', 3, '第一年',
     '第一年的账出来了。要么小成，要么血本无归。你在办公室里等到凌晨，屏幕上的数字终于不再跳。', [
@@ -1127,7 +1416,7 @@
         a(g, { stress: -2, happiness: 1 });
         return '你抽回了一半本钱，剩下的事交给时间。';
       }}
-    ]);
+    ], 24, 44);
 
   node('st_l3_4', 'l3', 4, '第三年',
     '第三年，行业忽然起风。有人一夜之间融到了钱，也有人被一纸政策按在地上。你的电话响个不停。', [
@@ -1165,13 +1454,13 @@
         L.LINES.push(g, 'st_l3_tail', 5, '你把工牌重新挂回了脖子上');
         return '你把公司转了出去，重新开始投简历。';
       }}
-    ]);
+    ], 26, 46);
   tail('st_l3_tail', 'l3', '风口过去以后',
     '后来那个行业又起了几次风。你在新闻里看见熟悉的名字，给老朋友发了条消息，没提当年的事。', function (g) {
       if (g.lines.l3.result === 'fail') { m(g, { debt: -5000 }); a(g, { stress: -3 }); return '债还了一部分，日子慢慢回到正轨。'; }
       a(g, { happiness: 1 });
       return '你没有再上那趟车，也没有后悔。';
-    });
+    }, 55, 90);
 
   /* ---------- 4《楼下的老人》 ---------- */
   node('st_l4_1', 'l4', 1, '楼下的老人',
@@ -1197,7 +1486,7 @@
         L.LINES.push(g, 'st_l4_2', 3, '你从另一侧楼梯上去了');
         return '你从另一侧的楼梯上去，没和她打招呼。';
       }}
-    ]);
+    ], 22, 45);
 
   node('st_l4_2', 'l4', 2, '她讲的那些年',
     '老人留你坐一会儿。她说起年轻时在纺织厂，说起一个再也没回来的人。她讲得很慢。', [
@@ -1229,7 +1518,7 @@
         L.LINES.push(g, 'st_l4_3', 3, '你打断了她');
         return '你问她有没有要修的电器，她说没有。';
       }}
-    ]);
+    ], 24, 46);
 
   node('st_l4_3', 'l4', 3, '那个冬天',
     '入冬以后，楼下那扇窗连着几天没亮灯。你敲门，没人应。物业说，老人被送去了医院。', [
@@ -1254,7 +1543,7 @@
         L.LINES.push(g, 'st_l4_tail', 3, '那扇窗一直没再亮');
         return '你每次经过都低着头。';
       }}
-    ]);
+    ], 26, 48);
 
   node('st_l4_4', 'l4', 4, '留下的东西',
     '老人走了。她的子女从外地赶回来，在楼道里清出一只旧木箱，说里面有给你的东西。', [
@@ -1282,9 +1571,9 @@
         a(g, { happiness: -1, stress: -2 });
         return '你说东西都留给家里人吧。';
       }}
-    ]);
+    ], 28, 50);
   tail('st_l4_tail', 'l4', '那扇没亮的窗',
-    '再后来那间屋子住进了别人。你偶尔还会想起她说话的速度。');
+    '再后来那间屋子住进了别人。你偶尔还会想起她说话的速度。', null, 55, 90);
 
   /* ---------- 5《同桌的坠落》 ---------- */
   node('st_l5_1', 'l5', 1, '同桌开始逃课',
@@ -1313,7 +1602,7 @@
         L.LINES.push(g, 'st_l5_2', 1, '你去了老师办公室');
         return '老师把他从台球厅拎了回来。他看你的眼神变了。';
       }}
-    ]);
+    ], 12, 18);
 
   node('st_l5_2', 'l5', 2, '他让你选一边',
     '同桌把你拉到楼梯拐角，说兄弟们晚上有事，让你一起去，只站场子，不动手。', [
@@ -1339,7 +1628,7 @@
         L.LINES.push(g, 'st_l5_tail', 4, '你换了座位');
         return '你申请换了座位，再没和他说过话。';
       }}
-    ]);
+    ], 13, 18);
 
   node('st_l5_3', 'l5', 3, '他出事了',
     '那年冬天，同桌出事了。电话打到你这里时，你正在准备一场很重要的考试。', [
@@ -1381,7 +1670,7 @@
         L.PROMISE.add(g, { npcRole: '同桌', type: 'absence', who: '同桌', text: '你报了警，没有提前告诉他', dueYear: g.year + 8, consequence: '他记了很多年', lineId: 'l5' });
         return '你报了警。警察来的时候，他看了你一眼，什么都没说。';
       }}
-    ]);
+    ], 15, 20);
 
   node('st_l5_4', 'l5', 4, '很多年以后的重逢',
     '很多年后，你在一个很普通的地方遇见他。他变了，也没全变。', [
@@ -1391,7 +1680,7 @@
         if (g.lines.l5.extra.saved || g.lines.l5.moral >= 1) {
           npcTouch(g, '同桌', { intimacy: 12 });
           a(g, { happiness: 4, stress: -2 });
-          return '他说当年那件事，多亏你。你们喝到很晚。';
+          return '他说那年你替他扛下的处分，多亏你。你们喝到很晚。';
         }
         npcTouch(g, '同桌', { intimacy: -6 });
         a(g, { happiness: -2, stress: 2 });
@@ -1402,84 +1691,146 @@
         a(g, { stress: -1 });
         return '你和他点了个头，各自走开。';
       }}
-    ]);
+    ], 26, 45);
   tail('st_l5_tail', 'l5', '换掉的座位',
-    '那张课桌后来换了好几任主人。你偶尔会梦见楼梯拐角那盏灯。');
+    '那张课桌后来换了好几任主人。你偶尔会梦见楼梯拐角那盏灯。', null, 55, 90);
 
-  /* ---------- 6《体检报告上的那个箭头》 ---------- */
+  /* ---------- 6《体检报告上的那个箭头》：起 → 承 → 承 → 转 → 合 → 余波 ---------- */
   node('st_l6_1', 'l6', 1, '报告单上的箭头',
-    '体检报告上有一个指标被标了向上的箭头。医生让你三个月后复查，你把报告折起来放进包里。', [
-      { label: '立刻去复查', hint: '花费 800 · 早发现', tone: 'safe', apply: function (g) {
+    '体检中心三楼的走廊，上午十点。同事在电梯口等你，手机在口袋里震个不停。报告单上有一项被画了一个向上的箭头，医生用笔点了点那行数字：三个月后来复查。你把报告折成四折，塞进西装内袋。', [
+      { label: '当天就约复查', hint: '花费 800 · 早发现', tone: 'safe', apply: function (g) {
         m(g, { cash: -800 });
         L.LINES.set(g, 'l6', 2);
-        L.LINES.push(g, 'st_l6_2', 1, '你预约了复查');
-        return '你当天就约了下周的号。';
+        pushNode(g, 'st_l6_2', 3, '你在导诊台约了下周的号');
+        return '你在导诊台约了下周的号，把那张纸重新展开，压平，夹进工作证。';
       }},
-      { label: '先拖着，忙完这阵', hint: '健康 -6 · 线不中断', tone: 'switch', apply: function (g) {
+      { label: '先拖着，忙完这阵', hint: '健康 -6 · 压力 +3', tone: 'switch', apply: function (g) {
         a(g, { health: -6, stress: 3 });
         L.LINES.set(g, 'l6', 2);
-        L.LINES.push(g, 'st_l6_2', 2, '你把报告压在了抽屉里');
-        return '你把报告压进抽屉，想着忙完这阵再说。';
+        pushNode(g, 'st_l6_2', 3, '你把报告压进了抽屉');
+        return '你把报告压进办公桌最下面那格抽屉，上面盖了一叠报销单。';
       }},
-      { label: '换一家医院再查', hint: '花费 1500', tone: 'risk', apply: function (g) {
+      { label: '换一家医院再查', hint: '花费 1500 · 换一个说法', tone: 'risk', apply: function (g) {
         m(g, { cash: -1500 });
         L.LINES.set(g, 'l6', 2);
-        L.LINES.push(g, 'st_l6_2', 1, '你换了一家医院');
-        return '第二家医院的医生看了片子，眉头皱了一下。';
+        pushNode(g, 'st_l6_2', 3, '你挂了下周另一家医院的号');
+        return '第二家医院的医生看片子时眉头皱了一下，说再做一个，别省这个钱。';
       }}
-    ]);
+    ], 26, 45, 'crossroad', 73, '起');
 
-  node('st_l6_2', 'l6', 2, '走廊尽头的灯',
-    '复查结果出来了。医生把片子推过来，说需要做进一步检查，也可能只是虚惊一场。', [
-      { label: '安排进一步检查', hint: '花费 3000 · 压力上升', tone: 'risk', apply: function (g) {
+  node('st_l6_2', 'l6', 2, '周四下午的号',
+    '复查排在周四下午。你请了半天假，扣两百块全勤；检查费三千，医保报一半。你在走廊里给领导发消息，说下午回不去，指尖在屏幕上停了很久。医生把片子推过来，说需要进一步检查，也可能只是虚惊一场。', [
+      { label: '安排进一步检查', hint: '花费 3000 · 压力 +8', tone: 'risk', apply: function (g) {
         m(g, { cash: -3000 });
         L.LINES.set(g, 'l6', 3);
         if (chance(0.5)) {
           g.lines.l6.extra.serious = true;
           a(g, { health: -8, stress: 8 });
-          return '结果不算好，需要尽快处理。你在走廊里坐了很久。';
+          pushNode(g, 'st_l6_3', 2, '进一步检查的结果不算好');
+          return '结果不算好，需要尽快处理。你在走廊尽头坐到天黑，手机里还有十一个未接来电。';
         }
         a(g, { health: 2, stress: 3, happiness: 2 });
-        return '结果是良性的。你走出医院，觉得阳光有点刺眼。';
+        pushNode(g, 'st_l6_3', 2, '结果是良性的');
+        return '结果是良性的。你走出医院，觉得下午的阳光有点刺眼。';
       }},
       { label: '保守治疗，先观察', hint: '不确定 · 可能延误', tone: 'switch', apply: function (g) {
         L.LINES.set(g, 'l6', 3);
         if (chance(0.45)) {
           g.lines.l6.extra.serious = true;
           a(g, { health: -12, stress: 5 });
-          return '半年后症状加重，你才又回到医院。';
+          pushNode(g, 'st_l6_3', 2, '半年后症状加重');
+          return '半年后症状加重，你半夜挂急诊，才又回到这家医院。';
         }
         a(g, { health: 1, stress: -2, happiness: 1 });
-        return '你按医嘱调整作息，指标慢慢稳住了。';
+        pushNode(g, 'st_l6_3', 2, '你按医嘱调整作息');
+        return '你按医嘱调整作息，三个月后指标慢慢稳住了。';
       }},
-      { label: '不看结果，先回去上班', hint: '逃避', tone: 'cold', apply: function (g) {
+      { label: '不做检查，先回去开会', hint: '健康 -10 · 压力 +6', tone: 'cold', apply: function (g) {
         L.LINES.set(g, 'l6', 3);
         g.lines.l6.extra.serious = true;
         a(g, { health: -10, stress: 6, happiness: -3 });
-        return '你把报告单塞进口袋，回去开了一个很长的会。';
+        pushNode(g, 'st_l6_3', 2, '你把报告塞回口袋，回去开会');
+        return '你把报告塞回西装内袋，回去开了一个很长的会，散会时已经十点半。';
       }}
-    ]);
+    ], 28, 48, 'crossroad', 73, '承');
 
-  node('st_l6_3', 'l6', 3, '恢复期',
-    '治疗或观察期过去，身体给了一个答案。你开始重新安排生活的速度。', [
-      { label: '按医嘱慢慢康复', hint: '健康回升 · 事业让位', tone: 'safe', apply: function (g) {
+  node('st_l6_3', 'l6', 3, '夜里三点',
+    '半年过去。你开始夜里三点醒，枕头上有一小片汗。陪你复诊的同事把报告摊在餐桌上，说：你打算拖到什么时候。餐桌上还摆着上周的挂号单，边角已经卷了。', [
+      { label: '请假住院，把工作交出去', hint: '花费 5000 · 健康 +6', tone: 'safe', apply: function (g) {
+        m(g, { cash: -5000 });
         L.LINES.set(g, 'l6', 4);
-        a(g, { health: g.lines.l6.extra.serious ? -2 : 5, stress: -4, happiness: 2 });
-        if (g.lines.l6.extra.serious) m(g, { debt: 10000 });
-        return '你把日程表清空了一半，第一次按时睡觉。';
+        a(g, { health: 6, stress: -3 });
+        pushNode(g, 'st_l6_4', 3, '你请了长假，住进了医院');
+        return '你请了长假，把电脑交给同事，住院单压在床头柜上。头一晚你睡了六个小时。';
       }},
-      { label: '急着回去上班', hint: '健康透支', tone: 'risk', apply: function (g) {
+      { label: '一边治疗一边上班', hint: '健康 -6 · 压力 +6', tone: 'risk', apply: function (g) {
         L.LINES.set(g, 'l6', 4);
-        a(g, { health: -8, stress: 6 });
-        m(g, { cash: 6000 });
-        return '你提前回了公司，会议一个接一个。';
+        a(g, { health: -6, stress: 6 });
+        pushNode(g, 'st_l6_4', 3, '你白天上班，晚上去医院');
+        return '你白天上班，晚上去医院输液，左手背上贴了一星期的胶布。';
+      }},
+      { label: '换中医，慢慢调', hint: '花费 2000 · 换一条路', tone: 'switch', apply: function (g) {
+        m(g, { cash: -2000 });
+        L.LINES.set(g, 'l6', 4);
+        a(g, { stress: 2 });
+        pushNode(g, 'st_l6_4', 3, '你换了一家中医院');
+        return '你换了一家中医院，医生给你开了三十副药，药味在阳台上晾了一整月。';
       }}
-    ]);
-  tail('st_l6_tail', 'l6', '身体记得',
-    '后来你每年都去体检。报告单上那个箭头慢慢变成了一个习惯。', function (g) {
-      a(g, { health: -3, stress: -1 });
-      return '你开始留意身体的每一个小信号。';
-    });
+    ], 30, 50, 'crossroad', 73, '承');
+
+  node('st_l6_4', 'l6', 4, '两张片子并排放',
+    '结果出来了。医生把两张片子并排放在灯箱上，指着左边那张说：第一家拍漏了一处，这个位置半年前就该处理。你盯着那个箭头看了很久，才发现它的方向一直是同一个。', [
+      { label: '立刻手术，能签的字都签了', hint: '花费 20000 · 健康 +4', tone: 'risk', apply: function (g) {
+        m(g, { cash: -20000 });
+        L.LINES.set(g, 'l6', 5);
+        a(g, { health: 4, stress: 5 });
+        pushNode(g, 'st_l6_5', 2, '你在手术同意书上签了字');
+        return '你在三张同意书上一笔一划签了自己的名字，护士把你推进去的时候，走廊的灯还亮着。';
+      }},
+      { label: '先做穿刺，等结果', hint: '花费 6000 · 多等一个月', tone: 'switch', apply: function (g) {
+        m(g, { cash: -6000 });
+        L.LINES.set(g, 'l6', 5);
+        a(g, { stress: 3 });
+        pushNode(g, 'st_l6_5', 2, '你决定先做穿刺');
+        return '你决定先做穿刺，等结果的那一个月，你把手机屏保换成了日历。';
+      }},
+      { label: '不做了，出院回家', hint: '健康 -14 · 幸福感 -5', tone: 'cold', apply: function (g) {
+        L.LINES.set(g, 'l6', 5);
+        a(g, { health: -14, happiness: -5, stress: 4 });
+        pushNode(g, 'st_l6_5', 2, '你办了出院手续');
+        return '你办了出院手续，把没拆封的病号服叠好放在床尾，护士站的人都没有拦你。';
+      }}
+    ], 32, 52, 'crossroad', 73, '转');
+
+  node('st_l6_5', 'l6', 5, '箭头消失了吗',
+    '治疗结束后的第一个复查日。你把三张报告按时间顺序排在桌上，那个箭头在最后一张上变了样子。同事发消息问你结果，你打了半天字，又都删掉。', [
+      { label: '认真治完，按时复查', hint: '健康 +8 · 幸福感 +5', tone: 'safe', apply: function (g) {
+        L.LINES.set(g, 'l6', 6); g.lines.l6.result = 'good';
+        a(g, { health: 8, stress: -4, happiness: 5 });
+        pushNode(g, 'st_l6_tail', 3, '复查单上的箭头消失了');
+        return g.year + ' 年春天，复查单上那一行指标回到了参考范围。你把三张旧报告叠在一起，扔进了碎纸机。同事说：你这半年像换了个人。';
+      }},
+      { label: '指标压住了，但药不能停', hint: '健康 -2 · 苦乐参半', tone: 'switch', apply: function (g) {
+        L.LINES.set(g, 'l6', 6); g.lines.l6.result = 'bitter';
+        a(g, { health: -2, stress: 2, happiness: 2 });
+        pushNode(g, 'st_l6_tail', 3, '药盒按星期分好，摆在餐桌上');
+        return '指标压住了，药要一直吃。药盒按星期分好，一格一格摆在餐桌上，你从此记住了每一次复查的日期。';
+      }},
+      { label: '提前退休，把日子慢下来', hint: '健康 -6 · 幸福感 -2', tone: 'cold', apply: function (g) {
+        L.LINES.set(g, 'l6', 6); g.lines.l6.result = 'bad';
+        a(g, { health: -6, happiness: -2, stress: -3 });
+        if (g.job) g.job.retired = true;
+        pushNode(g, 'st_l6_tail', 3, '你四十九岁那年提前退了休');
+        return '刀口愈合得慢，第二年又做了一次。你四十九岁提前退了休，每天下午去公园走两圈，走一百米就要坐下来歇一会儿。';
+      }}
+    ], 34, 55, 'crossroad', 73, '合');
+
+  tail('st_l6_tail', 'l6', '取号机前的队伍',
+    '很多年以后，你还是每年去那家医院。取号机前排着长队，报告单上的箭头换成了另一个指标。',
+    function (g) {
+      a(g, { health: -2, stress: -1 });
+      return g.year + ' 年秋天，护士抬头叫你的名字，把报告递出来，说：还是老样子，按时来就行。';
+    }, 36, 90);
 
   /* ---------- 7《老宅拆迁》 ---------- */
   node('st_l7_1', 'l7', 1, '拆迁通知',
@@ -1501,7 +1852,7 @@
         L.LINES.push(g, 'st_l7_2', 2, '你在家族群里放了话');
         return '你在家族群里说，该我们的一分不能少。';
       }}
-    ]);
+    ], 28, 55);
 
   node('st_l7_2', 'l7', 2, '亲戚的算盘',
     '方案里的面积和户口对不上。有人提议把你家那一份并到老人名下，说这样“大家都能多拿”。', [
@@ -1537,7 +1888,7 @@
         a(g, { stress: -6, happiness: 5 });
         return '你说这钱不要了，老宅留着照片就行。';
       }}
-    ]);
+    ], 30, 58);
 
   node('st_l7_3', 'l7', 3, '签字那天',
     '签字那天下了小雨。协议摊在桌上，每个人都在看别人先落笔。', [
@@ -1563,13 +1914,13 @@
         a(g, { stress: 8, happiness: -4 });
         return '谈到最后谈崩了，补偿拖了两年才下来。';
       }}
-    ]);
+    ], 32, 60);
   tail('st_l7_tail', 'l7', '老宅不在了',
     '推土机来的那天你没去看。后来那里盖起了一排一模一样的楼。', function (g) {
       if (g.flags.lookDownMoney) { a(g, { happiness: 2, stress: -2 }); return '你没有觉得少了什么。'; }
       a(g, { happiness: -1 });
       return '你偶尔会想起院子里那棵树。';
-    });
+    }, 55, 90);
 
   /* ---------- 8《深夜的一条消息》 ---------- */
   node('st_l8_1', 'l8', 1, '深夜的一条消息',
@@ -1592,7 +1943,7 @@
         L.LINES.push(g, 'st_l8_2', 4, '你拉黑了那个名字');
         return '你点了拉黑，心里空了一下，又觉得踏实。';
       }}
-    ]);
+    ], 24, 45);
 
   node('st_l8_2', 'l8', 2, '消息越来越密',
     '那之后，消息越来越密。对方开始说一些只有你们两个人听得懂的话。', [
@@ -1614,9 +1965,9 @@
         L.LINES.set(g, 'l8', 3);
         a(g, { stress: 5, happiness: -2 });
         L.LINES.push(g, 'st_l8_4', 2, '你不再回复');
-        return '你把那个人设成了消息免打扰，也没告诉任何人。';
+        return '你把对方设成了消息免打扰，也没告诉任何人。';
       }}
-    ]);
+    ], 26, 47);
 
   node('st_l8_3', 'l8', 3, '越界之后',
     '事情还是走到了那一步。回家的路上你一直在想，钥匙插进锁孔时该怎么开口。', [
@@ -1656,7 +2007,7 @@
         g.lines.l8.result = 'cut';
         return '你换了号码，删掉了所有联系方式。';
       }}
-    ]);
+    ], 28, 49);
 
   node('st_l8_4', 'l8', 4, '日子还要过下去',
     '这件事最后有了一个结果。有人留下，有人离开，也有人什么都没发生。', [
@@ -1673,9 +2024,9 @@
         a(g, { happiness: -2, stress: 2 });
         return '你没有承诺什么，也没有再提。';
       }}
-    ]);
+    ], 30, 52);
   tail('st_l8_tail', 'l8', '删掉的对话框',
-    '后来你换了手机。有些名字不会再出现在通讯录里。');
+    '后来你换了手机。有些名字不会再出现在通讯录里。', null, 55, 90);
 
   /* ---------- v35 链节点锁序补丁：上一个节点没发生，后一个不随机起跳 ---------- */
   (function () {
@@ -1698,6 +2049,7 @@
       id: 'col_health_empire', line: 'l6+l3', check: function (g) {
         return g.lines.l3.node >= 2 && g.lines.l6.node >= 2 && (g.attrs.health || 0) < 65;
       },
+      ageMin: 26, ageMax: 60,
       title: '扩张还是去医院',
       text: '项目正到关键处，体检报告也到了复查日期。同一天，两个电话都打了进来。',
       opts: [
@@ -1722,6 +2074,7 @@
       id: 'col_ledger_demolition', line: 'l2+l7', check: function (g) {
         return g.lines.l2.node >= 3 && g.lines.l7.node >= 2 && (g.lines.l2.moral <= 0 || g.flags.l2_evidence);
       },
+      ageMin: 30, ageMax: 60,
       title: '债主找上了拆迁办',
       text: '拆迁款还没到账，债主先找上了门。他说老宅那笔补偿里，有他的一份。',
       opts: [
@@ -1745,6 +2098,7 @@
       id: 'col_friend_startup', line: 'l5+l3', check: function (g) {
         return g.lines.l5.node >= 2 && g.lines.l3.node >= 2;
       },
+      ageMin: 18, ageMax: 45,
       title: '他要来你的公司',
       text: '同桌找到你，说想进你的项目。他说当年你拉过他一把，这次换他帮你。',
       opts: [
@@ -1773,6 +2127,7 @@
       id: 'col_letter_affair', line: 'l1+l8', check: function (g) {
         return g.lines.l1.revealed && g.lines.l8.node >= 2;
       },
+      ageMin: 24, ageMax: 50,
       title: '两封信，一个人',
       text: '你查到的那个名字，和深夜发来消息的人，居然是同一个姓。',
       opts: [
@@ -1795,6 +2150,7 @@
       id: 'col_countdown_empire', line: 'l6+l3', check: function (g) {
         return g.lines.l6.extra.serious && g.lines.l3.node >= 3 && (g.attrs.health || 0) < 50;
       },
+      ageMin: 28, ageMax: 60,
       title: '身体先按了暂停',
       text: '医生要求你立刻住院。同一天，合伙人说融资方要见创始人本人。',
       opts: [
@@ -1819,6 +2175,7 @@
       id: 'col_oldman_demolition', line: 'l4+l7', check: function (g) {
         return g.lines.l4.node >= 3 && g.lines.l7.node >= 2;
       },
+      ageMin: 30, ageMax: 60,
       title: '老人留下的那间房',
       text: '老人留下的那间屋子也在拆迁范围内。她的子女说，老人曾提过把房子留给你。',
       opts: [
@@ -1840,6 +2197,7 @@
       id: 'col_origin_demolition', line: 'l9+l7', check: function (g) {
         return g.origin && g.origin.revealed && g.lines.l7.node >= 2;
       },
+      ageMin: 30, ageMax: 65,
       title: '户口本上多了一个名字',
       text: '血缘的事刚落地，拆迁办又打来电话：你家的户口，和另一户人对上了。',
       opts: [
@@ -1859,7 +2217,8 @@
   COLLISIONS.forEach(function (c) {
     IDX[c.id] = {
       id: c.id, type: 'random', stage: null, tier: 'crossroad', layer: 'chain',
-      weight: 0, family: c.id, prio: 72, title: c.title, text: c.text,
+      weight: 0, family: c.id, prio: 72, title: c.title, text: c.text, line: c.line,
+      ageMin: c.ageMin, ageMax: c.ageMax,
       opts: c.opts, cond: function (g) { return true; }
     };
   });
@@ -1867,6 +2226,8 @@
     if (!g.colSeen) g.colSeen = {};
     for (var i = 0; i < COLLISIONS.length; i++) {
       var c = COLLISIONS[i];
+      /* 撞车涉及多条线：只要有一条没抽中，这辆车就不发 */
+      if (!matchLine(g, c.line)) continue;
       if (g.colSeen[c.id]) continue;
       if (!c.check(g)) continue;
       var pids = (g.pending || []).map(function (p) { return p.event; });
@@ -1895,7 +2256,9 @@
     if (g.age < 8) return;
     if (g.lastClueAge !== undefined && g.lastClueAge === g.age) return;
     if (!chance(0.1)) return;
-    var pool = CLUE_POOL.filter(function (c) { return c.cond(g); });
+    var pool = CLUE_POOL.filter(function (c) {
+      return isSelected(g, c.lineId) && c.cond(g);
+    });
     if (!pool.length) return;
     var pick = pool[randInt(0, pool.length - 1)];
     var seq = (g.clueSeq = (g.clueSeq || 0) + 1);
@@ -1936,11 +2299,21 @@
      八、生成身世征兆事件
      ========================================================= */
   SECRETS.forEach(function (sec) {
-    for (var i = 0; i < 3; i++) makeSignEvent(sec, i);
+    for (var i = 0; i < 3; i++) {
+      /* 征兆跟随 SIGN_AGES 出现；带婴儿照的征兆从 3 岁起，兼顾正文里的“婴儿”语义 */
+      var lo = SIGN_AGES[i], hi = SIGN_AGES[i] + 3;
+      if ((sec.id === 's1' && i === 2) || (sec.id === 's4' && i === 0)) lo = 3;
+      makeSignEvent(sec, i, lo, hi);
+    }
   });
 
   /* 暴露给测试 / UI */
   L.LINES.originTruth = function (g) { return g.origin ? g.origin.truth : null; };
   L.LINES.collisions = COLLISIONS.map(function (c) { return { id: c.id, line: c.line, title: c.title }; });
   L.LINES.secret = function (g) { return secretById(g.origin.secretId); };
+
+  /* v3.7：选中线的链节点必须能走完，不因亲属已故的文本过滤而断链 */
+  Object.keys(IDX).forEach(function (id) {
+    if (/^(st_l\d_|origin_)/.test(id)) IDX[id]._deceasedOk = true;
+  });
 })();

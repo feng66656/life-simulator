@@ -7,7 +7,43 @@
 
   var ATTR_KEYS = ['knowledge', 'health', 'finance', 'charm', 'happiness', 'reputation', 'stress'];
   var HEALTH_LIMIT = 0;
-  var MAX_TURNS = 130;
+  var MAX_TURNS = 200;
+
+  /* v3.8：非自然终局包的年度预算在引擎侧统一调参（只动 annualBudget），
+     并按包内文档的归一化规则把 baseChance 重新归一到该预算。
+     引擎按“回合年龄”掷骰，31–55 段实际只有 12 个不同年龄，故该段预算按 12 次回合折算。 */
+  var V38_BUDGET = {
+    '0-6': 0.01300, '7-12': 0.02400, '13-18': 0.03400,
+    '19-30': 0.03800, '31-55': 0.04500, '56+': 0.00389
+  };
+  function tuneV38() {
+    var V = LS.V38;
+    if (!V || !V.CONFIG || !Array.isArray(V.ENDINGS)) return;
+    var tune = LS.V38_TUNE || {};
+    var budgets = tune.budget || V38_BUDGET;
+    V.CONFIG.annualBudget = V.CONFIG.annualBudget || {};
+    var baseLim = 0.03;
+    var minBase = 0.00001;
+    for (var band in budgets) {
+      if (budgets[band] === undefined) continue;
+      V.CONFIG.annualBudget[band] = budgets[band];
+      var sum = 0;
+      var i, e;
+      for (i = 0; i < V.ENDINGS.length; i++) {
+        e = V.ENDINGS[i];
+        if (e.band === band) sum += num0(e.baseChance);
+      }
+      var k = (sum > 0) ? (budgets[band] / sum) : 1;
+      for (i = 0; i < V.ENDINGS.length; i++) {
+        e = V.ENDINGS[i];
+        if (e.band !== band) continue;
+        e.baseChance = Math.min(baseLim, Math.max(minBase, num0(e.baseChance) * k));
+        var boostLim = 0.08 - e.baseChance;
+        if (num0(e.riskBoost) > boostLim) e.riskBoost = boostLim;
+      }
+    }
+  }
+  tuneV38();
 
   var ATTR_LABEL = { knowledge: '学识', health: '健康', finance: '财力', charm: '魅力', happiness: '幸福感', stress: '压力' };
 
@@ -941,6 +977,27 @@
     if (lines.length > maxLines) lines = lines.slice(0, maxLines);
     if (lines.length < 2) lines.push('这一段很短，短到还没来得及留下什么。');
 
+    /* v3.9：阶段总结必须交代三件事：走了几回合、开了几条链、哪条没走完 */
+    var plan = (g.stagePlan && g.stagePlan.stage === fromStage) ? g.stagePlan : null;
+    var undone = (plan && plan.undone && plan.undone.length) ? plan.undone.slice() : unresolvedChainList(g);
+    var undoneTitles = [];
+    for (var ui = 0; ui < undone.length; ui++) undoneTitles.push(undone[ui].title || undone[ui].event || '那条线');
+    var planTurns = plan ? num0(plan.played) : 0;
+    var planBudget = plan ? num0(plan.budget) : 0;
+    var opened = chainsOpenedIn(g, plan ? plan.startAge : startAge, plan ? plan.endAge : endAge, undone);
+    if (plan) {
+      var tail;
+      if (plan.skipped) {
+        tail = '你在第 ' + planTurns + ' 回合提前离开了这一段，话没说完' +
+          (undoneTitles.length ? '：与「' + undoneTitles[0] + '」的那条线断在原地' : '：有些名字还没等到下文') + '。';
+      } else if (undoneTitles.length) {
+        tail = '这一段走了 ' + planTurns + ' 回合，开了 ' + opened + ' 条链；「' + undoneTitles[0] + '」没能等到下文。';
+      } else {
+        tail = '这一段走了 ' + planTurns + ' 回合，开了 ' + opened + ' 条链，都走到了头。';
+      }
+      lines.push(tail);
+    }
+
     /* changes：真实差值 */
     [['knowledge', '学识'], ['health', '健康'], ['finance', '财力'], ['charm', '魅力'], ['happiness', '幸福感'], ['stress', '压力']].forEach(function (p) {
       var d = dif(sa[p[0]], now.attrs[p[0]]);
@@ -971,13 +1028,24 @@
       atAge: endAge,
       lines: lines,
       changes: changes,
-      impacts: useImpacts || []
+      impacts: useImpacts || [],
+      skip: !!(plan && plan.skipped),
+      flex: {
+        turns: planTurns, budget: planBudget,
+        baseBudget: plan ? num0(plan.baseBudget) : 0,
+        chainsOpened: opened,
+        undone: undoneTitles,
+        endAge: plan ? num0(plan.endAge) : endAge,
+        skipped: !!(plan && plan.skipped)
+      }
     };
   }
 
   /* ---------------- 事件筛选 ---------------- */
   function condOk(g, e) {
     if (!e) return false;
+    /* v3.7：未抽中的隐藏线事件一律不进可选池（含撞车/身世/线索） */
+    if (e.line && LS.LINES && LS.LINES.match && !LS.LINES.match(g, e.line)) return false;
     if (e.cond) {
       try { if (!e.cond(g)) return false; } catch (err) { return false; }
     }
@@ -1019,12 +1087,14 @@
       /* v3.4：天赋按“事件类别”真实加/减权，不只是一次性属性 */
       if (LS.talentBiasOf) w *= LS.talentBiasOf(g, LS.iconCatOf ? LS.iconCatOf(e) : 'cross', g.age);
       var cdA = globalCD[e.id];
-      if (cdA) w *= 1 / (1 + num0(cdA.runs) * 0.3);
+      if (cdA) w *= 1 / (1 + num0(cdA.runs) * 1.5);
       var cdB = g.eventCD && g.eventCD[e.id];
       if (cdB) w *= 1 / (1 + num0(cdB.runs) * 0.3);
       w *= epochMul;
       /* v3.5：开局主题去重与“不连出医疗”通过降权实现，避免随机池被清空 */
       if (LS.V35 && LS.V35.weightFactor) w *= LS.V35.weightFactor(g, e);
+      /* v3.7：中年上下半年按主题加权（H1 工作/钱/外部，H2 家庭/身体/关系） */
+      if (LS.V37 && LS.V37.weightOf) w *= LS.V37.weightOf(g, e);
       if (w < 0.02) w = 0.02;
       total += w;
       weights.push(w);
@@ -1261,6 +1331,14 @@
     var E = LS.EVENTS || [];
     var stage = LS.stageOf(nextAge);
     var i, e;
+    /* v3.7：时代锚点年份不能静默跳过，否则 v36 的六个年份会缺 */
+    if (LS.V36 && LS.V36.ERA_ANCHORS) {
+      var nextYear = g.year + (nextAge - g.age);
+      var eraFired = g.eraFired || {};
+      for (i = 0; i < LS.V36.ERA_ANCHORS.length; i++) {
+        if (LS.V36.ERA_ANCHORS[i].year === nextYear && !eraFired[nextYear]) return true;
+      }
+    }
     for (i = 0; i < E.length; i++) {
       e = E[i];
       if (!e || e.type !== 'forced') continue;
@@ -1392,6 +1470,373 @@
 
   /* UI 直接调用：从当前状态推进到下一个关键节点前（v3.2 已删除“跳过平淡年”） */
 
+  /* v3.7：隐藏线节点优先于强制剧情年，否则一条线会被升学/工作节点整年挤掉 */
+  function takeDueChain(g) {
+    if (!Array.isArray(g.pending) || !LS.LINES || !LS.LINES.match) return null;
+    var best = null, bestIdx = -1;
+    for (var i = 0; i < g.pending.length; i++) {
+      var item = g.pending[i];
+      if (!item || item.dueAge > g.age) continue;
+      var pe = LS.EVENT_INDEX[item.event];
+      if (!pe || !pe.line) continue;
+      if (!LS.LINES.match(g, pe.line)) continue;
+      if (g.fired && g.fired.indexOf(pe.id) >= 0) continue;
+      if (!condOk(g, pe)) continue;
+      if (!best || item.dueAge < best.dueAge) { best = item; bestIdx = i; }
+    }
+    if (!best) return null;
+    g.pending.splice(bestIdx, 1);
+    return LS.EVENT_INDEX[best.event];
+  }
+
+  /* =========================================================
+     v3.8 事件分桶 + 槽位配额
+     每回合先定槽位，再在槽内抽；一回合仍然只产出 1 个事件。
+     事件按 stage 归桶，避免“扫全表时 stage 不匹配就静默丢弃”。
+     ========================================================= */
+  var SLOT_ORDER = ['main', 'side', 'relation', 'career', 'dilemma', 'causal', 'forced', 'daily'];
+  var SLOT_QUOTA = { main: 0.15, side: 0.40, relation: 0.18, career: 0.10, dilemma: 0.07, causal: 0.14, forced: 0.07, daily: 0.16 };
+  var EV_BUCKETS = null;
+  var EV_BUCKETS_LEN = -1;
+
+  function slotOfEvent(e) {
+    if (!e) return 'daily';
+    if (e.type === 'career' || e.layer === 'career') return 'career';
+    if (e.type === 'forced') return 'forced';
+    if (e.type === 'causal') return 'causal';
+    if (e.layer === 'npc' || e.npcEvent || e.npcRole) return 'relation';
+    if (e.type === 'era' || e.layer === 'era') return 'main';
+    if (e.type === 'branch' || e.layer === 'branch') return 'daily';
+    if (e.type === 'random' || e.type === 'daily') {
+      if (e.tier === 'crossroad') return 'main';
+      if (e.tier === 'echo') return 'relation';
+      if (e.family) return 'side';
+      return 'daily';
+    }
+    return 'daily';
+  }
+
+  function newSlotBucket() {
+    return { main: [], side: [], relation: [], causal: [], forced: [], daily: [] };
+  }
+
+  function buildEventBuckets() {
+    var E = LS.EVENTS || [];
+    if (EV_BUCKETS && EV_BUCKETS_LEN === E.length) return EV_BUCKETS;
+    var b = { byStage: {}, all: newSlotBucket() };
+    var stages = LS.STAGES || [];
+    var i, s;
+    for (s = 0; s < stages.length; s++) b.byStage[stages[s]] = newSlotBucket();
+    for (i = 0; i < E.length; i++) {
+      var e = E[i];
+      if (!e || !e.id) continue;
+      /* 隐藏线节点只走 pending 管线，避免被随机层抽到后乱序 */
+      if (e.line) continue;
+      /* 时代事件只走 eraAnchor，避免槽位抽到无年份的旧事件 */
+      if (e.type === 'era' || e.layer === 'era') continue;
+      var slot = slotOfEvent(e);
+      if (!slot || slot === 'career') continue; /* 职业事件只走 LS.CAREER.due */
+      var bucket = (e.stage && b.byStage[e.stage]) ? b.byStage[e.stage] : b.all;
+      if (bucket[slot]) bucket[slot].push(e);
+    }
+    EV_BUCKETS = b;
+    EV_BUCKETS_LEN = E.length;
+    return b;
+  }
+
+  function slotUsable(g, e, slot) {
+    if (!e || !e.id) return false;
+    if (isFired(g, e)) return false;
+    if (isPendingFuture(g, e.id)) return false;
+    if (slot === 'forced') {
+      if (!ageMatch(e, g.age)) return false;
+    }
+    if ((slot === 'relation' || slot === 'side' || slot === 'daily') && seenBefore(g, e)) return false;
+    if (slot !== 'forced' && riskBlocked(g, e)) return false;
+    if ((slot === 'main' || slot === 'side' || slot === 'relation' || slot === 'daily') && e.healthNeg) return false;
+    if (slot === 'causal' && e.healthNeg && !riskActive(g, e)) return false;
+    return condOk(g, e);
+  }
+
+  function preferFresh(list, slot) {
+    if (!list.length || slot === 'forced') return list;
+    var gcd = (LS.eventCDRead ? LS.eventCDRead() : {}) || {};
+    var fresh = [], i;
+    for (i = 0; i < list.length; i++) {
+      var cd = gcd[list[i].id];
+      if (!cd || num0(cd.runs) === 0) fresh.push(list[i]);
+    }
+    /* 跨局优先抽从未出现过的；某阶段池抽干后才允许重复 */
+    return fresh.length ? fresh : list;
+  }
+
+  function slotPool(g, slot) {
+    var b = buildEventBuckets();
+    var st = b.byStage[g.stage] || { main: [], side: [], relation: [], causal: [], forced: [], daily: [] };
+    var stageList = (st && st[slot]) || [];
+    var allList = b.all[slot] || [];
+    var out = [], i;
+    for (i = 0; i < stageList.length; i++) {
+      if (slotUsable(g, stageList[i], slot)) out.push(stageList[i]);
+    }
+    for (i = 0; i < allList.length; i++) {
+      if (slotUsable(g, allList[i], slot)) out.push(allList[i]);
+    }
+    return preferFresh(out, slot);
+  }
+
+  function slotState(g) {
+    if (!g.slotState || typeof g.slotState !== 'object') g.slotState = { last: {} };
+    if (!g.slotState.last) g.slotState.last = {};
+    return g.slotState;
+  }
+
+  function noteSlot(g, slot) {
+    slotState(g).last[slot] = num0(g.turn);
+  }
+
+  function pendingDueList(g) {
+    if (!Array.isArray(g.pending)) return [];
+    var due = [];
+    for (var p = 0; p < g.pending.length; p++) {
+      var item = g.pending[p];
+      if (!item || num0(item.dueAge) > g.age) continue;
+      var pe = LS.EVENT_INDEX[item.event];
+      if (pe && riskBlocked(g, pe)) continue;
+      due.push({ item: item, ev: pe, prio: pe ? (pe.prio || 60) : 0 });
+    }
+    return due;
+  }
+
+  function hasDuePending(g) {
+    return pendingDueList(g).length > 0;
+  }
+
+  function takePendingDue(g, urgentOnly) {
+    var due = pendingDueList(g);
+    if (!due.length) return null;
+    /* v3.6：先到期的先兑现（FIFO），撞车/承诺到期这类“必须答复”的插队 */
+    due.sort(function (a, b) {
+      var ua = a.item.urgent ? 1 : 0, ub = b.item.urgent ? 1 : 0;
+      if (ub !== ua) return ub - ua;
+      var da = a.item.dueAge || 0, db = b.item.dueAge || 0;
+      if (da !== db) return da - db;
+      return (b.prio || 0) - (a.prio || 0);
+    });
+    if (urgentOnly && !due[0].item.urgent) return null;
+    var chosen = due[0];
+    var idx = g.pending.indexOf(chosen.item);
+    if (idx >= 0) g.pending.splice(idx, 1);
+    if (chosen.item.mark) g.marks[chosen.item.mark] = true;
+    if (chosen.item.note) LS.addMemory(g, chosen.item.note + '，事情在这一年有了结果。', 'causal');
+    if (!chosen.ev || !condOk(g, chosen.ev)) return null;
+    var fromAge = chosen.item.choiceAge;
+    if (fromAge === null || fromAge === undefined) fromAge = Math.max(0, g.age - (chosen.item.delay || 1));
+    g.echoInfo = {
+      kind: 'echo',
+      fromAge: fromAge,
+      years: Math.max(1, g.age - fromAge),
+      sourceTitle: chosen.item.choiceTitle || '',
+      choiceLabel: chosen.item.choiceLabel || '',
+      choiceId: chosen.item.choiceId || '',
+      parentChoiceId: chosen.item.choiceId || '',
+      sourceText: chosen.item.choiceScene || '',
+      note: chosen.item.note || '',
+      riskKey: chosen.item.riskKey || (chosen.ev && chosen.ev.riskKey) || '',
+      oneLiner: (chosen.item.choiceLabel ? '当时你选择了「' + chosen.item.choiceLabel + '」' : (chosen.item.note || '此前的选择'))
+    };
+    g.echoLog = g.echoLog || [];
+    g.echoLog.push({
+      choiceId: chosen.item.choiceId || '',
+      choiceAge: fromAge,
+      choiceTitle: chosen.item.choiceTitle || '',
+      choiceLabel: chosen.item.choiceLabel || '',
+      eventId: chosen.ev.id,
+      eventTitle: chosen.ev.title,
+      age: g.age,
+      year: g.year,
+      delay: Math.max(1, g.age - fromAge),
+      note: chosen.item.note || ''
+    });
+    if (g.echoLog.length > 120) g.echoLog = g.echoLog.slice(-120);
+    return chosen.ev;
+  }
+
+  function pickCausal(g, pool) {
+    if (!pool || !pool.length) return null;
+    /* 多年事件链优先：链上事件一旦满足条件，给更高落点概率 */
+    var chainPool = [];
+    for (var cc = 0; cc < pool.length; cc++) {
+      if (pool[cc].layer === 'chain') chainPool.push(pool[cc]);
+    }
+    var picked = pickWeighted((chainPool.length && LS.chance(0.55)) ? chainPool : pool, g);
+    if (!picked) return null;
+    if (picked.healthNeg || picked.riskKey) {
+      var rk = picked.riskKey || pickRiskKey(g);
+      var org = (g.riskOrigin || {})[rk] || null;
+      g.echoInfo = {
+        kind: 'risk',
+        fromAge: org ? org.age : Math.max(0, g.age - 2),
+        years: org ? Math.max(1, g.age - org.age) : 2,
+        sourceTitle: org ? org.title : '长期的生活习惯',
+        choiceLabel: org ? org.label : '',
+        choiceId: '',
+        parentChoiceId: '',
+        riskKey: rk,
+        note: LS.RISK_LABEL[rk] || '',
+        oneLiner: (LS.RISK_LABEL[rk] || '长期隐患')
+      };
+    } else if (picked.tier === 'echo' && !g.echoInfo) {
+      g.echoInfo = { kind: 'echo', fromAge: Math.max(0, g.age - 1), years: 1, sourceTitle: '', choiceLabel: '', parentChoiceId: '', oneLiner: '此前的经历' };
+    }
+    if (picked.tier === 'echo') {
+      g.echoLog = g.echoLog || [];
+      g.echoLog.push({
+        choiceId: '',
+        choiceAge: g.echoInfo.fromAge,
+        choiceTitle: g.echoInfo.sourceTitle || '',
+        choiceLabel: g.echoInfo.choiceLabel || '',
+        eventId: picked.id,
+        eventTitle: picked.title,
+        age: g.age,
+        year: g.year,
+        delay: g.echoInfo.years || 1,
+        note: g.echoInfo.note || ''
+      });
+      if (g.echoLog.length > 120) g.echoLog = g.echoLog.slice(-120);
+    }
+    return picked;
+  }
+
+  function dilemmaHandicap(g) {
+    if (!LS.V36 || !LS.V36.DILEMMAS) return true;
+    if (g.stage !== '青年' && g.stage !== '中年') return true;
+    if (num0(g.dilemmaCount) >= 8) return true;
+    if (g.turn - num0(g.lastDilemmaTurn) < 4) return true;
+    for (var uq = 0; uq < g.pending.length; uq++) {
+      var pu = g.pending[uq];
+      if (pu.urgent && num0(pu.dueAge) <= g.age) return true;
+    }
+    return false;
+  }
+
+  function dilemmaAvailable(g) {
+    return !dilemmaHandicap(g);
+  }
+
+  function takeDilemma(g) {
+    if (dilemmaHandicap(g)) return null;
+    var pool = [];
+    for (var di = 0; di < LS.V36.DILEMMAS.length; di++) {
+      var de = LS.V36.DILEMMAS[di];
+      if (de.stage && de.stage.indexOf(g.stage) < 0) continue;
+      if (!condOk(g, de)) continue;
+      if (isFired(g, de)) continue;
+      if (isPendingFuture(g, de.id)) continue;
+      if (seenBefore(g, de)) continue;
+      pool.push(de);
+    }
+    if (!pool.length) return null;
+    var picked = pickWeighted(pool, g);
+    if (picked) {
+      g.lastDilemmaTurn = g.turn;
+      g.dilemmaCount = num0(g.dilemmaCount) + 1;
+    }
+    return picked;
+  }
+
+  function freshCountOf(list) {
+    if (!list || !list.length) return 0;
+    var gcd = (LS.eventCDRead ? LS.eventCDRead() : {}) || {};
+    var n = 0;
+    for (var i = 0; i < list.length; i++) {
+      var cd = gcd[list[i].id];
+      if (!cd || num0(cd.runs) === 0) n++;
+    }
+    return n;
+  }
+
+  function buildSlotPools(g) {
+    var plan = { pools: {}, fresh: {}, due: false, dilemma: false, careerEv: null };
+    for (var i = 0; i < SLOT_ORDER.length; i++) {
+      var sl = SLOT_ORDER[i];
+      plan.pools[sl] = (sl === 'dilemma' || sl === 'career') ? [] : slotPool(g, sl);
+      plan.fresh[sl] = (sl === 'dilemma' || sl === 'career' || sl === 'forced')
+        ? true : (freshCountOf(plan.pools[sl]) > 0);
+    }
+    plan.due = hasDuePending(g);
+    plan.dilemma = dilemmaAvailable(g);
+    /* 职业事件同样走槽位，不再无条件抢占回合；due 内部自带 2 回合冷却 */
+    if (LS.CAREER && LS.CAREER.due) plan.careerEv = LS.CAREER.due(g);
+    return plan;
+  }
+
+  function slotAvailable(plan, slot) {
+    if (slot === 'causal') return plan.due || (plan.pools.causal && plan.pools.causal.length > 0);
+    if (slot === 'dilemma') return plan.dilemma;
+    if (slot === 'career') return !!plan.careerEv;
+    return !!(plan.pools[slot] && plan.pools[slot].length);
+  }
+
+  function chooseSlot(g, plan) {
+    var S = slotState(g);
+    var best = '', bestScore = -1;
+    for (var i = 0; i < SLOT_ORDER.length; i++) {
+      var slot = SLOT_ORDER[i];
+      if (!slotAvailable(plan, slot)) continue;
+      var last = S.last[slot];
+      if (last === undefined) last = -40;
+      var gap = num0(g.turn) - last;
+      if (gap < 0) gap = 0;
+      var quota = SLOT_QUOTA[slot] || 0.1;
+      /* v3.9：中年每回合跨好几年，职业链的可出牌次数被压缩，给 career 槽补偿权重 */
+      if (slot === 'career' && LS.V37 && LS.V37.isDouble(g.age)) quota *= 2.2;
+      /* v3.9：回合变稀后两难与职业一样容易被挤掉，同样给一点补偿 */
+      if (slot === 'dilemma') quota *= 2.0;
+      var score = (gap + 0.5) * quota;
+      /* 槽内已无跨局新事件时降权，把回合让给仍有新鲜事件的槽，避免重复消耗 */
+      if (!plan.fresh[slot]) score *= 0.15;
+      if (score > bestScore) { best = slot; bestScore = score; }
+    }
+    return best;
+  }
+
+  function topForcedFrom(pool) {
+    var best = null;
+    for (var i = 0; i < pool.length; i++) {
+      if (!best || num0(pool[i].prio) > num0(best.prio)) best = pool[i];
+    }
+    return best;
+  }
+
+  function topForced(g, minPrio) {
+    var pool = slotPool(g, 'forced');
+    var best = null;
+    for (var i = 0; i < pool.length; i++) {
+      if (num0(pool[i].prio) < minPrio) continue;
+      if (!best || num0(pool[i].prio) > num0(best.prio)) best = pool[i];
+    }
+    return best;
+  }
+
+  function drawSlot(g, slot, plan) {
+    var ev = null;
+    if (slot === 'causal') {
+      ev = takePendingDue(g, false);
+      if (!ev) ev = pickCausal(g, plan.pools.causal);
+    } else if (slot === 'forced') {
+      ev = topForcedFrom(plan.pools.forced);
+    } else if (slot === 'dilemma') {
+      ev = takeDilemma(g);
+    } else if (slot === 'career') {
+      ev = plan.careerEv;
+    } else {
+      ev = pickWeighted(plan.pools[slot], g);
+    }
+    if (ev) noteSlot(g, slot);
+    return ev;
+  }
+
   function selectEvent(g) {
     var E = LS.EVENTS;
     maybeNewEpoch(g);
@@ -1401,6 +1846,31 @@
       var dEv = LS.V35.dueDeath(g);
       if (dEv) return dEv;
     }
+
+    /* v3.8：非自然终局 / 刑满释放优先（同一年只掷一次，服刑期内返回 null） */
+    if (LS.V38 && LS.V38.due) {
+      var v38Ev = LS.V38.due(g);
+      if (v38Ev) return v38Ev;
+    }
+
+    /* v3.7 P4：中考/高考/大学毕业/研究生毕业四个分流点，强制优先于普通事件与隐藏线 */
+    if (LS.V37 && LS.V37.dueFork) {
+      var forkEv = LS.V37.dueFork(g);
+      if (forkEv) return forkEv;
+    }
+
+    /* v3.7 P4：职业路径专属事件已并入槽位调度（career 槽），不再无条件抢回合 */
+
+    /* v3.7 P4.0：为时代锚点预留的追加回合，直接返回锚点事件 */
+    if (g.eraPending && LS.V36 && LS.V36.eraAnchor) {
+      g.eraPending = false;
+      var holdEra = LS.V36.eraAnchor(g);
+      if (holdEra) return holdEra;
+    }
+
+    /* v3.7：抽中的隐藏线节点优先于日常/随机，且迟到最多一年，不被整年挤掉 */
+    var chainEv = takeDueChain(g);
+    if (chainEv) return chainEv;
 
     /* 0. 待业/毕业：进入独立的求职命运岔路（同岁有强制剧情时先走剧情） */
     if (needHunt(g)) {
@@ -1421,104 +1891,31 @@
       }
     }
 
-    /* 1. 阶段强制事件 */
-    var forced = [];
-    for (var i = 0; i < E.length; i++) {
-      var f = E[i];
-      if (f.type === 'forced' && f.age === g.age && condOk(g, f) && g.fired.indexOf(f.id) < 0) forced.push(f);
-    }
-    if (forced.length) {
-      forced.sort(function (a, b) { return (b.prio || 0) - (a.prio || 0); });
-      return forced[0];
+    /* 1. 强制槽硬点：出生/升学/毕业等 key 年份（同回合最多 1 条），
+       其余 forced 进入槽位调度，避免 events.js 的 forced 独占回合。 */
+    var hardForced = topForced(g, 95);
+    if (hardForced) return hardForced;
+
+    /* v3.7 P4.0：时代锚点独立成事件；正文本身讲该年的事，绝不做无关事件的背景行 */
+    if (LS.V36 && LS.V36.eraAnchor) {
+      var eraEv = LS.V36.eraAnchor(g);
+      if (eraEv) return eraEv;
     }
 
-    /* 3e. v3.6 两难层：青年/中年有概率撞上一次；不抢占紧急到期事件 */
-    if (LS.V36 && LS.V36.DILEMMAS && (g.stage === '青年' || g.stage === '中年')) {
-      var urgentDue = false;
-      for (var uq = 0; uq < g.pending.length; uq++) {
-        var pu = g.pending[uq];
-        if (pu.urgent && num0(pu.dueAge) <= g.age) { urgentDue = true; break; }
-      }
-      if (!urgentDue && num0(g.dilemmaCount) < 8 && g.turn - num0(g.lastDilemmaTurn) >= 4 && LS.chance(0.42)) {
-        var dilemmaPool = [];
-        for (var di = 0; di < LS.V36.DILEMMAS.length; di++) {
-          var de = LS.V36.DILEMMAS[di];
-          if (de.stage && de.stage.indexOf(g.stage) < 0) continue;
-          if (!condOk(g, de)) continue;
-          if (isFired(g, de)) continue;
-          if (isPendingFuture(g, de.id)) continue;
-          if (seenBefore(g, de)) continue;
-          dilemmaPool.push(de);
-        }
-        if (dilemmaPool.length) {
-          var dBan = pickWeighted(dilemmaPool, g);
-          if (dBan) {
-            g.lastDilemmaTurn = g.turn;
-            g.dilemmaCount = num0(g.dilemmaCount) + 1;
-            return dBan;
-          }
-        }
-      }
-    }
+    /* 3e. v3.6 两难层：已并入槽位调度（dilemma 槽），不再在层序里独占回合 */
 
-    /* 2. 到期的因果标记 */
-    var due = [];
-    for (var p = 0; p < g.pending.length; p++) {
-      var item = g.pending[p];
-      if (item.dueAge > g.age) continue;
-      var pe = LS.EVENT_INDEX[item.event];
-      if (pe && riskBlocked(g, pe)) continue;
-      due.push({ item: item, ev: pe, prio: pe ? (pe.prio || 60) : 0 });
-    }
-    if (due.length) {
-      /* v3.6：先到期的先兑现（FIFO），否则低优先暗线会被高优先链无限饿死 */
-      due.sort(function (a, b) {
-        /* 撞车/承诺到期这类“同一年必须给答复”的事件插队 */
-        var ua = a.item.urgent ? 1 : 0, ub = b.item.urgent ? 1 : 0;
-        if (ub !== ua) return ub - ua;
-        var da = a.item.dueAge || 0, db = b.item.dueAge || 0;
-        if (da !== db) return da - db;
-        return (b.prio || 0) - (a.prio || 0);
-      });
-      var chosen = due[0];
-      var idx = g.pending.indexOf(chosen.item);
-      if (idx >= 0) g.pending.splice(idx, 1);
-      if (chosen.item.mark) g.marks[chosen.item.mark] = true;
-      if (chosen.item.note) LS.addMemory(g, chosen.item.note + '，事情在这一年有了结果。', 'causal');
-      if (chosen.ev && condOk(g, chosen.ev)) {
-        var fromAge = chosen.item.choiceAge;
-        if (fromAge === null || fromAge === undefined) fromAge = Math.max(0, g.age - (chosen.item.delay || 1));
-        g.echoInfo = {
-          kind: 'echo',
-          fromAge: fromAge,
-          years: Math.max(1, g.age - fromAge),
-          sourceTitle: chosen.item.choiceTitle || '',
-          choiceLabel: chosen.item.choiceLabel || '',
-          choiceId: chosen.item.choiceId || '',
-          parentChoiceId: chosen.item.choiceId || '',
-          sourceText: chosen.item.choiceScene || '',
-          note: chosen.item.note || '',
-          riskKey: chosen.item.riskKey || (chosen.ev && chosen.ev.riskKey) || '',
-          oneLiner: (chosen.item.choiceLabel ? '当时你选择了「' + chosen.item.choiceLabel + '」' : (chosen.item.note || '此前的选择'))
-        };
-        /* v2：真实记录“伏笔落地”，因果链视图据此串联，不靠文案硬凑 */
-        g.echoLog = g.echoLog || [];
-        g.echoLog.push({
-          choiceId: chosen.item.choiceId || '',
-          choiceAge: fromAge,
-          choiceTitle: chosen.item.choiceTitle || '',
-          choiceLabel: chosen.item.choiceLabel || '',
-          eventId: chosen.ev.id,
-          eventTitle: chosen.ev.title,
-          age: g.age,
-          year: g.year,
-          delay: Math.max(1, g.age - fromAge),
-          note: chosen.item.note || ''
-        });
-        if (g.echoLog.length > 120) g.echoLog = g.echoLog.slice(-120);
-        return chosen.ev;
+    /* 2. 到期的因果标记：只有 urgent（撞车/承诺到期）享有回合硬优先；
+       其余到期回响进入 causal 槽，由槽位配额决定何时落点。 */
+    /* v3.7：旧档/并发残留里属于未抽中线的 pending，直接丢弃 */
+    if (LS.LINES && LS.LINES.match) {
+      for (var pq = g.pending.length - 1; pq >= 0; pq--) {
+        var pit = g.pending[pq];
+        var pev0 = pit && LS.EVENT_INDEX[pit.event];
+        if (pev0 && pev0.line && !LS.LINES.match(g, pev0.line)) g.pending.splice(pq, 1);
       }
     }
+    var urgentEv = takePendingDue(g, true);
+    if (urgentEv) return urgentEv;
 
     /* 2b. 善缘兑现 / 报复返场（10-20 年后，按人情账概率） */
     if (LS.social) {
@@ -1554,140 +1951,20 @@
       }
     }
 
-    /* 3. 因果条件事件（按一定概率插入，避免压掉随机事件） */
-    var causal = [];
-    for (var c = 0; c < E.length; c++) {
-      var ce = E[c];
-      if (ce.type !== 'causal') continue;
-      if (ce.stage && ce.stage !== g.stage) continue;
-      if (!condOk(g, ce)) continue;
-      if (riskBlocked(g, ce)) continue;
-      if (ce.healthNeg && !riskActive(g, ce)) continue;
-      if (isFired(g, ce)) continue;
-      if (isPendingFuture(g, ce.id)) continue;
-      causal.push(ce);
-    }
-    if (causal.length) {
-      /* v3：只有真正的健康急症才无条件插队；其余按概率，避免高优先级的普适因果事件饿死随机层 */
-      var urgent = causal.some(function (x) { return x.healthNeg && num0(g.attrs.health) < 45; });
-      /* 多年事件链优先：链上事件一旦满足条件，给更高的落点概率，避免被普适因果事件挤掉 */
-      var chainPool = [];
-      for (var cc = 0; cc < causal.length; cc++) {
-        if (causal[cc].layer === 'chain') chainPool.push(causal[cc]);
-      }
-      if (urgent || LS.chance(0.45)) {
-        var picked = pickWeighted((chainPool.length && LS.chance(0.55)) ? chainPool : causal, g);
-        if (picked) {
-          if (picked.healthNeg || picked.riskKey) {
-            var rk = picked.riskKey || pickRiskKey(g);
-            var org = (g.riskOrigin || {})[rk] || null;
-            g.echoInfo = {
-              kind: 'risk',
-              fromAge: org ? org.age : Math.max(0, g.age - 2),
-              years: org ? Math.max(1, g.age - org.age) : 2,
-              sourceTitle: org ? org.title : '长期的生活习惯',
-              choiceLabel: org ? org.label : '',
-              choiceId: '',
-              parentChoiceId: '',
-              riskKey: rk,
-              note: LS.RISK_LABEL[rk] || '',
-              oneLiner: (LS.RISK_LABEL[rk] || '长期隐患')
-            };
-          } else if (picked.tier === 'echo' && !g.echoInfo) {
-            g.echoInfo = { kind: 'echo', fromAge: Math.max(0, g.age - 1), years: 1, sourceTitle: '', choiceLabel: '', parentChoiceId: '', oneLiner: '此前的经历' };
-          }
-          if (picked.tier === 'echo') {
-            g.echoLog = g.echoLog || [];
-            g.echoLog.push({
-              choiceId: '',
-              choiceAge: g.echoInfo.fromAge,
-              choiceTitle: g.echoInfo.sourceTitle || '',
-              choiceLabel: g.echoInfo.choiceLabel || '',
-              eventId: picked.id,
-              eventTitle: picked.title,
-              age: g.age,
-              year: g.year,
-              delay: g.echoInfo.years || 1,
-              note: g.echoInfo.note || ''
-            });
-            if (g.echoLog.length > 120) g.echoLog = g.echoLog.slice(-120);
-          }
-          return picked;
-        }
-      }
+    /* 3. 槽位调度：先定槽位（按配额轮转），再在槽内抽；
+       随机层因此不再排在十几层之后被饿死。 */
+    var plan = buildSlotPools(g);
+    for (var attempt = 0; attempt < SLOT_ORDER.length; attempt++) {
+      var slot = chooseSlot(g, plan);
+      if (!slot) break;
+      var slotEv = drawSlot(g, slot, plan);
+      if (slotEv) return slotEv;
+      /* 该槽本轮被抢空：标记不可用后顺延到次优槽 */
+      plan.pools[slot] = [];
+      if (slot === 'causal') plan.due = false;
     }
 
-    /* 3b. 时代层：只在少数年份出现，却会改写后续若干年的环境；先于支线判定，保证能被看到 */
-    var era = [];
-    for (var ei = 0; ei < E.length; ei++) {
-      var ee = E[ei];
-      if (ee.type !== 'era' && layerOf(ee) !== 'era') continue;
-      if (ee.stage && ee.stage !== g.stage) continue;
-      if (!condOk(g, ee)) continue;
-      if (isFired(g, ee)) continue;
-      if (isPendingFuture(g, ee.id)) continue;
-      era.push(ee);
-    }
-    if (era.length && LS.chance(0.55)) {
-      var ePick = pickWeighted(era, g);
-      if (ePick) return ePick;
-    }
-
-    /* 3d. NPC 主动事件层：借钱/求助/邀约/翻脸，不一定每年发生（放在分支层之前，避免被高优先级剧情长期挤占） */
-    var npcPool = [];
-    for (var ni = 0; ni < E.length; ni++) {
-      var ne = E[ni];
-      if (layerOf(ne) !== 'npc') continue;
-      if (ne.stage && ne.stage !== g.stage) continue;
-      if (!condOk(g, ne)) continue;
-      if (isFired(g, ne)) continue;
-      if (isPendingFuture(g, ne.id)) continue;
-      if (seenBefore(g, ne)) continue;
-      npcPool.push(ne);
-    }
-    if (npcPool.length && LS.chance(0.36)) {
-      var nPick = pickWeighted(npcPool, g);
-      if (nPick) return nPick;
-    }
-
-    /* 3c. 分支剧情层：条件满足时按权重插入，替代当年的随机事件而非额外增加回合 */
-    var branch = [];
-    for (var bi = 0; bi < E.length; bi++) {
-      var be = E[bi];
-      if (be.type !== 'branch' && layerOf(be) !== 'branch') continue;
-      if (be.stage && be.stage !== g.stage) continue;
-      if (!condOk(g, be)) continue;
-      if (riskBlocked(g, be)) continue;
-      if (isFired(g, be)) continue;
-      if (isPendingFuture(g, be.id)) continue;
-      branch.push(be);
-    }
-    if (branch.length) {
-      var urgentB = branch.some(function (x) { return (x.prio || 0) >= 85; });
-      if (urgentB || LS.chance(0.30)) {
-        var bPick = pickWeighted(branch, g);
-        if (bPick) return bPick;
-      }
-    }
-
-    /* 4. 随机权重事件（健康负面一律不在此池，见因果链路） */
-    var random = [];
-    for (var r = 0; r < E.length; r++) {
-      var re = E[r];
-      if (re.type !== 'random') continue;
-      if (re.stage !== g.stage) continue;
-      if (re.healthNeg) continue;
-      if (!condOk(g, re)) continue;
-      if (isFired(g, re)) continue;
-      if (seenBefore(g, re)) continue;
-      random.push(re);
-    }
-    if (random.length) {
-      var rp = pickWeighted(random, g);
-      if (rp) return rp;
-    }
-
-    /* 5. 兜底日常 */
+    /* 4. 兜底日常 */
     for (var d = 0; d < E.length; d++) {
       var de = E[d];
       if (de.type === 'daily' && de.stage === g.stage) return de;
@@ -1698,28 +1975,31 @@
   /* ---------------- 年度演化 ---------------- */
   function healthLoss(g) {
     var age = g.age;
+    /* v3.7 P4：整体下调自然衰减（旧值 0.6/0.5/0.8/1.0/1.4/2.0/3.4/5.2/7.0）。
+       健康管理得当的局能撑到 80+；不管健康的人仍会被慢性病/隐患拖到 50–60 岁。 */
     var loss;
-    if (age <= 3) loss = 0.6;
-    else if (age <= 12) loss = 0.5;
-    else if (age <= 18) loss = 0.8;
-    else if (age <= 30) loss = 1.0;
-    else if (age <= 40) loss = 1.4;
-    else if (age <= 55) loss = 2.0;
-    else if (age <= 70) loss = 3.4;
-    else if (age <= 85) loss = 5.2;
-    else loss = 7.0;
+    if (age <= 3) loss = 0.5;
+    else if (age <= 12) loss = 0.4;
+    else if (age <= 18) loss = 0.6;
+    else if (age <= 30) loss = 0.8;
+    else if (age <= 40) loss = 1.0;
+    else if (age <= 55) loss = 1.3;
+    else if (age <= 70) loss = 1.9;
+    else if (age <= 85) loss = 2.8;
+    else loss = 4.0;
 
     if (g.job.id) {
       var jd = LS.JOBS[g.job.id];
-      loss += (jd.healthDrain || 0) * 0.9;
+      loss += (jd.healthDrain || 0) * 0.7;
       var jt = g.job.tags || {};
-      if (jt.overtime === '高') loss += 0.5;
+      if (jt.overtime === '高') loss += 0.4;
     }
     /* 隐性隐患长期消耗 */
     var maxRisk = 0;
     LS.RISK_KEYS.forEach(function (k) { maxRisk = Math.max(maxRisk, (g.risks && g.risks[k]) || 0); });
-    loss += maxRisk / 100 * 1.6;
-    if (age >= 45) loss += (age - 45) * 0.08;
+    loss += maxRisk / 100 * 1.1;
+    /* 旧值 0.08/年过陡，45 岁后天然加速累积过快；改为温和的 0.025 */
+    if (age >= 45) loss += (age - 45) * 0.025;
 
     /* 慢性病与旧账 */
     if (g.marks.bp_untreated) loss += 1.8;
@@ -1732,10 +2012,10 @@
     if (g.marks.exercise) loss -= 0.7;
     if (g.marks.mobility_issue) loss += 1.0;
 
-    if (g.attrs.stress >= 75) loss += 1.3;
-    else if (g.attrs.stress >= 55) loss += 0.6;
+    if (g.attrs.stress >= 75) loss += 0.9;
+    else if (g.attrs.stress >= 55) loss += 0.5;
     if (g.attrs.happiness >= 70) loss -= 0.9;
-    if (g.attrs.happiness < 30) loss += 0.8;
+    if (g.attrs.happiness < 30) loss += 0.6;
     if (g.attrs.health < 40) loss += 0.8;
 
     loss *= talentMul(g, 'health');
@@ -1760,6 +2040,9 @@
       g.money.cash += 20000;
       g.attrs.stress = LS.clamp(g.attrs.stress + 2, 0, 100);
     }
+
+    /* v3.7 P4：职业路径年收入，每年只在跨年结算时入账一次（H1→H2 不走 tickEconomy） */
+    if (LS.CAREER && LS.CAREER.applyIncome) LS.CAREER.applyIncome(g);
 
     /* 未成年由家庭承担生活与教育开支，个人账户不产生生活费与负债 */
     if (minor) {
@@ -1954,19 +2237,24 @@
 
   function tickHealth(g) {
     tickRisks(g);
+    /* v3.7 P4：45 岁做一次长期生活方式结算，长期熬夜/高压累积折寿 4–8 年 */
+    if (g.age === 45 && LS.applyLifestyleLifespan) LS.applyLifestyleLifespan(g);
     var loss = healthLoss(g);
     g.attrs.health -= loss;
 
     /* 身体自愈：年轻时恢复快，慢性病会拖慢恢复 */
     var chronic = g.marks.bp_untreated || g.marks.liver_bad || g.marks.lung_issue || g.marks.mobility_issue;
     var recover = 0;
-    if (g.age <= 35) recover = 2.2;
-    else if (g.age <= 55) recover = 1.7;
-    else if (g.age <= 70) recover = 0.9;
-    else if (g.age <= 80) recover = 0.3;
-    if (chronic) recover *= 0.35;
+    if (g.age <= 35) recover = 2.5;
+    else if (g.age <= 55) recover = 4.2;
+    else if (g.age <= 70) recover = 6.5;
+    else if (g.age <= 80) recover = 5.2;
+    else if (g.age <= 90) recover = 3.5;
+    if (chronic) recover *= 0.5;
     if (g.attrs.happiness >= 60) recover += 0.4;
-    if (g.marks.exercise) recover += 0.6;
+    if (g.marks.exercise) recover += 0.7;
+    /* v3.7 P4：健康管理的平台期——高健康且压力可控时额外回补，让人能稳定活到 80+ */
+    if (g.attrs.health >= 78 && g.attrs.stress < 55) recover += 0.45;
     if (g.attrs.health < 92) g.attrs.health = Math.min(92, g.attrs.health + recover);
     if (g.attrs.health > 100) g.attrs.health = 100;
 
@@ -1975,10 +2263,10 @@
     if (g.money.debt > 0) stressDrift += LS.clamp(g.money.debt / 120000, 0, 3);
     if (g.family.childrenIds.length) stressDrift += 0.8;
     if (g.attrs.happiness >= 68) stressDrift -= 1.6;
-    if (g.attrs.happiness < 32) stressDrift += 1.3;
+    if (g.attrs.happiness < 32) stressDrift += 0.7;
     g.attrs.stress += stressDrift - 1.5;
     /* 人对长期压力有适应性，压力越高回落越快 */
-    if (g.attrs.stress > 55) g.attrs.stress -= (g.attrs.stress - 55) * 0.08;
+    if (g.attrs.stress > 55) g.attrs.stress -= (g.attrs.stress - 55) * 0.15;
     g.attrs.stress = LS.clamp(g.attrs.stress, 0, 100);
 
     /* 幸福感缓慢回归，受压力与关系影响 */
@@ -2080,6 +2368,7 @@
 
   /* ---------------- 死亡与总结 ---------------- */
   function deathReason(g) {
+    if (g.v38Death && g.v38Death.cause) return g.v38Death.cause;
     if (g.forceDeath) return '一场突发的意外';
     if (g.attrs.health <= HEALTH_LIMIT) {
       if (g.marks.bp_untreated) return '高血压引发的并发症';
@@ -2087,7 +2376,7 @@
       if (g.marks.lung_issue) return '肺部疾病';
       return '身体机能衰竭';
     }
-    if (g.age >= g.maxAge) return '自然寿终';
+    if (g.age >= Math.min(Number(g.maxAge) || 100, 95)) return '自然寿终';
     if (g.age >= 100) return '自然寿终';
     return null;
   }
@@ -2222,10 +2511,32 @@
     return text;
   }
 
-  function finish(g, reason) {
+  function v38UndoneOf(g) {
+    var un = unresolvedChainList(g);
+    if (!un.length) return '';
+    var u = un[0];
+    return '「' + (u.title || u.event || '那条线') + '」停在半路';
+  }
+
+  function finish(g, reason, info) {
     if (g.death.dead) return g.summary;
+    /* v3.8：非自然终局包写下的明细在这里并入早终 UI，不改 ui.js */
+    if (g.v38Death && (!info || info.kind !== 'natural')) {
+      var vd = g.v38Death;
+      info = info || {};
+      info.kind = 'early';
+      if (!info.cause) info.cause = vd.cause || reason;
+      if (!info.tag) info.tag = vd.tag || '';
+      if (!info.sceneLast) info.sceneLast = (vd.settle || []).join('');
+      if (!info.whoWasThere) info.whoWasThere = (vd.present || []).slice();
+      if (!info.relics) info.relics = vd.relic ? [vd.relic] : [];
+      if (!info.lastWords) info.lastWords = vd.lastWords || '';
+      if (!info.undone) info.undone = v38UndoneOf(g);
+    }
+    var early = !!(info && info.kind === 'early');
     g.death.dead = true;
-    g.death.reason = reason || '身体机能衰竭';
+    g.death.kind = early ? 'early' : 'natural';
+    g.death.reason = (early ? (info.cause || reason) : reason) || '身体机能衰竭';
     g.death.year = g.year;
     g.death.age = g.age;
     g.current = null;
@@ -2261,10 +2572,19 @@
 
     /* v3：晚年总结作为结局前奏 */
     var finalStageSummary = null;
-    if (LS.stageOf(g.death.age) === '晚年' && typeof buildStageSummary === 'function') {
+    if (!early && LS.stageOf(g.death.age) === '晚年' && typeof buildStageSummary === 'function') {
       var fim = writeStageImpact(g, '晚年');
       finalStageSummary = buildStageSummary(g, '晚年', '晚年', fim);
       g.stageSummary = finalStageSummary;
+    }
+
+    /* v3.7 P4：职业结局标签（状元/沉沦/普通），旧档无 career 字段时安全降级 */
+    var careerEnd = '';
+    var careerPathId = null;
+    if (LS.CAREER) {
+      if (LS.CAREER.init) LS.CAREER.init(g);
+      careerEnd = (LS.CAREER.endLabel ? LS.CAREER.endLabel(g) : '') || '';
+      careerPathId = (g.career && g.career.path) || null;
     }
 
     g.summary = {
@@ -2274,6 +2594,15 @@
       deathYear: g.death.year,
       age: g.death.age,
       reason: g.death.reason,
+      kind: early ? 'early' : 'natural',
+      endingTag: (info && info.tag) || '',
+      sceneLast: (info && info.sceneLast) || '',
+      whoWasThere: (info && info.whoWasThere) || [],
+      relics: (info && info.relics) || [],
+      lastWords: (info && info.lastWords) || '',
+      undone: (info && info.undone) || '',
+      careerEnd: careerEnd,
+      careerPath: careerPathId,
       edu: LS.eduName(g.edu.level),
       eduPath: g.edu.path.slice(),
       jobHistory: g.job.history.slice(),
@@ -2459,8 +2788,12 @@
     var skippedTotal = 0;
     while (guard++ < 24 && !g.death.dead) {
       /* v3：平淡年合并——当前年不是关键年、且不跨阶段时静默推进，最多连续 6 年 */
+      /* v3.7：中年每年两回合，不做跨年平淡合并，避免吞掉 H2 */
       var skipped = 0;
       while (!g.death.dead && skipped < 6) {
+        if (LS.V37 && LS.V37.isDouble(g.age)) break;
+        /* v3.9：阶段内年龄已按回合预算排好，不再额外静默跳年 */
+        if (g.stagePlan) break;
         if (hasKeyEvent(g, g.age)) break;
         if (LS.chance(paceOf(g.age))) break;
         var nextAge = g.age + 1;
@@ -2477,7 +2810,8 @@
       e = prepEvent(g, e);
       if (LS.V36 && LS.V36.attachOverlays) e = LS.V36.attachOverlays(g, e);
 
-      if (autoResolvable(e)) {
+      if (autoResolvable(e) && !e.eraNote &&
+          !(LS.V37 && LS.V37.isDouble(g.age) && (e.opts || []).length)) {
         g.current = e;
         g.currentId = e.id;
         g.currentTier = e.tier || 'daily';
@@ -2554,6 +2888,11 @@
     if (!opt) return { ok: false, error: '选项不存在' };
 
     var before = snapshotBefore(g);
+    /* v3.7：记录选择前的亲密关系，供 H1 年度账本比对 */
+    var npcBefore = {};
+    (g.npcs || []).forEach(function (n) {
+      if (n && n.id) npcBefore[n.id] = num0(n.intimacy);
+    });
     var baseBefore = { attrs: JSON.parse(JSON.stringify(g.attrs)), rep: LS.repTotal(g) };
     var report = {};
     var text = '';
@@ -2645,12 +2984,24 @@
       });
       if (g.outcomeLog.length > 200) g.outcomeLog.shift();
     }
+    /* v3.7 P4：职业路径记分/旗标 + 分流点入行，必须在所有 fx 结算之后 */
+    if (LS.CAREER && LS.CAREER.applyChoice) LS.CAREER.applyChoice(g, ev, opt);
+    if (LS.V37 && LS.V37.applyFork && opt && opt.fork) LS.V37.applyFork(g, ev, opt);
+
     /* v3.6：两难记账、放弃方降亲密、承诺与多年回响 */
     if (LS.V36 && LS.V36.onChoice) LS.V36.onChoice(g, ev, opt, outcomeLabel);
     g._ctxChoice = null;
 
     clampAttrs(g);
     moneyRound(g);
+    /* v3.7：中年上半年选择若付出明显代价/收益，记入年度账本，下半年出后果卡 */
+    if (LS.V37 && LS.V37.onChoice) {
+      LS.V37.onChoice(g, ev, opt, {
+        health: before.attrs.health,
+        cash: before.cash,
+        intimacy: npcBefore
+      });
+    }
     var decKey = (ctx.id || '') + '@' + g.age + '#' + g.turn;
     if (!g._auto && (!g._decCounted || g._decCounted !== decKey)) {
       g.decisionCount = num0(g.decisionCount) + 1;
@@ -2742,42 +3093,382 @@
     }
   }
 
+  /* ---------------- v3.9：弹性阶段制 ---------------- */
+  var STAGE_TURN_RULE = { base: 6, min: 3, max: 12, chainBonus: 2 };
+  LS.STAGE_TURN_RULE = STAGE_TURN_RULE;
+
+  /* 晚年阶段以实际寿数为终点，其余阶段用状态表里的结束年龄 */
+  function stageEndAgeOf(g, stage) {
+    var rng = LS.stageRange(stage);
+    var end = num0(rng[1]);
+    if (stage === '晚年') {
+      var cap = num0(g && g.maxAge);
+      if (cap >= num0(rng[0]) && cap < end) end = cap;
+    }
+    return end;
+  }
+
+  function isChainEvent(e) {
+    if (!e) return false;
+    if (e.layer === 'chain' || e.line) return true;
+    if (e.type === 'causal' && !e.riskKey) return true;
+    return false;
+  }
+
+  /* 未走完的链：pending 里尚未到期/尚未触发的链式后续事件，按 family 去重 */
+  function chainPendingItems(g) {
+    var out = [];
+    var p = (g && g.pending) || [];
+    for (var i = 0; i < p.length; i++) {
+      var it = p[i];
+      if (!it || !it.event) continue;
+      var e = LS.EVENT_INDEX ? LS.EVENT_INDEX[it.event] : null;
+      if (!isChainEvent(e)) continue;
+      if (g.fired && !e.repeatable && g.fired.indexOf(e.id) >= 0) continue;
+      out.push({
+        item: it, event: e, dueAge: num0(it.dueAge),
+        title: e.title || e.id,
+        family: e.family || e.line || e.id
+      });
+    }
+    return out;
+  }
+
+  function unresolvedChainList(g) {
+    var raw = chainPendingItems(g);
+    var out = [], seen = {};
+    for (var i = 0; i < raw.length; i++) {
+      var x = raw[i];
+      if (seen[x.family]) continue;
+      seen[x.family] = true;
+      out.push({ event: x.event.id, title: x.title, family: x.family, dueAge: x.dueAge });
+    }
+    return out;
+  }
+
+  function chainBonusOf(g) {
+    var n = unresolvedChainList(g).length;
+    return Math.min(STAGE_TURN_RULE.max - STAGE_TURN_RULE.base, n * STAGE_TURN_RULE.chainBonus);
+  }
+
+  /* 阶段内必须踩到的年龄：强制事件、时代锚点、分流点、阶段终点 */
+  function criticalAgesFor(g, stage, fromAge, endAge, includeFrom) {
+    var set = {}, list = [];
+    function add(a) {
+      var n = Math.round(num0(a));
+      if (!isFinite(n)) return;
+      if (n < fromAge || n > endAge) return;
+      if (n === fromAge && !includeFrom) return;
+      if (set[n]) return;
+      set[n] = true;
+      list.push(n);
+    }
+    var evs = LS.EVENTS || [];
+    for (var i = 0; i < evs.length; i++) {
+      var e = evs[i];
+      if (!e || e.type !== 'forced' || typeof e.age !== 'number') continue;
+      if (e.stage && e.stage !== stage) continue;
+      add(e.age);
+    }
+    if (LS.V36 && LS.V36.ERA_ANCHORS) {
+      for (var k = 0; k < LS.V36.ERA_ANCHORS.length; k++) {
+        add(LS.V36.ERA_ANCHORS[k].year - num0(g.birthYear));
+      }
+    }
+    if (LS.V37 && LS.V37.FORK_AGE) {
+      for (var key in LS.V37.FORK_AGE) {
+        if (Object.prototype.hasOwnProperty.call(LS.V37.FORK_AGE, key)) add(Number(key));
+      }
+    }
+    add(endAge);
+    list.sort(function (a, b) { return a - b; });
+    return list;
+  }
+
+  /* 在 [fromAge, endAge] 内排出 budget 个回合年龄：关键年龄必踩，其余均匀填空 */
+  function buildAgeList(g, stage, fromAge, endAge, budget, includeFrom) {
+    var req = criticalAgesFor(g, stage, fromAge, endAge, includeFrom);
+    if (!req.length) req = [endAge];
+    if (req[req.length - 1] !== endAge) {
+      req.push(endAge);
+      req.sort(function (a, b) { return a - b; });
+    }
+    if (req.length > budget) req = req.slice(req.length - budget);
+    var extras = budget - req.length;
+    var gaps = [];
+    var prev = fromAge;
+    for (var i = 0; i < req.length; i++) {
+      var lo = prev + 1, hi = req[i] - 1;
+      if (hi >= lo) gaps.push({ lo: lo, hi: hi, span: hi - lo + 1 });
+      prev = req[i];
+    }
+    var out = req.slice();
+    var totalSpan = 0;
+    for (var j = 0; j < gaps.length; j++) totalSpan += gaps[j].span;
+    if (extras > 0) {
+      if (!totalSpan) {
+        /* 关键年龄已经铺满整段，多出来的回合落在中段同一年 */
+        var mid = req[Math.floor(req.length / 2)];
+        for (var m = 0; m < extras; m++) out.push(mid);
+      } else {
+        var used = 0;
+        for (var q = 0; q < gaps.length; q++) {
+          var take = (q === gaps.length - 1) ? (extras - used)
+            : Math.round(extras * gaps[q].span / totalSpan);
+          if (take > gaps[q].span) take = gaps[q].span;
+          if (take > extras - used) take = extras - used;
+          if (take < 0) take = 0;
+          var step = gaps[q].span / (take + 1);
+          for (var t = 0; t < take; t++) {
+            var a = gaps[q].lo + Math.floor(step * (t + 1));
+            if (a > gaps[q].hi) a = gaps[q].hi;
+            out.push(a);
+          }
+          used += take;
+        }
+        /* 浮点分配少算时补在中段 */
+        var mid2 = req[Math.floor(req.length / 2)];
+        while (used < extras) { out.push(mid2); used++; }
+      }
+    }
+    out.sort(function (a, b) { return a - b; });
+    return out;
+  }
+
+  function makeStagePlan(g, stage) {
+    if (!stage) stage = LS.stageOf(g.age);
+    var start = num0(g.age);
+    var end = stageEndAgeOf(g, stage);
+    var req = criticalAgesFor(g, stage, start, end, true);
+    var baseBudget = Math.min(STAGE_TURN_RULE.max,
+      Math.max(STAGE_TURN_RULE.base, req.length));
+    var budget = Math.min(STAGE_TURN_RULE.max,
+      Math.max(STAGE_TURN_RULE.min, baseBudget + chainBonusOf(g)));
+    var plan = {
+      stage: stage, startAge: start, endAge: end,
+      baseBudget: baseBudget, budget: budget,
+      played: 0, lastAge: start,
+      ages: buildAgeList(g, stage, start, end, budget, true),
+      chainsAtStart: unresolvedChainList(g).length,
+      skipped: false, undone: [], skippedAtAge: null
+    };
+    g.stagePlan = plan;
+    /* 第一个回合不一定从阶段起点开始（中间的空年安静走过） */
+    var first = plan.ages.length ? plan.ages[0] : start;
+    if (first > g.age) jumpYears(g, first - g.age);
+    plan.lastAge = g.age;
+    return plan;
+  }
+
+  function ensureStagePlan(g) {
+    if (!g.stagePlan || !g.stagePlan.stage || g.stagePlan.stage !== g.stage) {
+      makeStagePlan(g, g.stage);
+    }
+    return g.stagePlan;
+  }
+
+  /* 一口气走过 delta 年：逐年的经济/健康/NPC/人生线 tick 全部照跑 */
+  function jumpYears(g, delta) {
+    delta = num0(delta);
+    if (delta <= 0) return 0;
+    for (var i = 0; i < delta; i++) {
+      g.age += 1;
+      g.year += 1;
+      g.turn += 1;
+      g.stage = LS.stageOf(g.age);
+      tickEconomy(g);
+      tickHealth(g);
+      tickNpcs(g);
+      ensureSocialNpcs(g);
+      clampAttrs(g);
+      LS.snapshot(g);
+      if (LS.social) {
+        LS.social.beginYear(g);
+        LS.social.decay(g);
+        if (LS.social.tickAll) LS.social.tickAll(g);
+      }
+      if (LS.LINES && LS.LINES.tick) LS.LINES.tick(g);
+      if (LS.V36 && LS.V36.tick) LS.V36.tick(g);
+      if (num0(g.maxAge) && g.age >= num0(g.maxAge)) break;
+    }
+    return delta;
+  }
+
+  /* 本阶段开了几条链：阶段内触发过的链式事件 + 还悬着的链 */
+  function chainsOpenedIn(g, startAge, endAge, undone) {
+    var fams = {}, i;
+    var log = (g && g.eventLog) || [];
+    for (i = 0; i < log.length; i++) {
+      var x = log[i];
+      if (num0(x.age) < num0(startAge) || num0(x.age) > num0(endAge)) continue;
+      var e = LS.EVENT_INDEX ? LS.EVENT_INDEX[x.eventId] : null;
+      if (!isChainEvent(e)) continue;
+      fams[e.family || e.line || e.id] = true;
+    }
+    for (i = 0; i < undone.length; i++) fams[undone[i].family] = true;
+    return Object.keys(fams).length;
+  }
+
+  function recordStageTurn(g, plan, stage, bySkip) {
+    var undone = (plan && plan.undone) || [];
+    var titles = [];
+    for (var i = 0; i < undone.length; i++) titles.push(undone[i].title || undone[i].event || '那条线');
+    g.stageTurnLog = g.stageTurnLog || [];
+    g.stageTurnLog.push({
+      stage: stage,
+      turns: num0(plan && plan.played),
+      budget: num0(plan && plan.budget),
+      baseBudget: num0(plan && plan.baseBudget),
+      startAge: num0(plan && plan.startAge),
+      endAge: num0(plan && plan.endAge),
+      atAge: num0(g.age),
+      chainsOpened: chainsOpenedIn(g, num0(plan && plan.startAge), num0(plan && plan.endAge), undone),
+      undone: titles,
+      skip: !!bySkip
+    });
+  }
+
+  function regretSentence(g) {
+    var sk = (g && g.stageSkips) || [];
+    var bits = [];
+    for (var i = 0; i < sk.length; i++) {
+      var rec = sk[i];
+      var u = (rec.undone && rec.undone.length) ? rec.undone[0] : null;
+      bits.push('那一年你走了，话没说完：' +
+        (u ? '和「' + (u.title || u.event || '那条线') + '」的那条线停在 ' + num0(rec.age) + ' 岁'
+          : '有些名字没等到下文'));
+    }
+    if (!sk.length) {
+      var un = unresolvedChainList(g);
+      if (un.length) bits.push('到最后，有些话还是没说完：「' + (un[0].title || un[0].event) + '」停在半路');
+    }
+    return bits.length ? bits.slice(0, 2).join('；') + '。' : '';
+  }
+
   function advance(g) {
     if (g.death.dead) return { dead: true, reason: g.death.reason };
+
+    /* v3.8：结局包的服刑线——选择时已推进 years-1 年，这里补齐最后一年，
+       保证 sentence.years 真实推进年龄；出狱回合由 selectEvent 里的 V38.due 优先返回 release */
+    var v38P = g.v38 && g.v38.prison;
+    if (v38P && v38P.active && v38P.pendingRelease &&
+        num0(g.age) < num0(v38P.releaseAge) &&
+        g.v38JailDone !== v38P.releaseAge) {
+      g.v38JailDone = v38P.releaseAge;
+      g.current = null;
+      g.currentId = null;
+      g.turn += 1;
+      g.age += 1;
+      g.year += 1;
+      g.half = 'H1';
+      g.stage = LS.stageOf(g.age);
+      if (LS.snapshot) LS.snapshot(g);
+      return { dead: false, jailed: true, released: true };
+    }
+
+    /* v3.8：每回合先让结局包判定（早终 / 服刑），数据由 endings_v38.js 注册 */
+    if (LS.ENDGAME && LS.ENDGAME.due && !g.jailHold) {
+      var endInfo = null;
+      try {
+        endInfo = LS.ENDGAME.due({ game: g, age: g.age, year: g.year, stage: g.stage });
+      } catch (err) { endInfo = null; }
+      if (endInfo && endInfo.jailYears) {
+        LS.ENDGAME.sentence(g, endInfo.jailYears, endInfo);
+        return { jailed: true, years: endInfo.jailYears };
+      }
+      if (endInfo && (endInfo.cause || endInfo.kind === 'early')) {
+        var endSum = LS.ENDGAME.finish(g, endInfo);
+        return { dead: true, early: true, reason: endSum.reason };
+      }
+    }
+
+    /* 服刑期：一年一回合推进，出狱后恢复 */
+    if (g.flags && g.flags.jailed) {
+      g.jailHold = true;
+      g.current = null;
+      g.currentId = null;
+      if (g.year >= (g.jailUntilYear || g.year)) {
+        g.flags.jailed = false;
+        g.jailHold = false;
+        if (LS.addMemory) LS.addMemory(g, (g.jailYears || 1) + ' 年刑期结束，你从大门走出来。', 'jail');
+        return { dead: false, released: true };
+      }
+      g.turn += 1;
+      g.age += 1;
+      g.year += 1;
+      g.half = 'H1';
+      return { dead: false, jailed: true };
+    }
+    /* v3.7 P4.0：时代锚点年份若已被同龄强制事件占用，当年追加一回合，让锚点独立成事件 */
+    if (LS.V36 && LS.V36.eraDue && LS.V36.eraDue(g) && !g.eraPending &&
+        !(g.current && String(g.current.id).indexOf('v36_era_') === 0) &&
+        !g.pendingStage && !g.pendingSummary) {
+      g.eraHold = true;
+      g.eraPending = true;
+      g.turn += 1;
+      g.current = null;
+      g.currentId = null;
+      return { dead: false, eraHold: true };
+    }
+    g.eraHold = false;
+    g.eraPending = false;
+    /* v3.7：分流点被同年死亡等强制事件挤占时，当年追加一回合补上，避免整段路径丢失 */
+    if (LS.V37 && LS.V37.FORK_AGE && LS.EVENT_INDEX) {
+      var dueForkId = LS.V37.FORK_AGE[g.age];
+      if (dueForkId && LS.EVENT_INDEX[dueForkId] &&
+          !(g.fired && g.fired.indexOf(dueForkId) >= 0) &&
+          !(g.current && g.current.id === dueForkId) &&
+          !g.pendingStage && !g.pendingSummary) {
+        g.forkHold = true;
+        g.turn += 1;
+        g.current = null;
+        g.currentId = null;
+        return { dead: false, forkHold: true };
+      }
+    }
+    g.forkHold = false;
+    /* v3.7：中年 H1 → H2 只加回合，不加年龄/年份，不跑年度 tick */
+    if (LS.V37 && LS.V37.isDouble(g.age) && LS.V37.halfOf(g) === 'H1') {
+      g.turn += 1;
+      g.half = 'H2';
+      return { dead: false, half: true };
+    }
     if (g.turn >= MAX_TURNS || g.age >= 110) {
       finish(g, '自然寿终');
       return { dead: true, reason: g.death.reason };
     }
     var fromStage = g.stage;
-    g.age += 1;
-    g.year += 1;
-    g.turn += 1;
+    /* v3.9：阶段内按预算走回合，年龄在两回合之间均匀推进 */
+    var plan = ensureStagePlan(g);
+    plan.played = num0(plan.played) + 1;
+    /* 中途新开的链会把预算往上抬，最多 12 回合 */
+    var want = Math.min(STAGE_TURN_RULE.max, num0(plan.baseBudget) + chainBonusOf(g));
+    if (want > plan.budget) {
+      plan.budget = want;
+      plan.ages = plan.ages.slice(0, plan.played)
+        .concat(buildAgeList(g, plan.stage, plan.lastAge, plan.endAge, plan.budget - plan.played, false));
+    }
+    var endStage = plan.played >= plan.budget;
+    var target = endStage ? (plan.endAge + 1) : plan.ages[plan.played];
+    if (target === undefined || target === null || target < g.age) target = plan.endAge;
+    if (target <= g.age) {
+      g.turn += 1; /* 同一年里的追加回合 */
+    } else {
+      jumpYears(g, target - g.age);
+    }
+    plan.lastAge = g.age;
     var toStage = LS.stageOf(g.age);
     g.stage = toStage;
-
-    tickEconomy(g);
-    tickHealth(g);
-    tickNpcs(g);
-    ensureSocialNpcs(g);
-    clampAttrs(g);
-    LS.snapshot(g);
-
-    /* v3.2：年度社交——配额重置、亲密度自然衰减 */
-    if (LS.social) {
-      LS.social.beginYear(g);
-      LS.social.decay(g);
-      /* v3.5：NPC 独立命运推进（升学/就业/婚育/病/失业/创业/退休） */
-      if (LS.social.tickAll) LS.social.tickAll(g);
-    }
-    /* v3.6：九条人生线 / 身世征兆 / 线索卡 / 交叉撞车 / 承诺到期 */
-    if (LS.LINES && LS.LINES.tick) LS.LINES.tick(g);
-    /* v3.6：两难回响到期、承诺自动补足 */
-    if (LS.V36 && LS.V36.tick) LS.V36.tick(g);
 
     var reason = deathReason(g);
     if (reason) {
       finish(g, reason);
       return { dead: true, reason: reason };
+    }
+    /* 晚年以寿数为终点，走满预算即自然收束 */
+    if (endStage && toStage === fromStage) {
+      finish(g, '自然寿终');
+      return { dead: true, reason: g.death.reason };
     }
 
     /* v3：阶段跨越——先落“长期影响”，再生成总结卡，最后才排过场 */
@@ -2790,8 +3481,20 @@
       var impacts = writeStageImpact(g, fromStage);
       g.stageSummary = buildStageSummary(g, fromStage, toStage, impacts);
       g.pendingSummary = true;
+      /* v3.7：阶段总结与年终小结同年撞车时合并，避免同回合两张卡 */
+      if (g.pendingYearSummary) {
+        g.stageSummary.yearSummary = g.pendingYearSummary;
+        g.pendingYearSummary = null;
+      }
       g.stageStart = LS.stageSnapshot(g);
       g.lastSummaryAt = g.age;
+      recordStageTurn(g, plan, fromStage, false);
+      makeStagePlan(g, toStage);
+      var reason2 = deathReason(g);
+      if (reason2) {
+        finish(g, reason2);
+        return { dead: true, reason: reason2 };
+      }
     }
 
     /* 阶段过场：每个阶段只触发一次 */
@@ -2799,6 +3502,11 @@
     if (sk && !(g.stageSeen || {})[sk]) {
       g.pendingStage = sk;
     }
+    /* v3.7：跨年结束，回到 H1，清空年度账本并刷新年度起点快照 */
+    g.half = 'H1';
+    g.halfLedger = [];
+    g.pendingConsequence = null;
+    if (LS.V37 && LS.V37.snapYear) g.yearStartSnap = LS.V37.snapYear(g);
     return { dead: false };
   }
 
@@ -2806,6 +3514,29 @@
     var r = choose(g, index);
     if (!r.ok) return r;
     if (r.dead) return { ok: true, dead: true, summary: g.summary, outcome: r.outcome, changes: r.changes, event: null };
+
+    /* v3.7：中年下半年结算——先出后果卡，再出年终小结，最后才跨年 */
+    if (LS.V37 && LS.V37.isDouble(g.age) && LS.V37.halfOf(g) === 'H2') {
+      var ledger = LS.V37.ledgerForYear(g);
+      if (ledger) {
+        g.pendingConsequence = ledger;
+        g.blockedTurn = g.turn;
+        return {
+          ok: true, dead: false, outcome: r.outcome, changes: r.changes,
+          paused: 'consequence', consequence: LS.V37.consequenceOf(g, ledger), type: 'forced', event: null
+        };
+      }
+      var ys = LS.V37.buildYearSummary(g);
+      if (ys) {
+        g.pendingYearSummary = ys;
+        g.blockedTurn = g.turn;
+        return {
+          ok: true, dead: false, outcome: r.outcome, changes: r.changes,
+          paused: 'yearEnd', yearSummary: ys, event: null
+        };
+      }
+    }
+
     var a = advance(g);
     if (a.dead) return { ok: true, dead: true, summary: g.summary, outcome: r.outcome, changes: r.changes, event: null };
 
@@ -2850,6 +3581,50 @@
   function continueAfter(g, kind) {
     if (g.death.dead) return { ok: true, dead: true, summary: g.summary, event: null };
 
+    /* v3.7：下半年的后果卡确认后，再出该年的年终小结 */
+    if (kind === 'consequence' || (!kind && g.pendingConsequence)) {
+      g.pendingConsequence = null;
+      g.halfLedger = [];
+      if (LS.V37 && LS.V37.isDouble(g.age) && LS.V37.halfOf(g) === 'H2') {
+        var ys = LS.V37.buildYearSummary(g);
+        if (ys) {
+          g.pendingYearSummary = ys;
+          g.blockedTurn = g.turn;
+          return { ok: true, dead: false, paused: 'yearEnd', yearSummary: ys, event: null };
+        }
+      }
+    }
+
+    /* v3.7：年终小结确认后才跨年（H2 不提前加年龄/年份） */
+    if (kind === 'yearEnd' || (!kind && g.pendingYearSummary)) {
+      g.pendingYearSummary = null;
+      g.halfLedger = [];
+      var ay = advance(g);
+      if (ay.dead) return { ok: true, dead: true, summary: g.summary, event: null };
+      if (g.pendingStage) {
+        g.blockedTurn = g.turn;
+        return { ok: true, dead: false, paused: 'stage', stage: g.pendingStage, summary: g.stageSummary, event: null };
+      }
+      if (g.pendingSummary) {
+        g.pendingSummary = false;
+        g.blockedTurn = g.turn;
+        return { ok: true, dead: false, paused: 'summary', summary: g.stageSummary, event: null };
+      }
+      var yb = (g.blockedTurn === g.turn) ? null : pickBroadcast(g);
+      if (yb) {
+        g.blockedTurn = g.turn;
+        return { ok: true, dead: false, paused: 'broadcast', broadcast: yb, event: null };
+      }
+      var ye = nextEvent(g);
+      if (g.death.dead) return { ok: true, dead: true, summary: g.summary, event: null };
+      if (g.pendingStage) {
+        g.blockedTurn = g.turn;
+        return { ok: true, dead: false, paused: 'stage', stage: g.pendingStage, summary: g.stageSummary, event: null };
+      }
+      if (g.pendingSummary) g.pendingSummary = false;
+      return { ok: true, dead: false, event: ye };
+    }
+
     if (kind === 'summary' || (!kind && g.pendingSummary)) {
       g.pendingSummary = false;
       if (g.pendingStage) consumeStage(g);
@@ -2893,6 +3668,8 @@
       g.legacy = { reputation: repB, cash: cashB, source: leg.source || '' };
       if (repB || cashB) LS.addMemory(g, '上一世留下的名声和一点钱，先摆在了你面前。', 'legacy');
     }
+    /* v3.9：进入第一个阶段前先排好回合预算与年龄阶梯 */
+    makeStagePlan(g, g.stage);
     nextEvent(g);
     return g;
   }
@@ -2962,6 +3739,104 @@
     return errs;
   }
 
+  /* =========================================================
+     v3.8 早终（ENDGAME）：引擎只负责收口，结局数据由 js/endings_v38.js 注册
+     ========================================================= */
+  LS.ENDGAME = LS.ENDGAME || {};
+
+  LS.ENDGAME.finish = function (g, info) {
+    info = info || {};
+    if (info.kind !== 'natural') info.kind = 'early';
+    return finish(g, info.cause || g.death.reason, info);
+  };
+
+  /* 服刑：不是终点，按年推进，出狱后继续 */
+  LS.ENDGAME.sentence = function (g, years, info) {
+    years = Math.max(1, Math.round(years || 2));
+    g.flags = g.flags || {};
+    g.flags.jailed = true;
+    g.jailYears = years;
+    g.jailUntilYear = g.year + years;
+    if (LS.addMemory) LS.addMemory(g, (info && info.scene) || ('你被带走，判了 ' + years + ' 年。'), 'jail');
+    return { jailed: true, years: years, untilYear: g.jailUntilYear };
+  };
+
+  /* v3.9：跳过本阶段——立即收尾，未走完的链计入总结与结局信 */
+  function skipStage(g) {
+    if (!g || g.death.dead) return { ok: false, error: '这一生已经结束。' };
+    if (!g.stagePlan || g.stagePlan.stage !== g.stage) makeStagePlan(g, g.stage);
+    var plan = g.stagePlan;
+    var fromStage = plan.stage;
+    var undone = unresolvedChainList(g);
+    var turns = num0(plan.played);
+    plan.skipped = true;
+    plan.undone = undone;
+    plan.skippedAtAge = g.age;
+
+    g.stageSkips = g.stageSkips || [];
+    g.stageSkips.push({
+      stage: fromStage, age: num0(g.age), turns: turns, budget: num0(plan.budget),
+      undone: undone.map(function (u) { return { event: u.event, title: u.title, dueAge: u.dueAge }; })
+    });
+    g.skippedChains = g.skippedChains || [];
+    for (var i = 0; i < undone.length; i++) {
+      g.skippedChains.push({
+        stage: fromStage, age: num0(g.age), event: undone[i].event,
+        title: undone[i].title, family: undone[i].family, dueAge: undone[i].dueAge
+      });
+    }
+
+    /* 提前离开，没等到下文的链不再在后面的阶段里冒出来 */
+    var kill = chainPendingItems(g);
+    if (kill.length) {
+      var drop = [];
+      for (var k = 0; k < kill.length; k++) drop.push(kill[k].item);
+      g.pending = (g.pending || []).filter(function (it) { return drop.indexOf(it) < 0; });
+    }
+
+    /* 时间照常走到阶段终点，再跨进下一阶段 */
+    var target = plan.endAge + 1;
+    if (target > g.age) jumpYears(g, target - g.age);
+    g.stage = LS.stageOf(g.age);
+
+    var impacts = writeStageImpact(g, fromStage);
+    g.stageSummary = buildStageSummary(g, fromStage, fromStage, impacts);
+    g.stageSummary.skip = true;
+    g.stageSummary.flex.endAge = plan.endAge;
+    g.pendingSummary = true;
+    g.lastSummaryAt = g.age;
+    g.stageStart = LS.stageSnapshot(g);
+    recordStageTurn(g, plan, fromStage, true);
+
+    g.half = 'H1';
+    g.halfLedger = [];
+    g.pendingConsequence = null;
+    if (LS.V37 && LS.V37.snapYear) g.yearStartSnap = LS.V37.snapYear(g);
+    var sk = LS.stageKeyOf(g.age);
+    if (sk && !(g.stageSeen || {})[sk]) g.pendingStage = sk;
+
+    var reason = deathReason(g);
+    if (reason) {
+      finish(g, reason);
+      return { ok: true, dead: true, turns: turns, undone: undone, summary: g.summary };
+    }
+    makeStagePlan(g, g.stage);
+    var reason2 = deathReason(g);
+    if (reason2) {
+      finish(g, reason2);
+      return { ok: true, dead: true, turns: turns, undone: undone, summary: g.summary };
+    }
+    return { ok: true, turns: turns, undone: undone, summary: g.stageSummary };
+  }
+
+  function letterWithRegret(g, letter) {
+    var txt = regretSentence(g);
+    if (!txt) return letter;
+    if (letter && Array.isArray(letter.paragraphs)) letter.paragraphs.push(txt);
+    else if (letter) letter.regret = txt;
+    return letter;
+  }
+
   LS.engine = {
     start: start,
     nextEvent: nextEvent,
@@ -2996,7 +3871,14 @@
     tagComboOf: tagComboOf,
     optCondOk: optCondOk,
     layerOf: layerOf,
-    PACE: PACE
+    PACE: PACE,
+    /* v3.9 弹性阶段制 */
+    skipStage: skipStage,
+    letterWithRegret: letterWithRegret,
+    regretText: regretSentence,
+    stagePlanOf: function (g) { return (g && g.stagePlan) || null; },
+    unresolvedChains: unresolvedChainList,
+    stageEndAgeOf: stageEndAgeOf
   };
   LS.PACE = PACE;
 

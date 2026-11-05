@@ -650,6 +650,7 @@
     btn.addEventListener('click', function () {
       reduceMotion = !reduceMotion;
       syncReduceMotion();
+      if (LS.FX) LS.FX.settings.set('motion', reduceMotion ? 'reduced' : 'full');
       if (game) LS.save.autoSave(game);
     });
   }
@@ -735,6 +736,12 @@
       return;
     }
     if (r.dead) { renderEnd(); return; }
+    if (LS.FX) {
+      LS.FX.setTurn(game ? game.turn : 0);
+      var fxHp = game && game.attrs ? Number(game.attrs.health) : 100;
+      if (!r.dead && fxHp < 25) LS.FX.sound('heartbeat');
+      else if (!r.dead && fxHp < 35) LS.FX.sound('alarm');
+    }
     if (r.paused === 'summary') {
       if (game.pendingStage) { showStageOverlay(game.pendingStage, false, r.summary || game.stageSummary); return; }
       showStageSummary(r.summary || game.stageSummary);
@@ -742,6 +749,9 @@
     }
     if (r.paused === 'stage') { showStageOverlay(r.stage || game.pendingStage, false, r.summary || game.stageSummary); return; }
     if (r.paused === 'broadcast') { showBroadcast(r.broadcast); return; }
+    /* v3.7：H1 选择的后果卡 / H2 年终小结 */
+    if (r.paused === 'consequence') { showConsequenceCard(r.consequence || game.pendingConsequence); return; }
+    if (r.paused === 'yearEnd') { showYearSummaryCard(r.yearSummary || game.pendingYearSummary); return; }
     if (r.event) { renderGame(); return; }
 
     /* 没有事件也没死：再取一次事件；仍为空则按待确认的总结/过场继续分发 */
@@ -756,6 +766,69 @@
       if (game.pendingStage) { showStageOverlay(game.pendingStage); return; }
     }
     renderGame();
+  }
+
+  /* v3.7：H2 后果卡——必须交代「年份 + 上半年的选择 + 具体后果」 */
+  function showConsequenceCard(card) {
+    if (!card) {
+      var rc0 = LS.engine.continueAfter(game, 'consequence');
+      LS.save.autoSave(game);
+      handleResult(rc0);
+      return;
+    }
+    markBlocker('consequence');
+    var cost = card.cost
+      ? '<div class="conseq-cost"><span>具体后果</span><b>' + esc(card.cost) + '</b></div>'
+      : '';
+    openOverlay('conseq-overlay',
+      '<div class="conseq-mask"><div class="conseq-card">' +
+      '<div class="conseq-kicker">上半年 → 下半年 · 后果</div>' +
+      '<h2 class="conseq-title">' + esc(card.title || (card.year + ' 年 · 上半年选择的后果')) + '</h2>' +
+      '<p class="conseq-text">' + esc(card.text || '') + '</p>' +
+      cost +
+      '<div class="conseq-foot"><span class="conseq-age">' + esc((card.age || game.age) + ' 岁 · 下半年') + '</span>' +
+      '<button type="button" class="btn primary" id="btnConseqOk">我记下了</button></div>' +
+      '</div></div>');
+    $('btnConseqOk').addEventListener('click', function () {
+      closeOverlay();
+      var r = LS.engine.continueAfter(game, 'consequence');
+      LS.save.autoSave(game);
+      handleResult(r);
+    });
+  }
+
+  /* v3.7：年终小结卡——每年只在 H2 出一次，展示钱/健康/一段关系 */
+  function showYearSummaryCard(ys) {
+    if (!ys) {
+      var ry0 = LS.engine.continueAfter(game, 'yearEnd');
+      LS.save.autoSave(game);
+      handleResult(ry0);
+      return;
+    }
+    markBlocker('yearEnd');
+    var rows = (ys.items || []).map(function (it) {
+      var cls = it.delta > 0 ? 'gain' : (it.delta < 0 ? 'loss' : 'flat');
+      return '<div class="year-chg ' + cls + '">' +
+        '<span class="yc-label">' + esc(it.label || '') + '</span>' +
+        '<span class="yc-text">' + esc(it.text || '') + '</span>' +
+        '</div>';
+    }).join('');
+    if (!rows) rows = '<div class="year-chg flat"><span class="yc-label">这一年</span><span class="yc-text">没有留下可记的变化</span></div>';
+    openOverlay('year-overlay',
+      '<div class="year-mask"><div class="year-card">' +
+      '<div class="year-kicker">年度结算 · 第 ' + esc(String(ys.turn || game.turn)) + ' 回合</div>' +
+      '<h2 class="year-title">' + esc(ys.title || (ys.year + ' 年 · 年终小结')) + '</h2>' +
+      '<p class="year-sub">这一年真正落下的三件事：钱、身体，和一个人。</p>' +
+      '<div class="year-changes">' + rows + '</div>' +
+      '<div class="year-foot"><span class="year-age">' + esc((ys.atAge || game.age) + ' 岁 · 下半年') + '</span>' +
+      '<button type="button" class="btn primary" id="btnYearOk">翻到下一年</button></div>' +
+      '</div></div>');
+    $('btnYearOk').addEventListener('click', function () {
+      closeOverlay();
+      var r = LS.engine.continueAfter(game, 'yearEnd');
+      LS.save.autoSave(game);
+      handleResult(r);
+    });
   }
 
   /* 过场遮罩期间冻结主循环表面：清空选项，避免遮罩下仍残留可点选项 */
@@ -984,7 +1057,8 @@
     var a = rng[0];
     var b = (s.atAge === undefined || s.atAge === null) ? rng[1] : s.atAge;
     /* 跨阶段时 atAge 已是新阶段第一年，回退一年得到旧阶段的结束年龄 */
-    if (s.toStage && s.toStage !== s.fromStage && b > a) b = Math.min(b - 1, rng[1]);
+    if (s.skip && s.flex && s.flex.endAge !== undefined && s.flex.endAge !== null) b = s.flex.endAge;
+    else if (s.toStage && s.toStage !== s.fromStage && b > a) b = Math.min(b - 1, rng[1]);
     var lines = (s.lines || []).map(function (t) {
       return '<p class="summary-line">' + esc(t) + '</p>';
     }).join('');
@@ -997,13 +1071,41 @@
         '<span class="impact-tag">已写入后续事件</span></div>' +
         '<div class="impact-note">' + esc(x.note || '') + '</div></div>';
     }).join('');
+    /* v3.9：阶段总结三件事——走了几回合、开了几条链、哪条没走完 */
+    var flexRow = '';
+    if (s.flex) {
+      var undoneTxt = (s.flex.undone && s.flex.undone.length)
+        ? '「' + s.flex.undone[0] + '」没走完'
+        : '链都走到了头';
+      flexRow = '<div class="summary-sub">本阶段回合</div><div class="summary-changes">' +
+        '<div class="summary-chg"><span class="chg-label">回合</span><span>' +
+        esc(String(s.flex.turns || 0)) + ' / ' + esc(String(s.flex.budget || 0)) + ' 回合</span></div>' +
+        '<div class="summary-chg"><span class="chg-label">链</span><span>开了 ' +
+        esc(String(s.flex.chainsOpened || 0)) + ' 条 · ' + esc(undoneTxt) + '</span></div>' +
+        '</div>';
+    }
+    /* v3.7：阶段总结与年终小结撞车时合并展示，避免同回合两张卡 */
+    var ysRows = '';
+    if (s.yearSummary && s.yearSummary.items) {
+      ysRows = s.yearSummary.items.map(function (it) {
+        var cls = it.delta > 0 ? 'gain' : (it.delta < 0 ? 'loss' : 'flat');
+        return '<div class="year-chg ' + cls + '"><span class="yc-label">' + esc(it.label || '') + '</span>' +
+          '<span class="yc-text">' + esc(it.text || '') + '</span></div>';
+      }).join('');
+      if (ysRows) {
+        ysRows = '<div class="summary-sub">' + esc(s.yearSummary.title || '年终小结') + '</div>' +
+          '<div class="year-changes">' + ysRows + '</div>';
+      }
+    }
     openOverlay('summary-overlay',
       '<div class="summary-mask"><div class="summary-card">' +
       '<div class="summary-kicker">阶段结算 · ' + esc(s.fromStage) + ' → ' + esc(s.toStage) + '</div>' +
       '<h2 class="summary-title">【' + esc(s.fromStage) + '】结束 · 年龄 ' + esc(a) + '–' + esc(b) + '</h2>' +
       (lines ? '<div class="summary-lines">' + lines + '</div>' : '') +
+      flexRow +
       '<div class="summary-sub">关键变化</div><div class="summary-changes">' +
       (changes || '<div class="empty-note">这一段没有明显的数值变化。</div>') + '</div>' +
+      ysRows +
       '<div class="summary-sub">本阶段留下的影响</div><div class="summary-impacts">' +
       (impacts || '<div class="empty-note">这一段没有留下会被后续事件读取的影响。</div>') + '</div>' +
       '<div class="summary-foot"><button type="button" class="btn primary summary-continue" id="btnSummaryContinue">继续</button></div>' +
@@ -1061,6 +1163,10 @@
         return;
       }
       markBlocker('broadcast');
+      if (LS.FX) {
+        LS.FX.sound(bcToneClass(b) === 'bad' ? 'bad' : 'good');
+        LS.FX.shake(1);
+      }
     }
     var art = (LS.artHas && LS.artHas(b.art)) ? '<div class="bc-art">' + (LS.artScene(b.art) || LS.artEvent(b.art)) + '</div>' : '';
     var chg = b.changes
@@ -1068,23 +1174,47 @@
       : '<div class="bc-changes muted">本回合没有产生可记录的数值变动。</div>';
     var merged = (b.merged && b.merged.length)
       ? '<div class="bc-merged">同回合同时发生：' + esc(b.merged.join('、')) + '（已合并播报）</div>' : '';
+    var bcBody = art + '<p class="bc-text">' + esc(b.text) + '</p>' + chg + merged +
+      '<div class="bc-time">' + esc(((b.year || game.year) + ' 年 · ' + (b.age || game.age) + ' 岁')) + '</div>';
+    /* v3.8：阻断式播报统一交给 LS.FX.modal（同回合 ≤1 条），fx 未加载时回退旧遮罩 */
+    if (LS.FX && LS.FX.modal) {
+      LS.FX.modal({
+        kicker: '重大结果播报',
+        title: '【' + String(b.title) + '】',
+        body: bcBody,
+        tone: (bcToneClass(b) === 'bad') ? 'bad' : 'good',
+        level: 'major',
+        blocking: true,
+        okLabel: '我知道了',
+        onSuppress: function () { legacyBroadcast(b, debug, bcBody); },
+        onClose: function () { broadcastAfter(b, debug); }
+      });
+      return;
+    }
+    legacyBroadcast(b, debug, bcBody);
+  }
+
+  /* 旧遮罩（fx 未加载 / 被弹窗上限抑制时的兜底） */
+  function legacyBroadcast(b, debug, bcBody) {
     openOverlay('bc-overlay',
       '<div class="bc-mask"><div class="bc-card broadcast ' + bcToneClass(b) + ' tone-' + esc(b.tone || 'gold') + '">' +
       '<div class="bc-kicker">重大结果播报</div>' +
       '<h2 class="bc-title">' + emojiSpan('bc', bcToneClass(b), 'bc-emoji') + '【' + esc(b.title) + '】</h2>' +
-      art +
-      '<p class="bc-text">' + esc(b.text) + '</p>' +
-      chg + merged +
-      '<div class="bc-time">' + esc(((b.year || game.year) + ' 年 · ' + (b.age || game.age) + ' 岁')) + '</div>' +
+      bcBody +
       '<button type="button" class="btn primary bc-ok" id="btnBcOk">我知道了</button>' +
       '</div></div>');
     $('btnBcOk').addEventListener('click', function () {
       closeOverlay();
-      if (debug) { renderGame(); return; }
-      var r = LS.engine.continueAfter(game);
-      LS.save.autoSave(game);
-      handleResult(r);
+      broadcastAfter(b, debug);
     });
+  }
+
+  /* 播报关掉后继续推进 */
+  function broadcastAfter(b, debug) {
+    if (debug) { renderGame(); return; }
+    var r = LS.engine.continueAfter(game);
+    LS.save.autoSave(game);
+    handleResult(r);
   }
 
   /* 属性变化高亮：增益柔和绿，损耗与负债/压力橙红 */
@@ -1851,21 +1981,55 @@
 
     $('storyPanel').scrollTop = 0;
     paintMood();
+    if (LS.FX) {
+      LS.FX.sound('page');
+      LS.FX.enter($('storyPanel'), { kind: 'card' });
+    }
     if (DEBUG_MODE) buildDebugPanel();
+  }
+
+  function halfTextOf(g) {
+    if (!g) return '全年';
+    if (LS.V37 && LS.V37.isDouble(g.age)) return LS.V37.halfLabel(g);
+    return '全年';
+  }
+
+  /* v3.7：状态栏 = 年份 + 上/下半年；中年额外挂「中年 · N 岁」徽章 */
+  function paintStatusLine() {
+    if (!game) return;
+    if ($('sbTime')) $('sbTime').textContent = game.year + ' 年 · ' + halfTextOf(game);
+    if ($('sbAge')) $('sbAge').textContent = game.age + ' 岁';
+    if ($('sbStage')) $('sbStage').textContent = stageBarText();
+    if ($('sbHalf')) {
+      var isMid = LS.V37 && LS.V37.isDouble(game.age);
+      $('sbHalf').hidden = !isMid;
+      $('sbHalf').textContent = isMid ? LS.V37.badgeText(game) : '';
+    }
+    if ($('sbAttrs')) $('sbAttrs').innerHTML = chips();
+  }
+
+  /* v3.9：右侧「跳过本阶段」——只在正常出牌、且不是最后一段时出现 */
+  function paintSkipStage() {
+    var b = $('btnSkipStage');
+    if (!b) return;
+    var plan = (game && !game.death.dead) ? game.stagePlan : null;
+    var on = !!game && !game.death.dead && !!game.current &&
+      !game.pendingSummary && !game.pendingStage && !blockerTaken() &&
+      plan && !plan.skipped && plan.stage !== '晚年';
+    b.hidden = !on;
+    if (on) b.textContent = '跳过本阶段（' + (plan.played || 0) + '/' + (plan.budget || 0) + '）';
   }
 
   function renderGame() {
     if (!game) return;
     if (game.death.dead) { renderEnd(); return; }
 
-    $('sbTime').textContent = game.year + ' 年';
-    $('sbAge').textContent = game.age + ' 岁';
-    $('sbStage').textContent = stageBarText();
-    $('sbAttrs').innerHTML = chips();
+    paintStatusLine();
     paintMood();
     paintSbMoney();
     paintArchive();
     paintSocialBar();
+    paintSkipStage();
 
     /* 未确认的阶段总结与阶段过场合并为一次遮罩 */
     if (game.pendingSummary) {
@@ -1898,6 +2062,7 @@
       $('storyPanel').className = 'story ev-card tier-daily';
       paintQuietNote(null);
       paintMood();
+      paintSkipStage();
       return;
     }
 
@@ -1920,6 +2085,7 @@
     }
 
     paintEvent(e);
+    paintSkipStage();
   }
 
   /* 选项区上方浮字：按 changes 字符串拆条，1.6 秒淡出，不阻塞点击 */
@@ -1953,6 +2119,8 @@
     if (!game || game.death.dead) return;
     var buttons = $('options').querySelectorAll('button');
     for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
+    if (LS.FX) LS.FX.sound('tick');
+    if (LS.REPLAY && game.current) LS.REPLAY.logChoice(game.turn, game.current.id, index);
 
     var r = LS.engine.resolve(game, index);
     if (!r.ok) {
@@ -2006,8 +2174,14 @@
       '</div>' +
       '<div class="detail-block"><h4>隐性健康隐患</h4>' + riskRows() + '</div>' +
       '<div class="detail-block"><h4>人际关系</h4>' + (npcRows || '<div class="empty-note">暂无记录</div>') + '</div>' +
+      '<div class="detail-block"><h4>表现层设置</h4><div id="fxSettingsHost"></div></div>' +
       '</div>';
     openModal('人生详情 · ' + game.name, html);
+    /* v3.8：声音/震动/弹窗频率开关交给 fx 包 */
+    if (LS.FX && LS.FX.mountSettings) {
+      LS.FX.mountSettings($('fxSettingsHost'));
+      LS.FX.settings.set('motion', reduceMotion ? 'reduced' : 'full');
+    }
   }
 
   function riskRows() {
@@ -2203,10 +2377,7 @@
       return;
     }
     if (game.pendingSummary || game.pendingStage) {
-      $('sbTime').textContent = game.year + ' 年';
-      $('sbAge').textContent = game.age + ' 岁';
-      $('sbStage').textContent = stageBarText();
-      $('sbAttrs').innerHTML = chips();
+      paintStatusLine();
       paintMood();
       paintSbMoney();
       if (game.pendingStage) showStageOverlay(game.pendingStage, false, game.stageSummary);
@@ -2215,10 +2386,7 @@
     }
     var b = takePending();
     if (b) {
-      $('sbTime').textContent = game.year + ' 年';
-      $('sbAge').textContent = game.age + ' 岁';
-      $('sbStage').textContent = stageBarText();
-      $('sbAttrs').innerHTML = chips();
+      paintStatusLine();
       paintMood();
       paintSbMoney();
       showBroadcast(b);
@@ -2309,6 +2477,19 @@
     if (promiseBtn) promiseBtn.addEventListener('click', openPromises);
     var relBtn = $('btnRelation');
     if (relBtn) relBtn.addEventListener('click', openRelationModal);
+    var skipBtn = $('btnSkipStage');
+    if (skipBtn) {
+      skipBtn.addEventListener('click', function () {
+        if (!game || game.death.dead) return;
+        var r = LS.engine.skipStage(game);
+        if (!r.ok) return;
+        paintSkipStage();
+        LS.save.autoSave(game);
+        if (r.dead) { renderEnd(); return; }
+        if (r.summary) { showStageSummary(r.summary); return; }
+        renderGame();
+      });
+    }
     $('btnSave').addEventListener('click', function () { openSaveModal('save'); });
     $('btnLoad').addEventListener('click', function () { openSaveModal('load'); });
     $('btnMemoir').addEventListener('click', function () { openMemoir('time'); });
@@ -2690,14 +2871,20 @@
   }
 
   function renderEnd() {
+    /* v3.8：结局页音效；早终额外震动 */
+    if (LS.FX) LS.FX.sound('bad');
     clearMood();
     var s = game.summary || LS.engine.finish(game, game.death.reason || '身体机能衰竭');
+    if (LS.FX && s.kind === 'early') LS.FX.shake(3);
     var ach = s.achievements || [];
     var got = s.gotAchievements || [];
 
+    var careerEnd = s.careerEnd || '';
+    var careerPath = (s.careerPath && LS.CAREER && LS.CAREER.get) ? LS.CAREER.get(s.careerPath) : null;
     var cards = [
       { k: '寿命', v: s.age + ' 岁', x: s.birthYear + '–' + s.deathYear },
       { k: '学历', v: s.edu, x: '累计工作 ' + s.jobYears + ' 年' },
+      { k: '职业结局', v: careerEnd || '无固定职业', x: careerPath ? careerPath.name + '路径' : '未走进职业路径' },
       { k: '净资产', v: LS.fmtMoney(s.netWorth), x: '现金 ' + LS.fmtMoney(s.cash) + ' · 负债 ' + LS.fmtMoney(s.debt), small: true },
       { k: '成就', v: got.length + ' 项', x: '共 ' + ach.length + ' 项可达成' }
     ];
@@ -2739,9 +2926,34 @@
         '<span class="legacy-tip">下一局开局自动带入</span></div>'
       : '<div class="legacy-note muted">传承 · 这一世没有留下可被继承的声望或现金。</div>';
 
-    var letter = (LS.V36 && LS.V36.letter) ? LS.V36.letter(game, s) : null;
+    var early = s.kind === 'early';
+    var letter = (!early && LS.V36 && LS.V36.letter) ? LS.V36.letter(game, s) : null;
+    /* v3.9：跳过阶段而没走完的链，写进结局信 */
+    if (letter && LS.engine.letterWithRegret) letter = LS.engine.letterWithRegret(game, letter);
+    if (letter && letter.stats && s.careerEnd) {
+      letter.stats.push({ k: '职业结局', v: s.careerEnd + (careerPath ? ' · ' + careerPath.name : '') });
+    }
     var letterHtml = '';
-    if (letter) {
+    if (early) {
+      /* 早终不用寿终那套四段信：只留「那句没说完的话」与「那件没做完的事」 */
+      var ee = '';
+      if (s.lastWords) {
+        ee += '<div class="ee-item"><div class="ee-k">那句没说完的话</div><div class="ee-v">' + esc(s.lastWords) + '</div></div>';
+      }
+      if (s.undone) {
+        ee += '<div class="ee-item"><div class="ee-k">那件没做完的事</div><div class="ee-v">' + esc(s.undone) + '</div></div>';
+      }
+      var eeMeta = [];
+      if (s.sceneLast) eeMeta.push('最后 · ' + s.sceneLast);
+      if (s.whoWasThere && s.whoWasThere.length) eeMeta.push('在场 · ' + s.whoWasThere.join('、'));
+      if (s.relics && s.relics.length) eeMeta.push('遗物 · ' + s.relics.join('、'));
+      letterHtml =
+        '<div class="end-early">' +
+        (s.endingTag ? '<div class="ee-tag">' + esc(s.endingTag) + '</div>' : '') +
+        (ee || '<div class="empty-note">有些话没来得及说，有些事没来得及做。</div>') +
+        (eeMeta.length ? '<div class="ee-meta">' + esc(eeMeta.join('　·　')) + '</div>' : '') +
+        '</div>';
+    } else if (letter) {
       letterHtml =
         '<div class="end-letter">' +
         '<div class="letter-salute">' + esc(letter.salute) + '</div>' +
@@ -2760,9 +2972,9 @@
 
     var html =
       '<div class="end-head">' +
-      '<div class="end-kicker">人生结算 · LIFE SUMMARY</div>' +
+      '<div class="end-kicker">' + (early ? '人生终止 · EARLY END' : '人生结算 · LIFE SUMMARY') + '</div>' +
       '<div class="end-title">' + esc(s.name) + '　' + s.age + ' 岁</div>' +
-      '<div class="end-sub">' + s.birthYear + ' 年 — ' + s.deathYear + ' 年　·　' + esc(s.reason) + '　·　出生于' + esc(game.birthplace) + '，' + esc(game.background) + '家庭　·　随机种子 ' + s.seed + '</div>' +
+      '<div class="end-sub">' + s.birthYear + ' 年 — ' + s.deathYear + ' 年　·　' + esc(s.reason) + (early ? '　·　这一程停在这里' : '　·　出生于' + esc(game.birthplace) + '，' + esc(game.background) + '家庭') + '　·　随机种子 ' + s.seed + '</div>' +
       '</div>' +
 
       letterHtml +
@@ -2785,6 +2997,8 @@
 
       '<div class="end-actions">' +
       '<button class="btn share-btn" id="btnShareCard">导出分享卡</button>' +
+      '<button class="btn" id="btnLifeCard">保存这一生</button>' +
+      '<button class="btn" id="btnSeedCode">复制种子码</button>' +
       '<button class="btn" id="btnResumeCard">人生履历卡</button>' +
       '<button class="btn" id="btnCodex">成就图鉴</button>' +
       '<button class="btn" id="btnEndLoad">读取存档</button>' +
@@ -2804,6 +3018,23 @@
     });
     $('btnEndExit').addEventListener('click', function () { $('exitScreen').hidden = false; });
     $('btnShareCard').addEventListener('click', exportShareCard);
+    $('btnLifeCard').addEventListener('click', function () {
+      if (!LS.CARD || !LS.CARD.download) return;
+      LS.CARD.download('人生长图_' + s.name + '_' + s.age + '岁.png', { game: game });
+    });
+    $('btnSeedCode').addEventListener('click', function () {
+      var code = (LS.REPLAY && LS.REPLAY.exportCode) ? String(LS.REPLAY.exportCode() || '') : '';
+      var tip = function (msg) {
+        openModal('种子码', '<p>' + esc(msg) + '</p><p class="seed-code">' + esc(code) + '</p>');
+      };
+      if (!code) { tip('本局没有可导出的种子码。'); return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(function () { tip('已复制到剪贴板。'); },
+          function () { tip('浏览器不允许自动复制，请手动选中。'); });
+      } else {
+        tip('浏览器不允许自动复制，请手动选中。');
+      }
+    });
     $('btnResumeCard').addEventListener('click', exportResumeCard);
     $('btnCodex').addEventListener('click', openCodex);
     $('btnEndMemoirTime').addEventListener('click', function () { openMemoir('time'); });
@@ -2948,10 +3179,7 @@
         game.echoInfo = echoInfo || null;
         game.current = ev;
         if ($('sbTime')) {
-          $('sbTime').textContent = game.year + ' 年';
-          $('sbAge').textContent = game.age + ' 岁';
-          $('sbStage').textContent = stageBarText();
-          $('sbAttrs').innerHTML = chips();
+          paintStatusLine();
         }
         if (ev.tier === 'crossroad') {
           game.crossGate = ev.id + '@' + game.age;

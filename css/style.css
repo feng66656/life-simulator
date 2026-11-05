@@ -3108,3 +3108,188 @@ body.reduce-motion *::after{
   .create-quote{ font-size: 12.5px; }
   .stage-quote{ font-size: 12px; }
 }
+
+/* =========================================================
+   v3.7 · 回合结构：半回合徽章 / 后果卡 / 年终小结
+   ========================================================= */
+.half-badge{
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--paper-2);
+  color: var(--accent-2);
+  font-size: 11px;
+  line-height: 1.65;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.half-badge[hidden]{ display: none; }
+
+.conseq-mask, .year-mask{
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(32, 32, 34, .16);
+}
+.conseq-card, .year-card{
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  width: min(560px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+  animation: cardIn .4s ease both;
+}
+.conseq-card{ padding: 22px 26px 18px; border-top: 3px solid var(--accent); }
+.conseq-kicker{
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: var(--accent-2);
+  margin-bottom: 4px;
+}
+.conseq-title{
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 2px 0 10px;
+}
+.conseq-text{
+  font-size: 14px;
+  line-height: 1.85;
+  color: var(--ink-2);
+  margin: 0 0 12px;
+}
+.conseq-cost{
+  border-left: 3px solid var(--accent);
+  background: var(--paper-2);
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.conseq-cost span{
+  font-size: 11px;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+}
+.conseq-cost b{ font-size: 13px; color: var(--accent-2); font-weight: 600; }
+.conseq-foot, .year-foot{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.conseq-age, .year-age{ font-size: 12px; color: var(--ink-3); letter-spacing: .04em; }
+
+.year-card{ padding: 24px 30px 20px; border-top: 3px solid var(--teal); }
+.year-kicker{
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: var(--teal-2);
+  margin-bottom: 4px;
+}
+.year-title{
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  color: var(--ink);
+  margin: 2px 0 6px;
+}
+.year-sub{
+  font-size: 12px;
+  color: var(--ink-3);
+  margin: 0 0 16px;
+}
+.year-changes{
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 6px 0;
+  margin-bottom: 16px;
+}
+.year-chg{
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 2px;
+  font-size: 14px;
+  border-bottom: 1px dashed var(--line);
+}
+.year-chg:last-child{ border-bottom: 0; }
+.yc-label{
+  flex: 0 0 auto;
+  min-width: 74px;
+  font-size: 12px;
+  color: var(--ink-3);
+  letter-spacing: .04em;
+}
+.yc-text{ color: var(--ink); line-height: 1.7; }
+.year-chg.gain .yc-text{ color: var(--good); }
+.year-chg.loss .yc-text{ color: var(--danger); }
+.year-chg.flat .yc-text{ color: var(--ink-2); }
+
+@media (max-width: 850px){
+  .year-card{ padding: 20px 18px 16px; }
+  .conseq-card{ padding: 18px 18px 14px; }
+  .year-title{ font-size: 22px; }
+  .year-chg{ flex-direction: column; gap: 2px; }
+  .yc-label{ min-width: 0; }
+}
+
+/* v3.8 早终：不用寿终的四段信，只留那句话与那件事 */
+.end-early{
+  max-width: 720px;
+  margin: 18px auto 0;
+  padding: 28px 32px 24px;
+  background: linear-gradient(180deg, #fbf7ee, #f4eee1);
+  border: 1px solid rgba(120,100,70,.18);
+  border-left: 3px solid rgba(150,90,60,.35);
+  border-radius: 3px;
+  box-shadow: 0 10px 26px rgba(50,40,25,.10);
+  color: #3c352b;
+}
+.end-early .ee-tag{
+  display: inline-block;
+  font-size: 12px;
+  letter-spacing: .18em;
+  color: #8a5a3c;
+  border: 1px solid rgba(138,90,60,.35);
+  padding: 2px 10px;
+  border-radius: 2px;
+  margin-bottom: 16px;
+}
+.end-early .ee-item{ margin-bottom: 16px; }
+.end-early .ee-k{
+  font-size: 12px;
+  letter-spacing: .14em;
+  color: #8a7a62;
+  margin-bottom: 6px;
+}
+.end-early .ee-v{
+  font-size: 16px;
+  line-height: 1.9;
+  text-indent: 2em;
+}
+.end-early .ee-meta{
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(120,100,70,.25);
+  font-size: 12px;
+  color: #6b6052;
+  line-height: 1.8;
+}
+
+
+/* v3.8 结局页种子码 */
+.seed-code{font-family:ui-monospace,Consolas,monospace;word-break:break-all;background:rgba(0,0,0,.06);padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.5}
