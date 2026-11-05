@@ -978,8 +978,12 @@
   /* ---------------- 事件筛选 ---------------- */
   function condOk(g, e) {
     if (!e) return false;
-    if (!e.cond) return true;
-    try { return !!e.cond(g); } catch (err) { return false; }
+    if (e.cond) {
+      try { if (!e.cond(g)) return false; } catch (err) { return false; }
+    }
+    /* v3.5：亲属状态守卫（父母/配偶/子女/手足/朋友） */
+    if (LS.V35 && LS.V35.pass && !LS.V35.pass(g, e)) return false;
+    return true;
   }
 
   function isPendingFuture(g, id) {
@@ -1019,6 +1023,8 @@
       var cdB = g.eventCD && g.eventCD[e.id];
       if (cdB) w *= 1 / (1 + num0(cdB.runs) * 0.3);
       w *= epochMul;
+      /* v3.5：开局主题去重与“不连出医疗”通过降权实现，避免随机池被清空 */
+      if (LS.V35 && LS.V35.weightFactor) w *= LS.V35.weightFactor(g, e);
       if (w < 0.02) w = 0.02;
       total += w;
       weights.push(w);
@@ -2446,6 +2452,7 @@
 
       g.currentId = e.id;
     g.current = e;
+    if (LS.V35 && LS.V35.markTheme) LS.V35.markTheme(g, e);
     g.currentTier = e.tier || 'daily';
     if (e.tier === 'crossroad') {
       g.stats.crossroadsSeen = (g.stats.crossroadsSeen || 0) + 1;

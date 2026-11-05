@@ -378,6 +378,16 @@
     recomputeBase();
     updateFieldNotes();
     updateLegacyNote();
+    paintPrequelQuotes();
+  }
+
+  /* v3.5：开局与创建页各随机一句金句（同一句不会在同一局重复） */
+  function paintPrequelQuotes() {
+    if (!LS.V35) return;
+    var wq = $('welcomeQuote');
+    if (wq) wq.innerHTML = LS.V35.quoteHtml(null);
+    var cq = $('createQuote');
+    if (cq) cq.innerHTML = LS.V35.quoteHtml(null);
   }
 
   function randomCharacter() {
@@ -913,6 +923,7 @@
       '<div class="stage-right">' +
       '<h2 class="stage-title">' + emojiSpan('stage', m.label, 'stage-emoji') + esc(m.title) + '</h2>' +
       '<p class="stage-desc">' + esc(m.desc) + '</p>' +
+      (LS.V35 ? '<div class="life-quote stage-quote">' + LS.V35.quoteHtml(game) + '</div>' : '') +
       recapHtml +
       stageSummaryInline(sum) +
       '<button type="button" class="btn primary stage-continue" id="btnStageContinue">继续人生</button>' +
@@ -1736,7 +1747,7 @@
     $('eventTitle').innerHTML = (titleEmoji ? '<span class="emoji ev-title-emoji" aria-hidden="true">' + esc(titleEmoji) + '</span> ' : '') +
       esc(tpl(e.title));
     $('eventTitle').className = 'tier-title ' + ti.cls;
-    var rawText = tpl(e.text);
+    var rawText = tpl(LS.V35 ? LS.V35.textOf(game, e) : e.text);
     var bodyEmoji = '';
     if (LS.iconCatOf) {
       var bodyCat = LS.iconCatOf({ text: rawText });
@@ -1806,14 +1817,25 @@
     var opts = $('options');
     opts.innerHTML = '';
     opts.className = 'options ' + ti.cls;
+    var shown = [];
     e.opts.forEach(function (opt, i) {
+      if (LS.V35 && LS.V35.optOk && !LS.V35.optOk(game, opt)) return;
+      shown.push({ opt: opt, i: i });
+    });
+    /* v3.5：过滤后至少保留一个选项；全部被过滤才回退全量，
+       避免把已故/不存在亲属的选项又放回界面。 */
+    if (!shown.length) {
+      shown = e.opts.map(function (opt, i) { return { opt: opt, i: i }; });
+    }
+    shown.forEach(function (pair, k) {
+      var opt = pair.opt, i = pair.i;
       var b = document.createElement('button');
       b.type = 'button';
       var toneCls = '';
       if (e.tier === 'crossroad') toneCls = ' tone-' + (opt.tone || (opt.gamble ? 'risk' : 'safe'));
       else if (e.tier === 'echo') toneCls = ' echo-opt';
       b.className = 'opt-btn opt-in' + toneCls;
-      b.style.animationDelay = (i * 70) + 'ms';
+      b.style.animationDelay = (k * 70) + 'ms';
       var rk = opt.risk && RISK_META[opt.risk];
       var hardWarn = (Number(game.attrs.happiness) < 40 && LS.isHardOpt && LS.isHardOpt(opt))
         ? '<span class="opt-warn">心情低落，这类事更难撑下来</span>' : '';
@@ -2722,6 +2744,7 @@
       '<div class="end-kicker">人生结算 · LIFE SUMMARY</div>' +
       '<div class="end-title">' + esc(s.name) + '　' + s.age + ' 岁</div>' +
       '<div class="end-sub">' + s.birthYear + ' 年 — ' + s.deathYear + ' 年　·　' + esc(s.reason) + '　·　出生于' + esc(game.birthplace) + '，' + esc(game.background) + '家庭　·　随机种子 ' + s.seed + '</div>' +
+      (LS.V35 ? '<div class="life-quote end-quote">' + LS.V35.quoteHtml(game) + '</div>' : '') +
       '</div>' +
       '<div class="end-cards">' + cards.map(function (c) {
         return '<div class="end-card"><div class="k">' + c.k + '</div><div class="v ' + (c.small ? 'small' : '') + '">' + esc(c.v) + '</div><div class="x">' + esc(c.x) + '</div></div>';
