@@ -62,9 +62,30 @@
         </div>
 
         <div class="panel">
-          <div class="panel-title">天赋 <span class="panel-tip">最多选 2 个 · <span id="talentCount">0</span>/2</span></div>
-          <div id="talentGrid" class="talent-grid"></div>
+          <div class="panel-title">出生档案 · 抽签</div>
+          <div class="origin-rows">
+            <div class="origin-row"><span>家庭阶层</span><b id="originClass">—</b></div>
+            <div class="origin-row"><span>地域</span><b id="originLocale">—</b></div>
+            <div class="origin-row origin-secret"><span>隐秘身世</span><b id="originSecret">?</b></div>
+          </div>
+          <div class="field-note">出生档案只显示 3 项，隐秘身世在人生里慢慢揭开。</div>
+          <button id="btnRollOrigin" class="btn tiny" type="button">重新抽取出身</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">天赋抽签 <span class="panel-tip">两轮 5 选 1 · 已抽 <span id="talentCount">0</span>/2</span></div>
+          <div id="talentGacha">
+            <div id="gachaRound" class="gacha-round">第 1 轮</div>
+            <div id="gachaCards" class="gacha-cards"></div>
+            <div id="gachaPicked" class="gacha-picked"></div>
+            <div class="gacha-actions">
+              <button id="btnReroll" class="btn tiny" type="button">重抽本轮</button>
+              <span id="gachaNote" class="field-note"></span>
+            </div>
+          </div>
           <div class="field-note" id="noteTalents"></div>
+          <!-- 阶段 1 过渡空壳：旧 ui.js 的 fillTalents 仍按 #talentGrid 渲染，T3 重写 ui.js 后删除 -->
+          <div id="talentGrid" class="talent-grid" hidden></div>
         </div>
       </div>
 
@@ -99,6 +120,7 @@
       <div class="sb-attrs" id="sbAttrs"></div>
       <div class="sb-right">
         <button id="btnRelation" class="btn tiny">人物关系</button>
+        <button id="btnReduceMotion" class="btn tiny" type="button">减少动效</button>
         <button id="btnDetail" class="btn tiny">查看详情</button>
       </div>
     </header>
@@ -138,6 +160,7 @@
       <button id="btnSave" class="btn corner">存档</button>
       <button id="btnLoad" class="btn corner">读档</button>
       <button id="btnMemoir" class="btn corner">回忆录</button>
+      <button id="btnPromises" class="btn corner">承诺清单</button>
     </div>
   </section>
 
@@ -179,7 +202,11 @@
 
 <input type="file" id="importFile" accept=".json,application/json" hidden>
 
+<!-- 非阻断暗角层：健康 / 幸福 / 压力低值时的氛围提示（不拦截点击） -->
+<div id="moodVignette" aria-hidden="true"><div id="moodHint" class="mood-hint"></div></div>
+
 <script src="js/state.js"></script>
+<script src="js/icons.js"></script>
 <script src="js/social.js"></script>
 <script src="js/events.js"></script>
 <script src="js/events_v32a.js"></script>
@@ -188,6 +215,8 @@
 <script src="js/events_v33b.js"></script>
 <script src="js/events_v33c.js"></script>
 <script src="js/events_v33d.js"></script>
+<script src="js/events_v35.js"></script>
+<script src="js/lines.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/art.js"></script>
 <script src="js/save.js"></script>

@@ -298,69 +298,175 @@
     }
   };
 
-  /* ---------------- 天赋（≥8，含正向与双面） ---------------- */
+  /* ---------------- 天赋：28 个 · 普通 11 / 稀有 12 / 传说 5 ---------------- */
   LS.TALENTS = [
-    {
-      id: 'memory', name: '过目不忘', tag: '学习',
+    /* ---- 稀有 ---- */
+    { id: 'memory', name: '过目不忘', tag: '学习', rarity: 'rare', emoji: '📘',
       desc: '记性好，读书省力。代价是更容易被“你应该更优秀”绑架。',
-      mods: { knowledge: 10, happiness: -1 },
-      eduBonus: 0.14, stress: 2
-    },
-    {
-      id: 'sickly', name: '体弱多病', tag: '双面',
+      mods: { knowledge: 10, happiness: -1 }, eduBonus: 0.14, stress: 2,
+      bias: { study: 1.25 } },
+    /* ---- 普通 ---- */
+    { id: 'sickly', name: '体弱多病', tag: '双面', rarity: 'normal', emoji: '🩺',
       desc: '从小跑医院，身体底子薄；但对人情冷暖更敏感。',
-      mods: { health: -14, happiness: 2, charm: 2 },
-      healthMul: 1.25, medEvents: 1
-    },
-    {
-      id: 'social', name: '社交达人', tag: '关系',
+      mods: { health: -14, happiness: 2, charm: 2 }, healthMul: 1.25, medEvents: 1,
+      bias: { health: 1.35, family: 1.1 } },
+    /* ---- 稀有 ---- */
+    { id: 'social', name: '社交达人', tag: '关系', rarity: 'rare', emoji: '🤝',
       desc: '自来熟，饭桌上能把陌生人变成熟人。',
-      mods: { charm: 9, happiness: 2 },
-      favorGain: 1.45, stress: -1
-    },
-    {
-      id: 'lucky', name: '幸运儿', tag: '运气',
+      mods: { charm: 9, happiness: 2 }, favorGain: 1.45, stress: -1,
+      bias: { family: 1.2, work: 1.05 } },
+    /* ---- 传说 ---- */
+    { id: 'lucky', name: '幸运儿', tag: '运气', rarity: 'legend', emoji: '🍀',
       desc: '大事未必顺，小事常能躲过去。',
-      mods: { happiness: 3 },
-      luck: 0.08
-    },
-    {
-      id: 'ambitious', name: '野心勃勃', tag: '双面',
+      mods: { happiness: 3 }, luck: 0.08,
+      bias: { gift: 1.3, risk: 0.8 } },
+    /* ---- 稀有 ---- */
+    { id: 'ambitious', name: '野心勃勃', tag: '双面', rarity: 'rare', emoji: '🔥',
       desc: '你很难接受“就这样吧”，但焦虑也跟着你。',
-      mods: { finance: 5, happiness: -2 },
-      incomeMul: 1.1, stress: 7
-    },
-    {
-      id: 'beauty', name: '天生丽质', tag: '外貌',
+      mods: { finance: 5, happiness: -2 }, incomeMul: 1.1, stress: 7,
+      bias: { work: 1.3 } },
+    /* ---- 稀有 ---- */
+    { id: 'beauty', name: '天生丽质', tag: '外貌', rarity: 'rare', emoji: '🌸',
       desc: '外貌带来善意，也带来不必要的麻烦。',
-      mods: { charm: 12, happiness: 1 },
-      favorGain: 1.12
-    },
-    {
-      id: 'steady', name: '心大手稳', tag: '双面',
+      mods: { charm: 12, happiness: 1 }, favorGain: 1.12,
+      bias: { love: 1.25 } },
+    /* ---- 普通 ---- */
+    { id: 'steady', name: '心大手稳', tag: '双面', rarity: 'normal', emoji: '🧘',
       desc: '不太容易慌，也不太容易兴奋。',
-      mods: { health: 3, happiness: 1 },
-      stress: -8, healthMul: 0.94
-    },
-    {
-      id: 'hardbone', name: '命硬', tag: '体质',
+      mods: { health: 3, happiness: 1 }, stress: -8, healthMul: 0.94,
+      bias: { risk: 0.85 } },
+    /* ---- 稀有 ---- */
+    { id: 'hardbone', name: '命硬', tag: '体质', rarity: 'rare', emoji: '🦴',
       desc: '别人扛不过去的，你往往能扛过去。',
-      mods: { health: 5 },
-      healthMul: 0.86, deathMul: 0.85
-    },
-    {
-      id: 'math', name: '数理脑袋', tag: '学习',
+      mods: { health: 5 }, healthMul: 0.86, deathMul: 0.85,
+      bias: { health: 1.2 } },
+    /* ---- 普通 ---- */
+    { id: 'math', name: '数理脑袋', tag: '学习', rarity: 'normal', emoji: '📐',
       desc: '对数字和结构天然敏感，适合技术路线。',
-      mods: { knowledge: 8, finance: 4 },
-      eduBonus: 0.08
-    },
-    {
-      id: 'art', name: '艺术细胞', tag: '审美',
+      mods: { knowledge: 8, finance: 4 }, eduBonus: 0.09,
+      bias: { study: 1.2, money: 1.1 } },
+    /* ---- 稀有 ---- */
+    { id: 'art', name: '艺术细胞', tag: '审美', rarity: 'rare', emoji: '🎨',
       desc: '对色彩、声音和情绪敏锐，但变现常常慢半拍。',
-      mods: { charm: 6, happiness: 3, knowledge: 1 },
-      artBonus: 0.2
-    }
+      mods: { charm: 6, happiness: 3, knowledge: 1 }, artBonus: 0.2,
+      bias: { art: 1.35 } },
+    /* ---- 传说 ---- */
+    { id: 'prodigy', name: '早慧', tag: '学习', rarity: 'legend', emoji: '🌟',
+      desc: '别人还在打基础时，你已经在想更远的事。早熟也意味着更早焦虑。',
+      mods: { knowledge: 12 }, stress: 6, eduBonus: 0.2,
+      bias: { study: 1.35 } },
+    /* ---- 稀有 ---- */
+    { id: 'lineage', name: '家学渊源', tag: '关系', rarity: 'rare', emoji: '📜',
+      desc: '家里有人读过书、见过世面，你少走一些弯路。',
+      mods: { knowledge: 6, reputation: 4 },
+      bias: { study: 1.1, family: 1.15 } },
+    /* ---- 普通 ---- */
+    { id: 'strongstomach', name: '铁胃', tag: '体质', rarity: 'normal', emoji: '🍚',
+      desc: '粗茶淡饭也吃得香，身体不容易垮。',
+      mods: { health: 6 }, healthMul: 0.92,
+      bias: { health: 1.15 } },
+    /* ---- 普通 · 双面 ---- */
+    { id: 'nightowl', name: '夜猫子', tag: '双面', rarity: 'normal', emoji: '🌙',
+      desc: '夜里脑子最清楚，白天总是欠一点觉。',
+      mods: { knowledge: 4, health: -4 },
+      bias: { work: 1.2, health: 1.1 } },
+    /* ---- 普通 · 双面 ---- */
+    { id: 'wanderer', name: '路痴', tag: '双面', rarity: 'normal', emoji: '🧭',
+      desc: '方向感差，却总能走进一些计划外的巷子。',
+      mods: { charm: 3, finance: -3 },
+      bias: { travel: 1.25 } },
+    /* ---- 稀有 ---- */
+    { id: 'craftsman', name: '手艺人', tag: '技能', rarity: 'rare', emoji: '🔧',
+      desc: '手上功夫扎实，靠一门手艺能吃很多年。',
+      mods: { finance: 4, knowledge: 5 }, incomeMul: 1.06,
+      bias: { work: 1.2 } },
+    /* ---- 普通 ---- */
+    { id: 'sweetmouth', name: '嘴甜', tag: '关系', rarity: 'normal', emoji: '🍬',
+      desc: '会说话，长辈和同事都愿意多帮你一句。',
+      mods: { charm: 7, happiness: -1 }, favorGain: 1.3,
+      bias: { family: 1.15 } },
+    /* ---- 普通 · 双面 ---- */
+    { id: 'slowwarm', name: '慢热', tag: '双面', rarity: 'normal', emoji: '🫖',
+      desc: '初见冷淡，熟了之后反而最靠得住。',
+      mods: { charm: 2, happiness: 2 }, favorGain: 0.9,
+      bias: { love: 0.95, family: 1.1 } },
+    /* ---- 稀有 · 双面 ---- */
+    { id: 'grudge', name: '记仇', tag: '双面', rarity: 'rare', emoji: '🗝️',
+      desc: '别人早忘了的事，你还记得很清楚。',
+      mods: { stress: 3 }, luck: -0.04,
+      bias: { risk: 1.2 } },
+    /* ---- 稀有 ---- */
+    { id: 'optimist', name: '乐天', tag: '心态', rarity: 'rare', emoji: '🌤️',
+      desc: '坏事也能往好处想，代价是偶尔准备不足。',
+      mods: { happiness: 8, finance: -2 }, stress: -6,
+      bias: { joy: 1.2 } },
+    /* ---- 普通 · 双面 ---- */
+    { id: 'taciturn', name: '寡言', tag: '双面', rarity: 'normal', emoji: '🤐',
+      desc: '话少，想得多；热闹的场合总显得局促。',
+      mods: { charm: -4, knowledge: 4 },
+      bias: { study: 1.15, family: 0.9 } },
+    /* ---- 传说 · 双面 ---- */
+    { id: 'stubborn', name: '偏执', tag: '双面', rarity: 'legend', emoji: '⛰️',
+      desc: '认准的事九头牛拉不回，也因此常把身边人推开。',
+      mods: { knowledge: 6, happiness: -6 }, stress: 8, incomeMul: 1.15,
+      bias: { work: 1.25, risk: 1.1 } },
+    /* ---- 稀有 ---- */
+    { id: 'warm', name: '亲和力', tag: '关系', rarity: 'rare', emoji: '☀️',
+      desc: '和你待在一起的人会放松，愿意把心事说出来。',
+      mods: { charm: 6, happiness: 3 }, favorGain: 1.35,
+      bias: { family: 1.2 } },
+    /* ---- 稀有 ---- */
+    { id: 'athletic', name: '身体底子好', tag: '体质', rarity: 'rare', emoji: '🏃',
+      desc: '从小跑跳不喘，运动场上总能多撑一会儿。',
+      mods: { health: 9, charm: 2 }, healthMul: 0.9,
+      bias: { sports: 1.25 } },
+    /* ---- 普通 ---- */
+    { id: 'accountant', name: '会算账', tag: '理财', rarity: 'normal', emoji: '🧮',
+      desc: '对数字敏感，花钱之前先在心里过一遍账。',
+      mods: { finance: 7 }, incomeMul: 1.05,
+      bias: { money: 1.25 } },
+    /* ---- 普通 ---- */
+    { id: 'storyteller', name: '说书人', tag: '表达', rarity: 'normal', emoji: '🎙️',
+      desc: '会讲故事，能把平淡的日子说出滋味。',
+      mods: { charm: 5, knowledge: 3 },
+      bias: { art: 1.15 } },
+    /* ---- 传说 ---- */
+    { id: 'fated', name: '强运', tag: '运气', rarity: 'legend', emoji: '🎏',
+      desc: '命里像被谁照看过一眼，关键时刻总有一线生机。',
+      mods: { happiness: 2 }, luck: 0.14,
+      bias: { gift: 1.4, risk: 0.75 } },
+    /* ---- 传说 ---- */
+    { id: 'latebloom', name: '大器晚成', tag: '时机', rarity: 'legend', emoji: '🌱',
+      desc: '前半生慢半拍，三十五岁之后才真正发力。',
+      mods: { knowledge: 2, happiness: -2 },
+      bias: { study: 0.9 },
+      biasAfterAge: { from: 35, bias: { work: 1.4, money: 1.2, study: 1.1 } } }
   ];
+
+  LS.talentsByRarity = function (r) {
+    return (LS.TALENTS || []).filter(function (t) { return t.rarity === r; });
+  };
+  LS.talentById = function (id) {
+    var list = LS.TALENTS || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  };
+  /* 天赋对“事件类别”的真实权重；未命中返回 1 */
+  LS.talentBiasOf = function (g, cat, age) {
+    if (!g || !g.talents || !g.talents.length) return 1;
+    var mul = 1;
+    for (var i = 0; i < g.talents.length; i++) {
+      var t = LS.talentById(g.talents[i]);
+      if (!t) continue;
+      var b = t.bias || {};
+      if (b[cat]) mul *= Number(b[cat]) || 1;
+      var ab = t.biasAfterAge;
+      if (ab && typeof age === 'number' && age >= ab.from && ab.bias && ab.bias[cat]) {
+        mul *= Number(ab.bias[cat]) || 1;
+      }
+    }
+    return isFinite(mul) ? mul : 1;
+  };
 
   /* ---------------- 职业 ---------------- */
   LS.JOBS = {
@@ -714,6 +820,19 @@
     }
     g.socialQuota.max = 1 + (g.attrs.charm >= 60 ? 1 : 0);
 
+    /* v3.6：出生档案（阶层/地域/隐秘身世）+ 九条人生线状态 */
+    if (LS.LINES) {
+      LS.LINES.init(g);
+      if (cfg.origin) {
+        g.origin.klass = cfg.origin.klass || g.origin.klass;
+        g.origin.locale = cfg.origin.locale || g.origin.locale;
+        if (cfg.origin.secretId) {
+          g.origin.secretId = cfg.origin.secretId;
+          g.origin.name = (LS.LINES.secret(g) || {}).name || g.origin.name;
+        }
+      }
+    }
+
     var birthText = '出生在' + g.birthplace + '的一个' + g.background + '家庭。父亲 ' + fatherAge + ' 岁，母亲 ' + motherAge + ' 岁。';
     LS.addMemory(g, birthText, 'birth');
     LS.pushEventLog(g, {
@@ -760,8 +879,12 @@
       isChild: !!opt.isChild,
       isSpouse: !!opt.isSpouse,
       lastContactYear: opt.lastContactYear === undefined ? null : opt.lastContactYear,
-      arcStage: opt.arcStage || '相遇'
+      arcStage: opt.arcStage || '相遇',
+      /* v3.5：NPC 独立命运（旧档由 SOCIAL.ensureFate 补齐） */
+      fate: opt.fate || null,
+      fateLog: opt.fateLog || []
     };
+    if (!npc.fate && window.LS && LS.SOCIAL && LS.SOCIAL.initFate) LS.SOCIAL.initFate(npc);
     return npc;
   };
   /* 记忆锚点：1-3 条，超出时挤掉最旧的一条 */

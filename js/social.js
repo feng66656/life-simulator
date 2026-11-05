@@ -255,6 +255,202 @@
     g.npcArc[npc.id].stage = stage;
   };
 
+  /* ================= v3.5 NPC 独立命运 ================= */
+  var FATE_JOBS = {
+    low: ['流水线工人', '快递员', '餐馆帮厨', '保安', '出租车司机'],
+    mid: ['公司职员', '小学老师', '护士', '个体户', '技术员', '销售'],
+    high: ['工程师', '医生', '律师', '部门经理', '大学教师', '创业者']
+  };
+  var FATE_SURNAME = ['李', '王', '张', '刘', '陈', '杨', '赵', '周', '吴', '徐'];
+
+  SOCIAL.initFate = function (npc) {
+    if (!npc || npc.fate) return npc && npc.fate;
+    var age = Number(npc.age) || 30;
+    var role = npc.role || '朋友';
+    var edu = age >= 22 ? 3 : (age >= 18 ? 2 : (age >= 12 ? 1 : 0));
+    var job = null, income = 0;
+    if (/父亲|母亲|爸|妈/.test(role)) { job = /母亲|妈/.test(role) ? '会计' : '工厂班长'; income = 5200; edu = 2; }
+    else if (role === '上司') { job = '部门经理'; income = 12000; edu = 4; }
+    else if (role === '配偶') { job = '公司职员'; income = 6000; edu = 3; }
+    else if (role === '子女') { job = age >= 22 ? '公司职员' : null; income = age >= 22 ? 5000 : 0; edu = Math.min(4, Math.max(0, Math.floor((age - 6) / 5))); }
+    else if (role === '发小' || role === '同学' || role === '朋友') { job = age >= 22 ? '公司职员' : null; income = age >= 22 ? 5500 : 0; }
+    npc.fate = {
+      edu: edu, job: job, jobLevel: job ? 1 : 0, income: income,
+      debt: 0, married: /父亲|母亲|配偶/.test(role) || false, spouse: '',
+      children: role === '子女' ? 0 : (/父亲|母亲/.test(role) ? 1 : 0),
+      city: '本市', business: false, bankrupt: false,
+      tags: [], retired: false, lastTickYear: null
+    };
+    return npc.fate;
+  };
+
+  SOCIAL.ensureFate = function (g) {
+    (g.npcs || []).forEach(function (n) {
+      SOCIAL.initFate(n);
+      if (!n.fateLog) n.fateLog = [];
+    });
+  };
+
+  SOCIAL.logFate = function (g, npc, type, text, cause, eventId) {
+    if (!npc) return;
+    npc.fateLog = npc.fateLog || [];
+    npc.fateLog.push({
+      year: g ? g.year : null, age: g ? g.age : null,
+      npcAge: npc.age, type: type, text: String(text || ''),
+      cause: cause || 'self', eventId: eventId || ''
+    });
+    if (npc.fateLog.length > 26) npc.fateLog.shift();
+  };
+
+  /* 主角对 NPC 的可见影响（验收流水用） */
+  SOCIAL.npcImpact = function (g, npc, type, text, eventId) {
+    if (!npc) return;
+    SOCIAL.logFate(g, npc, type, text, 'player', eventId);
+    g.npcImpactLog = g.npcImpactLog || [];
+    g.npcImpactLog.push({ year: g.year, age: g.age, npcId: npc.id, npcRole: npc.role, type: type, text: text, eventId: eventId || '' });
+    if (g.npcImpactLog.length > 120) g.npcImpactLog.shift();
+  };
+
+  SOCIAL.attitude = function (npc) {
+    var it = Number(npc.intimacy) || 0, f = Number(npc.favor) || 0;
+    if (it >= 62 || f >= 2) return f <= -2 ? '不满' : '支持';
+    if (it >= 38) return '中立';
+    return f <= -2 || it < 22 ? '不满' : '中立';
+  };
+
+  /* 年度命运推进：每人每年最多 1–2 条，避免刷屏 */
+  SOCIAL.tickFate = function (g, npc) {
+    if (!npc || !npc.alive) return;
+    var f = SOCIAL.initFate(npc);
+    f.lastTickYear = g.year;
+    var age = npc.age;
+    var r = Math.random;
+
+    /* 升学 */
+    if (age === 6 || age === 12 || age === 18) {
+      f.edu = Math.min(6, f.edu + 1);
+      SOCIAL.logFate(g, npc, 'edu', npc.name + '升入新的学校（' + ['小学', '初中', '高中', '大学', '研究生'][Math.min(4, f.edu - 1)] + '）', 'self');
+    }
+    /* 就业 */
+    if (age >= 22 && !f.job && !f.retired) {
+      if (r() < 0.35) {
+        var pool = f.edu >= 4 ? FATE_JOBS.high : (f.edu >= 2 ? FATE_JOBS.mid : FATE_JOBS.low);
+        f.job = pool[Math.floor(r() * pool.length)];
+        f.income = 3500 + f.edu * 900 + Math.floor(r() * 1500);
+        f.jobLevel = 1;
+        SOCIAL.logFate(g, npc, 'job', npc.name + '进了' + f.city + '一家单位，做' + f.job, 'self');
+      }
+    }
+    /* 升职 */
+    if (f.job && !f.retired && age >= 24 && r() < 0.10 + (npc.note && /能干|要强/.test(npc.note) ? 0.05 : 0)) {
+      f.jobLevel = Math.min(5, f.jobLevel + 1);
+      f.income = Math.round(f.income * 1.15);
+      f.tags = (f.tags || []).filter(function (t) { return t !== '失业'; });
+      SOCIAL.logFate(g, npc, 'promote', npc.name + '升了一级，收入涨到每月约 ' + f.income + ' 元', 'self');
+    }
+    /* 结婚 */
+    if (!f.married && age >= 24 && age <= 40 && r() < 0.11) {
+      f.married = true;
+      f.spouse = FATE_SURNAME[Math.floor(r() * FATE_SURNAME.length)] + '姓伴侣';
+      SOCIAL.logFate(g, npc, 'marry', npc.name + '结婚了，对象是' + f.spouse, 'self');
+    }
+    /* 生子 */
+    if (f.married && age >= 26 && age <= 42 && (f.children || 0) < 2 && r() < 0.14) {
+      f.children = (f.children || 0) + 1;
+      SOCIAL.logFate(g, npc, 'child', npc.name + '有了第' + f.children + '个孩子', 'self');
+    }
+    /* 生病 */
+    var illP = 0.012 + age / 1100 + (npc.health < 50 ? 0.05 : 0);
+    if (r() < illP) {
+      var loss = 6 + Math.floor(r() * 14);
+      npc.health = LS.clamp(npc.health - loss, 1, 100);
+      var severe = npc.health < 28;
+      if (severe) f.tags = [].concat(f.tags || [], ['重病']).filter(function (v, i, a) { return a.indexOf(v) === i; });
+      SOCIAL.logFate(g, npc, severe ? 'critical' : 'ill', npc.name + (severe ? '查出重病，住进了医院' : '大病一场，休养了一阵'), 'self');
+      g.npcFlags = g.npcFlags || {};
+      g.npcFlags[npc.id + ':重病'] = g.year;
+      /* 亲密的人重病：主角被牵动 */
+      if (severe && Number(npc.intimacy) >= 55) {
+        g.attrs.happiness = LS.clamp((Number(g.attrs.happiness) || 0) - 5, 0, 100);
+        g.attrs.stress = LS.clamp((Number(g.attrs.stress) || 0) + 4, 0, 100);
+        g.npcPulse = { year: g.year, tone: 'sorrow', text: '听说' + npc.name + '病重，你心里一直悬着。' };
+        SOCIAL.npcImpact(g, npc, 'ill', '你因' + npc.name + '重病而心神不宁', 'fate');
+      }
+    }
+    /* 失业 / 负债 */
+    if (f.job && !f.retired && age >= 28 && age <= 58 && r() < 0.022 + (f.debt > 0 ? 0.03 : 0)) {
+      f.debt = Math.round(f.debt + f.income * 4);
+      f.tags = [].concat(f.tags || [], ['失业', '负债']).filter(function (v, i, a) { return a.indexOf(v) === i; });
+      f.job = null; f.jobLevel = 0; f.income = 0;
+      SOCIAL.logFate(g, npc, 'losejob', npc.name + '被裁了，欠下约 ' + f.debt + ' 元', 'self');
+    }
+    /* 创业（发小/同学优先） */
+    if ((npc.role === '发小' || npc.role === '同学' || npc.role === '朋友') && !f.business && age >= 26 && age <= 45) {
+      var lendBoost = (g.kindnessLog || []).some(function (k) { return k.npcId === npc.id && k.kind === 'lend' && !k.resolved; });
+      if (r() < (lendBoost ? 0.05 : 0.022)) {
+        f.business = true;
+        f.job = '创业';
+        f.income = 3000;
+        SOCIAL.logFate(g, npc, 'startup', npc.name + '辞了职，拉了个小摊子开始创业', 'self');
+      }
+    }
+    /* 创业成败 */
+    if (f.business && age >= 28 && r() < 0.12) {
+      if (r() < 0.55) {
+        f.income = Math.round(f.income * 2.4 + 4000);
+        f.tags = (f.tags || []).filter(function (t) { return t !== '创业失败'; });
+        SOCIAL.logFate(g, npc, 'success', npc.name + '的小生意做起来了，月入约 ' + f.income + ' 元', 'self');
+      } else {
+        f.business = false; f.job = null; f.income = 0;
+        f.debt = Math.round(f.debt + 60000);
+        f.tags = [].concat(f.tags || [], ['创业失败', '负债']).filter(function (v, i, a) { return a.indexOf(v) === i; });
+        SOCIAL.logFate(g, npc, 'fail', npc.name + '的生意黄了，背上约 ' + f.debt + ' 元债', 'self');
+      }
+    }
+    /* 退休 */
+    if (age >= 60 && !f.retired) {
+      f.retired = true;
+      f.job = '退休';
+      f.income = Math.round((f.income || 4000) * 0.45);
+      SOCIAL.logFate(g, npc, 'retire', npc.name + '退休了，日子慢了下来', 'self');
+    }
+  };
+
+  SOCIAL.tickAll = function (g) {
+    SOCIAL.ensureFate(g);
+    /* 未入册的父母：童年/少年自动补位，保证家人环 */
+    if (!LS.getNpc(g, '父亲') && g.age <= 22) LS.addNpc(g, '父亲', { age: g.age + 26, intimacy: 72, circle: '亲属圈', note: '话不多，手很巧' });
+    if (!LS.getNpc(g, '母亲') && g.age <= 22) LS.addNpc(g, '母亲', { age: g.age + 24, intimacy: 78, circle: '亲属圈', note: '爱唠叨，记性极好' });
+    (g.npcs || []).forEach(function (n) {
+      if (n.alive) SOCIAL.tickFate(g, n);
+      else if (n.fateLog && !n.fateLog.some(function (l) { return l.type === 'death'; })) {
+        SOCIAL.logFate(g, n, 'death', n.name + '于' + (n.deathYear || g.year) + '年离世', 'self');
+      }
+    });
+  };
+
+  /* 关系网：性质 / 档位 / 活跃上限 */
+  SOCIAL.natureOf = function (npc) {
+    if (!npc) return 'friend';
+    if (npc.favor <= -3) return 'enemy';
+    if (/配偶|恋人/.test(npc.role) || npc.isSpouse) return 'love';
+    if (npc.circle === '亲属圈' || npc.isChild) return 'family';
+    if (/同事|上司|客户|合伙人|老板/.test(npc.role) || npc.circle === '同事圈' || npc.circle === '行业圈') return 'interest';
+    return 'friend';
+  };
+  SOCIAL.ringOf = function (npc) {
+    var nat = SOCIAL.natureOf(npc);
+    if (nat === 'family' || nat === 'love') return 1;
+    if (nat === 'interest') return 3;
+    return 2;
+  };
+  SOCIAL.netNpcs = function (g, cap) {
+    var live = (g.npcs || []).filter(function (n) { return n.alive; });
+    var dead = (g.npcs || []).filter(function (n) { return !n.alive; }).slice(-6);
+    live.sort(function (a, b) { return Number(b.intimacy) - Number(a.intimacy); });
+    return { live: live.slice(0, cap || 18), dead: dead };
+  };
+
   /* v3.2：对外别名，engine/ui 统一走 LS.social */
   LS.social = SOCIAL;
 })();

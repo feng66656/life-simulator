@@ -1012,6 +1012,8 @@
       var neg = /病|流感|摔|裁员|骗|吵|疼|亏|住院|诈骗|债|失|冲突|危机/.test(e.title || '');
       if (pos) w *= 1 + luckOf(g) * 4 + LS.repTotal(g) / 100 * 0.2;
       if (neg) w *= 1 - luckOf(g) * 2.5;
+      /* v3.4：天赋按“事件类别”真实加/减权，不只是一次性属性 */
+      if (LS.talentBiasOf) w *= LS.talentBiasOf(g, LS.iconCatOf ? LS.iconCatOf(e) : 'cross', g.age);
       var cdA = globalCD[e.id];
       if (cdA) w *= 1 / (1 + num0(cdA.runs) * 0.3);
       var cdB = g.eventCD && g.eventCD[e.id];
@@ -1428,7 +1430,15 @@
       due.push({ item: item, ev: pe, prio: pe ? (pe.prio || 60) : 0 });
     }
     if (due.length) {
-      due.sort(function (a, b) { return b.prio - a.prio; });
+      /* v3.6：先到期的先兑现（FIFO），否则低优先暗线会被高优先链无限饿死 */
+      due.sort(function (a, b) {
+        /* 撞车/承诺到期这类“同一年必须给答复”的事件插队 */
+        var ua = a.item.urgent ? 1 : 0, ub = b.item.urgent ? 1 : 0;
+        if (ub !== ua) return ub - ua;
+        var da = a.item.dueAge || 0, db = b.item.dueAge || 0;
+        if (da !== db) return da - db;
+        return (b.prio || 0) - (a.prio || 0);
+      });
       var chosen = due[0];
       var idx = g.pending.indexOf(chosen.item);
       if (idx >= 0) g.pending.splice(idx, 1);
@@ -2509,6 +2519,18 @@
     g.crossSeen = g.crossSeen || {};
     if (g.crossGate) g.crossSeen[g.crossGate] = true;
 
+    /* v3.5：在场者意见结算（采纳/忽视 → 真金白银的差异 + 亲密度/人情账） */
+    var adv = null;
+    g._adviceP = 0;
+    if (LS.advisorResolve) adv = LS.advisorResolve(g, ev, index);
+    if (adv) {
+      if (adv.fx) applyFx(g, adv.fx, report);
+      g._adviceP = num0(adv.pDelta);
+      g.lastAdvice = { lines: adv.lines || [], eventId: ev.id, age: g.age };
+    } else {
+      g.lastAdvice = null;
+    }
+
     applyFx(g, opt.fx, report);
     if (typeof opt.apply === 'function') {
       var applied = opt.apply(g, report);
@@ -2521,6 +2543,7 @@
       var weights = opt.outcomes.map(function (o, i) {
         var w = Math.max(0, Number(o.w) || 0);
         if (hard && hap < 40 && i === 0) w = w * (hap < 25 ? 0.70 : 0.85);
+        if (i === 0 && g._adviceP) w = w * LS.clamp(1 + g._adviceP * 2.2, 0.6, 1.6);
         total += w;
         return w;
       });
@@ -2544,7 +2567,7 @@
     }
     if (!text && opt.gamble) {
       var pv = typeof opt.gamble.p === 'function' ? opt.gamble.p(g) : opt.gamble.p;
-      var pAdj = LS.clamp((isFinite(pv) ? pv : 0.5) + luckOf(g) * 0.12, 0.03, 0.97);
+      var pAdj = LS.clamp((isFinite(pv) ? pv : 0.5) + luckOf(g) * 0.12 + num0(g._adviceP), 0.03, 0.97);
       if (isHardOpt(opt) && num0(g.attrs.happiness) < 40) {
         pAdj = LS.clamp(pAdj - (num0(g.attrs.happiness) < 25 ? 0.18 : 0.10), 0.03, 0.97);
         ctx.hapPenalty = true;
@@ -2685,7 +2708,11 @@
     if (LS.social) {
       LS.social.beginYear(g);
       LS.social.decay(g);
+      /* v3.5：NPC 独立命运推进（升学/就业/婚育/病/失业/创业/退休） */
+      if (LS.social.tickAll) LS.social.tickAll(g);
     }
+    /* v3.6：九条人生线 / 身世征兆 / 线索卡 / 交叉撞车 / 承诺到期 */
+    if (LS.LINES && LS.LINES.tick) LS.LINES.tick(g);
 
     var reason = deathReason(g);
     if (reason) {

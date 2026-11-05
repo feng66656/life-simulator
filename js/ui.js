@@ -10,12 +10,23 @@
   var bases = {};
   var useLegacy = true;
   var DEBUG_MODE = /debug/i.test(location.hash + location.search);
+  var reduceMotion = false;
+  var lastMoodTier = null;
+  var originPick = null;
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
+  }
+  /* 图标表由 icons.js 统一提供；未载入时按 fallback 降级，避免整块 UI 报错 */
+  function icon(group, key, fallback) {
+    return (LS.icon ? LS.icon(group, key, fallback) : '') || fallback || '';
+  }
+  function emojiSpan(group, key, cls, fallback) {
+    var ch = icon(group, key, fallback);
+    return ch ? '<span class="emoji ' + (cls || '') + '" aria-hidden="true">' + esc(ch) + '</span>' : '';
   }
   function show(screenId) {
     var screens = document.querySelectorAll('.screen');
@@ -77,44 +88,195 @@
     bg.value = '普通工薪';
   }
 
-  function fillTalents() {
-    var grid = $('talentGrid');
-    grid.innerHTML = '';
-    LS.TALENTS.forEach(function (t) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'talent' + (selTalents.indexOf(t.id) >= 0 ? ' on' : '');
-      b.dataset.id = t.id;
-      b.innerHTML = '<span class="t-name">' + esc(t.name) + '<span class="t-tag">' + esc(t.tag) + '</span></span>' +
-        '<span class="t-desc">' + esc(t.desc) + '</span>';
-      b.addEventListener('click', function () {
-        var i = selTalents.indexOf(t.id);
-        if (i >= 0) selTalents.splice(i, 1);
-        else {
-          if (selTalents.length >= 2) {
-            $('noteTalents').textContent = '最多只能选 2 个天赋。先取消一个再选。';
-            $('noteTalents').style.color = 'var(--danger)';
-            return;
-          }
-          selTalents.push(t.id);
-          $('noteTalents').style.color = '';
-        }
-        fillTalents();
-        recomputeBase();
-        updateTalentNote();
-      });
-      grid.appendChild(b);
+  /* =========================================================
+     v3.4 开局天赋抽卡：两轮 5 选 1，每轮可整轮重抽一次
+     ========================================================= */
+  var GACHA_ROUNDS = 2;
+  var GACHA_CARDS = 5;
+  var gacha = { round: 0, cards: [[], []], picks: [null, null], rerolled: [false, false] };
+
+  function grnd() { return LS.rand ? LS.rand() : Math.random(); }
+  function talentOf(id) { return LS.talent ? LS.talent(id) : null; }
+  function gachaPicked() {
+    return gacha.picks.filter(function (x) { return !!x; });
+  }
+  function rarityLabel(r) {
+    return r === 'legend' ? '传说' : (r === 'rare' ? '稀有' : '普通');
+  }
+  function rarClass(r) {
+    return 'rar-' + (r === 'legend' ? 'legend' : (r === 'rare' ? 'rare' : 'common'));
+  }
+  function rarityOfRoll(r) {
+    if (r < 0.05) return 'legend';
+    if (r < 0.30) return 'rare';
+    return 'normal';
+  }
+  /* 单轮候选：普通为主、稀有次之、传说约 5%；同轮不重复，且避开已抽中的天赋 */
+  function drawRound(index, exclude) {
+    var taken = gacha.picks.filter(function (x) { return !!x; });
+    taken = taken.concat(exclude || []);
+    var pool = (LS.TALENTS || []).filter(function (t) {
+      return taken.indexOf(t.id) < 0;
     });
+    var used = {};
+    var out = [];
+    for (var i = 0; i < GACHA_CARDS; i++) {
+      var rarity = rarityOfRoll(grnd());
+      var list = (LS.talentsByRarity ? LS.talentsByRarity(rarity) : pool.filter(function (t) {
+        return (t.rarity || 'normal') === rarity;
+      })).filter(function (t) {
+        return taken.indexOf(t.id) < 0 && !used[t.id];
+      });
+      if (!list.length) {
+        list = pool.filter(function (t) { return !used[t.id]; });
+      }
+      if (!list.length) break;
+      var t = list[Math.floor(grnd() * list.length)];
+      used[t.id] = true;
+      out.push(t.id);
+    }
+    gacha.cards[index] = out;
   }
 
-  function updateTalentNote() {
-    $('talentCount').textContent = selTalents.length;
-    if (selTalents.length === 0) {
-      $('noteTalents').textContent = '不选也可以。背景与出生地仍会决定你的起点。';
-    } else {
-      var names = selTalents.map(function (id) { return LS.talent(id).name; });
-      $('noteTalents').textContent = '已选：' + names.join('、') + '。天赋会改变基数、事件权重与后续判定。';
+  function resetGacha() {
+    gacha = { round: 0, cards: [[], []], picks: [null, null], rerolled: [false, false] };
+    drawRound(0);
+    syncGacha();
+  }
+
+  function syncGacha() {
+    selTalents = gacha.picks.filter(function (x) { return !!x; });
+  }
+
+  function gachaCardHtml(t) {
+    var rar = t.rarity || 'normal';
+    var picked = gacha.picks.indexOf(t.id) >= 0;
+    return '<button type="button" class="gacha-card ' + rarClass(rar) + (picked ? ' picked' : '') + '"' +
+      ' data-talent-id="' + esc(t.id) + '" aria-pressed="' + (picked ? 'true' : 'false') + '">' +
+      '<span class="g-emoji emoji" aria-hidden="true">' + esc(t.emoji || '✨') + '</span>' +
+      '<span class="g-name">' + esc(t.name) + '</span>' +
+      '<span class="g-desc">' + esc(t.desc || '') + '</span>' +
+      '<span class="g-rar">' + esc(icon('rarity', rar, '🟢')) + ' ' + esc(rarityLabel(rar)) + '</span>' +
+      '</button>';
+  }
+
+  function gachaSlotHtml(id, index) {
+    var t = id ? talentOf(id) : null;
+    if (!t) {
+      return '<div class="gacha-slot empty gp-empty"><span class="slot-empty">第 ' + (index + 1) + ' 轮待抽</span></div>';
     }
+    return '<div class="gacha-slot filled ' + rarClass(t.rarity || 'normal') + '">' +
+      '<span class="slot-emoji emoji" aria-hidden="true">' + esc(t.emoji || '✨') + '</span>' +
+      '<span class="slot-name">' + esc(t.name) + '</span>' +
+      '<span class="slot-rar">' + esc(rarityLabel(t.rarity || 'normal')) + '</span></div>';
+  }
+
+  function renderGacha() {
+    var done = gachaPicked().length >= GACHA_ROUNDS;
+    var round = done ? GACHA_ROUNDS - 1 : Math.min(gacha.round, GACHA_ROUNDS - 1);
+    var cardsEl = $('gachaCards');
+    if (cardsEl) {
+      cardsEl.innerHTML = (gacha.cards[round] || []).map(function (id) {
+        var t = talentOf(id);
+        return t ? gachaCardHtml(t) : '';
+      }).join('');
+      var btns = cardsEl.querySelectorAll('[data-talent-id]');
+      for (var i = 0; i < btns.length; i++) {
+        (function (btn) {
+          btn.addEventListener('click', function () { pickGacha(btn.dataset.talentId); });
+        })(btns[i]);
+      }
+    }
+    var roundEl = $('gachaRound');
+    if (roundEl) {
+      roundEl.textContent = done
+        ? '两轮已抽满 · 天赋已确定'
+        : '第 ' + (round + 1) + ' / ' + GACHA_ROUNDS + ' 轮 · 从 ' + (gacha.cards[round] || []).length + ' 张里选 1 张';
+    }
+    var pickedEl = $('gachaPicked');
+    if (pickedEl) {
+      pickedEl.innerHTML = gachaSlotHtml(gacha.picks[0], 0) + gachaSlotHtml(gacha.picks[1], 1);
+    }
+    var rerollBtn = $('btnReroll');
+    if (rerollBtn) {
+      var canReroll = !done && !gacha.rerolled[round];
+      rerollBtn.disabled = !canReroll;
+      rerollBtn.textContent = gacha.rerolled[round] ? '本轮已重抽' : '重抽本轮';
+    }
+    var countEl = $('talentCount');
+    if (countEl) countEl.textContent = String(gachaPicked().length);
+    updateTalentNote(done);
+  }
+
+  function pickGacha(id) {
+    var round = gacha.round;
+    if (round >= GACHA_ROUNDS) return;
+    if (gacha.picks[round]) return;
+    if ((gacha.cards[round] || []).indexOf(id) < 0) return;
+    gacha.picks[round] = id;
+    if (round < GACHA_ROUNDS - 1) {
+      gacha.round = round + 1;
+      if (!gacha.cards[gacha.round] || !gacha.cards[gacha.round].length) drawRound(gacha.round);
+    } else {
+      gacha.round = GACHA_ROUNDS;
+    }
+    syncGacha();
+    renderGacha();
+    recomputeBase();
+    updateTalentNote();
+  }
+
+  function rerollGacha() {
+    var round = gacha.round;
+    if (round >= GACHA_ROUNDS || gacha.rerolled[round]) return;
+    var old = (gacha.cards[round] || []).slice();
+    gacha.picks[round] = null;
+    gacha.rerolled[round] = true;
+    drawRound(round, old);
+    syncGacha();
+    renderGacha();
+    recomputeBase();
+    updateTalentNote();
+  }
+
+  function randomizeGacha() {
+    gacha = { round: 0, cards: [[], []], picks: [null, null], rerolled: [false, false] };
+    drawRound(0);
+    if (gacha.cards[0].length) gacha.picks[0] = gacha.cards[0][Math.floor(grnd() * gacha.cards[0].length)];
+    gacha.round = 1;
+    drawRound(1);
+    if (gacha.cards[1].length) gacha.picks[1] = gacha.cards[1][Math.floor(grnd() * gacha.cards[1].length)];
+    gacha.round = GACHA_ROUNDS;
+    syncGacha();
+  }
+
+  /* 保留同名入口：测试脚本与旧调用都走这里 */
+  function fillTalents() {
+    if ($('talentGacha') && (!gacha.cards[0] || !gacha.cards[0].length)) resetGacha();
+    renderGacha();
+  }
+
+  function updateTalentNote(done) {
+    var count = gachaPicked().length;
+    var text;
+    if (count === 0) {
+      text = '第 1 轮：从 5 张候选里选 1 张。每轮可以整轮重抽一次。';
+    } else if (count === 1) {
+      text = '已抽中「' + (talentOf(gacha.picks[0]) || {}).name + '」。第 2 轮再选 1 张，天赋才会生效。';
+    } else {
+      var names = gachaPicked().map(function (id) { return (talentOf(id) || {}).name; });
+      text = '已抽满：「' + names.join('」「') + '」。天赋会改变基数、事件权重与后续判定。';
+    }
+    var note = $('gachaNote');
+    if (note) { note.textContent = text; note.style.color = count < GACHA_ROUNDS ? 'var(--ink-3)' : ''; }
+    var legacyNote = $('noteTalents');
+    if (legacyNote) { legacyNote.textContent = text; legacyNote.style.color = ''; }
+    var countEl = $('talentCount');
+    if (countEl) countEl.textContent = String(count);
+    var startBtn = $('btnStartGame');
+    if (startBtn && $('talentGacha')) startBtn.disabled = count < GACHA_ROUNDS;
+    var roundEl = $('gachaRound');
+    if (done && roundEl) roundEl.textContent = '两轮已抽满 · 天赋已确定';
   }
 
   function recomputeBase() {
@@ -203,14 +365,12 @@
   }
 
   function resetCreate() {
-    selTalents = [];
+    resetGacha();
     useLegacy = true;
     $('inName').value = '';
     $('inGender').value = '男';
-    $('inBirthplace').value = '小城';
-    $('inBackground').value = '普通工薪';
-    $('noteTalents').textContent = '';
-    bases = LS.baseAttrs('小城', '普通工薪', []);
+    rollOrigin();
+    bases = LS.baseAttrs($('inBirthplace').value, $('inBackground').value, []);
     alloc = {};
     for (var k in bases) alloc[k] = bases[k];
     fillTalents();
@@ -227,15 +387,10 @@
     $('inGender').value = LS.pick(['男', '女', '其他']);
     $('inBirthplace').value = LS.pick(keys);
     $('inBackground').value = LS.pick(bgs);
-    selTalents = [];
-    var pool = LS.TALENTS.map(function (t) { return t.id; });
-    var n = LS.chance(0.75) ? 2 : (LS.chance(0.6) ? 1 : 0);
-    while (selTalents.length < n && pool.length) {
-      var idx = Math.floor(LS.rand() * pool.length);
-      selTalents.push(pool.splice(idx, 1)[0]);
-    }
+    randomizeGacha();
     fillTalents();
     updateTalentNote();
+    rollOrigin();
     bases = LS.baseAttrs($('inBirthplace').value, $('inBackground').value, selTalents);
     alloc = {};
     for (var k in bases) alloc[k] = bases[k];
@@ -251,7 +406,33 @@
     renderSliders();
     updatePoints();
     updateFieldNotes();
-    $('noteTalents').style.color = '';
+    var legacyNote = $('noteTalents');
+    if (legacyNote) legacyNote.style.color = '';
+  }
+
+  /* v3.6 出身抽签：界面只给 3 项，隐秘身世始终显示 ? */
+  function rollOrigin() {
+    if (!LS.ORIGIN) return;
+    var r = LS.ORIGIN.roll();
+    var bgMap = { '贫困': '贫困', '普通': '普通工薪', '小康': '中产', '富裕': '富裕', '单亲': '普通工薪', '重组家庭': '普通工薪', '无父无母': '贫困', '被收养': '普通工薪' };
+    var locMap = { '城市': '二线城市', '县城': '小城', '乡镇': '小城', '农村': '农村' };
+    originPick = { klass: r.klass, locale: r.locale, secretId: r.secretId };
+    var oc = $('originClass'), ol = $('originLocale'), os = $('originSecret');
+    if (oc) oc.textContent = r.klass;
+    if (ol) ol.textContent = r.locale;
+    if (os) os.textContent = '?';
+    if ($('inBackground') && bgMap[r.klass]) $('inBackground').value = bgMap[r.klass];
+    if ($('inBirthplace') && locMap[r.locale]) $('inBirthplace').value = locMap[r.locale];
+  }
+
+  function applyRolledOrigin() {
+    rollOrigin();
+    bases = LS.baseAttrs($('inBirthplace').value, $('inBackground').value, selTalents);
+    alloc = {};
+    for (var k in bases) alloc[k] = bases[k];
+    renderSliders();
+    updatePoints();
+    updateFieldNotes();
   }
 
   function bindCreate() {
@@ -264,12 +445,16 @@
       updatePoints();
     });
     $('btnRandomChar').addEventListener('click', randomCharacter);
+    var rollBtn = $('btnRollOrigin');
+    if (rollBtn) rollBtn.addEventListener('click', applyRolledOrigin);
     var legBtn = $('btnLegacy');
     if (legBtn) legBtn.addEventListener('click', function () {
       useLegacy = !useLegacy;
       updateLegacyNote();
     });
     $('btnCreateBack').addEventListener('click', function () { show('screen-welcome'); });
+    var rerollBtn = $('btnReroll');
+    if (rerollBtn) rerollBtn.addEventListener('click', rerollGacha);
     $('btnStartGame').addEventListener('click', function () {
       var name = $('inName').value.trim();
       if (!name) {
@@ -281,6 +466,15 @@
         openModal('属性分配超额', '<p class="empty-note">剩余点数不能为负，请调低某些属性后再开始。</p>');
         return;
       }
+      var picked = gachaPicked();
+      if (picked.length < GACHA_ROUNDS) {
+        var note = $('gachaNote');
+        if (note) {
+          note.textContent = '还要抽满两轮天赋才能开始：第 ' + (picked.length + 1) + ' 轮还没选。';
+          note.style.color = 'var(--danger)';
+        }
+        return;
+      }
       var attrs = {};
       for (var k in alloc) attrs[k] = Math.round(alloc[k]);
       var cfg = {
@@ -288,9 +482,10 @@
         gender: $('inGender').value,
         birthplace: $('inBirthplace').value,
         background: $('inBackground').value,
-        talents: selTalents.slice(),
+        talents: picked.slice(0, GACHA_ROUNDS),
         attrs: attrs,
         useLegacy: useLegacy,
+        origin: originPick,
         seed: (Date.now() % 2147483647) || 1
       };
       try {
@@ -299,6 +494,8 @@
         openModal('无法开始', '<p class="empty-note">' + esc(e.message || '创建失败') + '</p>');
         return;
       }
+      game.reduceMotion = !!reduceMotion;
+      syncReduceMotion();
       closeModal();
       show('screen-game');
       LS.save.autoSave(game);
@@ -315,69 +512,136 @@
     return '阶段 ' + LS.stageIndexOf(game.age) + '/7 · ' + LS.stageOf(game.age);
   }
 
-  /* 五星按 20 一档 */
-  function starsOf(v) {
-    var n = Math.floor(LS.clamp(Number(v) || 0, 0, 100) / 20);
-    var s = '';
-    for (var i = 0; i < 5; i++) s += (i < n ? '★' : '☆');
-    return s;
-  }
+  /* v3.4 七属性：图标 + 数值 + 迷你条；<40 警戒 / <25 危险 / <10 闪烁，压力反向 */
+  var ATTR_META = {
+    knowledge: { label: '学识' },
+    health: { label: '健康' },
+    finance: { label: '财力' },
+    charm: { label: '魅力' },
+    happiness: { label: '幸福' },
+    reputation: { label: '声望' },
+    stress: { label: '压力' }
+  };
 
-  /* 幸福感/压力只给区间描述，精确值留在详情面板 */
-  function moodOf(v, kind) {
-    v = Number(v) || 0;
-    if (kind === 'stress') {
-      if (v <= 25) return { cls: 'calm', word: '轻松' };
-      if (v <= 45) return { cls: 'ok', word: '尚可' };
-      if (v <= 65) return { cls: 'warn', word: '紧绷' };
-      return { cls: 'bad', word: '高压' };
-    }
-    if (v >= 70) return { cls: 'good', word: '很好' };
-    if (v >= 50) return { cls: 'ok', word: '尚可' };
-    if (v >= 35) return { cls: 'warn', word: '平淡' };
-    return { cls: 'bad', word: '低落' };
-  }
-
-  /* v3.2 低值预警三档：<40 浅红 / <25 深红 / <10 深红加粗；压力反向 */
   function warnLevel(v, invert) {
     v = Number(v) || 0;
     if (invert) {
-      if (v >= 85) return 'warn-lv3';
-      if (v >= 75) return 'warn-lv2';
-      if (v >= 60) return 'warn-lv1';
+      if (v > 90) return 'crit';
+      if (v > 75) return 'danger';
+      if (v > 65) return 'warn';
       return '';
     }
-    if (v < 10) return 'warn-lv3';
-    if (v < 25) return 'warn-lv2';
-    if (v < 40) return 'warn-lv1';
+    if (v < 10) return 'crit';
+    if (v < 25) return 'danger';
+    if (v < 40) return 'warn';
     return '';
   }
 
-  function attrBarChip(label, val, extraCls) {
+  function attrBarChip(key, val) {
+    var m = ATTR_META[key] || { label: key };
     var v = Math.round(LS.clamp(Number(val) || 0, 0, 100));
-    return '<div class="sb-chip attr-chip ' + (extraCls || '') + '">' +
-      '<div class="attr-top"><span class="lbl">' + esc(label) + '</span><span class="val">' + v + '</span></div>' +
-      '<div class="attr-bar"><i style="width:' + v + '%"></i></div>' +
-      '<div class="attr-stars">' + starsOf(v) + '</div></div>';
+    var lv = warnLevel(v, key === 'stress');
+    return '<div class="sb-chip attr-chip ' + esc(key) + (key === 'stress' ? ' stress' : '') +
+      (lv ? ' ' + lv : '') + '" data-k="' + esc(key) + '" title="' + esc(m.label + ' ' + v) + '">' +
+      '<div class="attr-top">' +
+      '<span class="ico" aria-hidden="true">' + esc(icon('attr', key, '·')) + '</span>' +
+      '<span class="lbl">' + esc(m.label) + '</span>' +
+      '<span class="val">' + v + '</span></div>' +
+      '<div class="attr-bar"><i style="width:' + v + '%"></i></div></div>';
   }
 
   function chips() {
+    if (!game) return '';
     var a = game.attrs;
-    var hap = moodOf(a.happiness, 'happy');
-    var pres = moodOf(a.stress, 'stress');
-    var healthExtra = warnLevel(a.health) + (a.health < 35 ? ' low' : '');
     return [
-      attrBarChip('学识', a.knowledge),
-      attrBarChip('健康', a.health, healthExtra),
-      attrBarChip('财力', a.finance),
-      attrBarChip('魅力', a.charm),
-      '<div class="sb-chip mood-chip ' + warnLevel(a.happiness) + '"><div class="attr-top"><span class="lbl">幸福感</span>' +
-        '<span class="mood-line"><i class="mood-dot ' + hap.cls + '"></i>' + hap.word + '</span></div>' +
-        '<div class="attr-bar"><i style="width:' + Math.round(LS.clamp(a.happiness, 0, 100)) + '%"></i></div></div>',
-      attrBarChip('声望', LS.repTotal(game)),
-      '<div class="sb-chip mood-chip ' + warnLevel(a.stress, true) + '"><div class="attr-top"><span class="lbl">压力</span>' +
-        '<span class="mood-line"><i class="mood-dot ' + pres.cls + '"></i>' + pres.word + '</span></div></div>'
+      attrBarChip('knowledge', a.knowledge),
+      attrBarChip('health', a.health),
+      attrBarChip('finance', a.finance),
+      attrBarChip('charm', a.charm),
+      attrBarChip('happiness', a.happiness),
+      attrBarChip('reputation', LS.repTotal(game)),
+      attrBarChip('stress', a.stress)
     ].join('');
+  }
+
+  /* v3.4 非阻断暗角：健康 <50 灰 / 幸福 <40 暖灰 / 压力 >65 冷灰，取最严重一档 */
+  function moodTierOf(a) {
+    if (!a) return null;
+    var list = [];
+    var h = Number(a.health) || 0;
+    var hap = Number(a.happiness) || 0;
+    var st = Number(a.stress) || 0;
+    if (h < 50) list.push({ tier: 'health', gap: 50 - h });
+    if (hap < 40) list.push({ tier: 'happy', gap: 40 - hap });
+    if (st > 65) list.push({ tier: 'stress', gap: st - 65 });
+    if (!list.length) return null;
+    list.sort(function (x, y) { return y.gap - x.gap; });
+    return list[0].tier;
+  }
+
+  var MOOD_HINT = {
+    health: '身体在报警：健康已低于 50，别再把休息往后拖。',
+    happy: '情绪长期偏低：幸福感不到 40，找个人说说话。',
+    stress: '压力已经过高：超过 65，再硬撑会先垮掉身体。'
+  };
+
+  function paintMood() {
+    var v = $('moodVignette');
+    var hint = $('moodHint');
+    if (!v) return;
+    var tier = game ? moodTierOf(game.attrs) : null;
+    v.style.pointerEvents = 'none';
+    v.style.opacity = tier ? '0.85' : '0';
+    v.setAttribute('aria-hidden', 'true');
+    if (tier !== lastMoodTier) {
+      v.className = 'mood-vignette' + (tier ? ' mood-' + tier : '');
+      void v.offsetWidth;
+      /* 一次性呼吸：只在档位切换时触发，减少动效时不播 */
+      if (tier && !reduceMotion && v.animate) {
+        try {
+          v.animate([{ opacity: 0 }, { opacity: 0.92 }, { opacity: 0.85 }],
+            { duration: 800, easing: 'ease-out' });
+        } catch (e) { /* 老浏览器忽略 */ }
+      }
+      lastMoodTier = tier;
+    }
+    if (hint) {
+      hint.textContent = tier ? MOOD_HINT[tier] : '';
+      hint.hidden = !tier;
+    }
+  }
+
+  function clearMood() {
+    lastMoodTier = null;
+    var v = $('moodVignette');
+    if (v) { v.className = 'mood-vignette'; v.style.opacity = '0'; }
+    var hint = $('moodHint');
+    if (hint) { hint.textContent = ''; hint.hidden = true; }
+  }
+
+  /* v3.4 减少动效：只切 body class，功能完全不变 */
+  function systemReduceMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { return false; }
+  }
+  function syncReduceMotion() {
+    document.body.classList.toggle('reduce-motion', !!reduceMotion);
+    var btn = $('btnReduceMotion');
+    if (btn) {
+      btn.textContent = reduceMotion ? '动效已关' : '减少动效';
+      btn.setAttribute('aria-pressed', reduceMotion ? 'true' : 'false');
+    }
+    if (game) game.reduceMotion = !!reduceMotion;
+  }
+  function bindReduceMotion() {
+    var btn = $('btnReduceMotion');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      reduceMotion = !reduceMotion;
+      syncReduceMotion();
+      if (game) LS.save.autoSave(game);
+    });
   }
 
   /* 现金与固定资产：放在左侧信息区，避免挤占六属性进度条 */
@@ -410,6 +674,11 @@
     h.className = 'v2-overlay';
     h.innerHTML = '';
     h.scrollTop = 0;
+    if (h.style) {
+      h.style.removeProperty('--stage');
+      h.style.removeProperty('--stage-bg');
+    }
+    h.removeAttribute('data-stage');
     setCornerHidden(false);
   }
   function openOverlay(kind, html) {
@@ -642,12 +911,20 @@
       '<div class="stage-body">' +
       '<div class="stage-left"><div class="stage-art">' + art + '</div></div>' +
       '<div class="stage-right">' +
-      '<h2 class="stage-title">' + esc(m.title) + '</h2>' +
+      '<h2 class="stage-title">' + emojiSpan('stage', m.label, 'stage-emoji') + esc(m.title) + '</h2>' +
       '<p class="stage-desc">' + esc(m.desc) + '</p>' +
       recapHtml +
       stageSummaryInline(sum) +
       '<button type="button" class="btn primary stage-continue" id="btnStageContinue">继续人生</button>' +
       '</div></div></div></div>');
+    /* 阶段主色：--stage 驱动 .stage-overlay；优先新 token，回落旧 --st-* */
+    var stageKey = m.key || key;
+    var host = overlayHost();
+    if (host.style) {
+      host.style.setProperty('--stage', 'var(--stage-' + stageKey + ', var(--st-' + stageKey + '))');
+      host.style.setProperty('--stage-bg', 'var(--stage-' + stageKey + '-bg, var(--st-' + stageKey + '-bg))');
+    }
+    host.setAttribute('data-stage', stageKey);
     var chipsInCard = overlayHost().querySelectorAll('[data-ci]');
     for (var i = 0; i < chipsInCard.length; i++) {
       (function (btn) {
@@ -751,6 +1028,17 @@
     });
   }
 
+  /* 播报情绪归类：乐事 / 哀事 / 中性；tone 优先，标题关键词兜底 */
+  function bcToneClass(b) {
+    var tone = String((b && b.tone) || '').toLowerCase();
+    if (/red|sorrow|bad|cry|loss/.test(tone)) return 'sorrow';
+    if (/gold|green|joy|good|win|happy/.test(tone)) return 'joy';
+    var title = String((b && b.title) || '');
+    if (/去世|离世|病逝|丧|死亡|失业|离婚|分手|失败|亏损|被骗|入狱|失明|截肢/.test(title)) return 'sorrow';
+    if (/结婚|出生|降生|考上|录取|升职|成功|中奖|买房|退休|团圆|康复|获奖/.test(title)) return 'joy';
+    return 'neutral';
+  }
+
   function showBroadcast(b, debug) {
     if (!b) return;
     /* v3.2 单回合只允许一个遮罩：已有遮罩则跳过播报，直接推进 */
@@ -770,9 +1058,9 @@
     var merged = (b.merged && b.merged.length)
       ? '<div class="bc-merged">同回合同时发生：' + esc(b.merged.join('、')) + '（已合并播报）</div>' : '';
     openOverlay('bc-overlay',
-      '<div class="bc-mask"><div class="bc-card tone-' + esc(b.tone || 'gold') + '">' +
+      '<div class="bc-mask"><div class="bc-card broadcast ' + bcToneClass(b) + ' tone-' + esc(b.tone || 'gold') + '">' +
       '<div class="bc-kicker">重大结果播报</div>' +
-      '<h2 class="bc-title">【' + esc(b.title) + '】</h2>' +
+      '<h2 class="bc-title">' + emojiSpan('bc', bcToneClass(b), 'bc-emoji') + '【' + esc(b.title) + '】</h2>' +
       art +
       '<p class="bc-text">' + esc(b.text) + '</p>' +
       chg + merged +
@@ -1155,7 +1443,14 @@
           : (more ? '<div class="rel-more">还有 ' + more + ' 人</div>' : '')) +
         '</div></div>';
     }
-    openModal('人物关系 · ' + alive.length + ' 人', '<div class="rel-list">' + html + '</div>');
+    var dots = (LS.LINES && LS.LINES.grayDots) ? LS.LINES.grayDots(game) : [];
+    var grayHtml = '';
+    if (dots.length) {
+      grayHtml = '<div class="rel-gray">' + dots.map(function (d) {
+        return '<span class="rel-gray-dot" title="未解开的线索"><i>?</i>' + esc(d.type) + '</span>';
+      }).join('') + '</div>';
+    }
+    openModal('人物关系 · ' + alive.length + ' 人', grayHtml + '<div class="rel-list">' + html + '</div>');
     var body = $('modalBody');
     var rows = body.querySelectorAll('[data-nid]');
     for (var r = 0; r < rows.length; r++) {
@@ -1207,6 +1502,12 @@
           '<div class="rel-tl-text">' + esc(x.text) + '</div></div>';
       }).join('') + '</div>'
       : '<div class="empty-note">还没有留下可追溯的记录。</div>';
+    var np = (game.promises || []).filter(function (p) {
+      return (p.npcId && p.npcId === n.id) || (p.npcRole && p.npcRole === n.role);
+    });
+    var promiseBlock = np.length
+      ? '<div class="npc-promises"><div class="npc-promise-head">与你有关的承诺</div>' + promiseRowsHtml(np) + '</div>'
+      : '';
     openModal(n.name + ' · 关系履历',
       '<div class="npc-his-head">' + avatarHtml(n) +
       '<span class="npc-his-info"><b>' + esc(n.name) + '</b>' +
@@ -1214,9 +1515,15 @@
       '<span class="rel-favor ' + fv.cls + '">' + fv.text + '</span>' +
       '<span class="rel-int">亲密度 ' + Math.round(LS.clamp(Number(n.intimacy) || 0, 0, 100)) + '</span></span></div>' +
       '<button type="button" class="btn tiny" id="btnBackRelation">返回人物卡</button>' +
-      timeline);
+      promiseBlock + timeline);
     var back = $('btnBackRelation');
     if (back) back.addEventListener('click', openRelationModal);
+    var pbtns = $('modalBody').querySelectorAll('[data-pid]');
+    for (var pb = 0; pb < pbtns.length; pb++) {
+      (function (btn) {
+        btn.addEventListener('click', function () { openPromiseLedger(btn.dataset.pid); });
+      })(pbtns[pb]);
+    }
   }
 
   /* 结局页“还在你身边的人”：按锚点写一句评价，不显示数字 */
@@ -1373,18 +1680,75 @@
     high: { cls: 'high', text: '高' }
   };
 
+  /* ---------- v3.4 事件档位展示：回响再分负面 / 馈赠 ---------- */
+  function echoIsGift(e) {
+    var kind = String((e && e.kind) || (game && game.echoInfo && game.echoInfo.kind) || '').toLowerCase();
+    if (/gift|good|joy|win|reward|bless|positive/.test(kind)) return true;
+    if (/risk|neg|bad|loss|ill|debt/.test(kind)) return false;
+    var title = String((e && e.title) || '');
+    if (/馈赠|回报|好事|如愿|善意|礼物|相助|团圆|中奖|升职|康复|录取/.test(title)) return true;
+    if (/恶化|复发|透支|病|丧|失去|失败|拖累|债务/.test(title)) return false;
+    return false;
+  }
+
+  function eventTierInfo(e) {
+    var t = LS.tierOf(e);
+    if (e && e.tier === 'echo') {
+      var gift = echoIsGift(e);
+      return gift
+        ? { cls: 'tier-echo tier-echo-gift', label: '回响·馈赠', iconKey: 'echo' }
+        : { cls: 'tier-echo tier-echo-neg', label: '回响·负面', iconKey: 'echo' };
+    }
+    if (e && e.tier === 'crossroad') {
+      return { cls: 'tier-crossroad tier-cross', label: '岔路', iconKey: 'crossroad' };
+    }
+    return { cls: 'tier-daily', label: '日常', iconKey: 'daily' };
+  }
+
+  /* ---------- v3.4 选项行首 emoji：按 tone / 文案 / 结果倾向 ---------- */
+  function optionEmoji(opt, e) {
+    var o = opt || {};
+    var s = String((o.label || '') + ' ' + (o.hint || '') + ' ' + (o.tag || ''));
+    if (o.tone === 'risk' || o.gamble) return '⚠️';
+    if (/风险|冒险|赌|透支|硬撑|冲动/.test(s)) return '⚠️';
+    if (o.money) return '💰';
+    if (/钱|工资|存款|薪|奖金|买|投资|债|亏|赚|首付|彩票|中奖/.test(s)) return '💰';
+    if (o.at && o.at.health) return '❤️';
+    if (/病|医|手术|体检|药|健康|住院|受伤|失眠/.test(s)) return '🩺';
+    if (/睡|休息|运动|锻炼|康复|散步/.test(s)) return '❤️';
+    if (o.at && o.at.knowledge) return '📘';
+    if (/考|学|读|书|论文|升学|毕业|课|作业/.test(s)) return '📘';
+    if (/工作|上班|加班|辞职|跳槽|求职|面试|创业|项目|领导|同事|裁员/.test(s)) return '💼';
+    if (/孩子|父母|家人|结婚|婚|妻|夫|伴侣|家庭|回家|亲戚/.test(s)) return '🏠';
+    if (/陪|安慰|道歉|和解|照顾|探望|表白|情书|喜欢|拥抱|写信/.test(s)) return '💗';
+    if (/等|再|推迟|以后|忍|拖|搁置/.test(s)) return '⏳';
+    return '·';
+  }
+
   function paintEvent(e) {
     var t = LS.tierOf(e);
+    var ti = eventTierInfo(e);
     var et = $('eventType');
-    et.innerHTML = '<span class="tier-icon">' + esc(t.icon) + '</span>' + esc(t.label);
-    et.className = 'event-type ' + t.cls;
+    et.innerHTML = emojiSpan('tier', ti.iconKey, 'tier-emoji', t.icon) + esc(ti.label);
+    et.className = 'event-type tier-tag ' + ti.cls;
     $('turnNo').textContent = '第 ' + game.turn + ' 回合 · ' + LS.stageLabel(game.stage);
-    $('eventTitle').textContent = tpl(e.title);
-    $('eventTitle').className = 'tier-title ' + t.cls;
-    $('storyText').innerHTML = emphasisHtml(tpl(e.text));
+    var titleEmoji = icon('event', LS.iconCatOf ? LS.iconCatOf(e) : 'cross', '');
+    $('eventTitle').innerHTML = (titleEmoji ? '<span class="emoji ev-title-emoji" aria-hidden="true">' + esc(titleEmoji) + '</span> ' : '') +
+      esc(tpl(e.title));
+    $('eventTitle').className = 'tier-title ' + ti.cls;
+    var rawText = tpl(e.text);
+    var bodyEmoji = '';
+    if (LS.iconCatOf) {
+      var bodyCat = LS.iconCatOf({ text: rawText });
+      var cand = icon('event', bodyCat, '');
+      if (cand && cand !== titleEmoji) bodyEmoji = cand;
+    }
+    $('storyText').innerHTML = (bodyEmoji
+      ? '<span class="emoji story-emoji" aria-hidden="true">' + esc(bodyEmoji) + '</span> ' : '') +
+      emphasisHtml(rawText);
     paintQuietNote(e);
     var sp = $('storyPanel');
-    sp.className = 'story ' + t.cls;
+    sp.className = 'story ev-card ' + ti.cls;
     void sp.offsetWidth;
     sp.classList.add('ev-fade');
 
@@ -1441,7 +1805,7 @@
 
     var opts = $('options');
     opts.innerHTML = '';
-    opts.className = 'options ' + t.cls;
+    opts.className = 'options ' + ti.cls;
     e.opts.forEach(function (opt, i) {
       var b = document.createElement('button');
       b.type = 'button';
@@ -1453,14 +1817,18 @@
       var rk = opt.risk && RISK_META[opt.risk];
       var hardWarn = (Number(game.attrs.happiness) < 40 && LS.isHardOpt && LS.isHardOpt(opt))
         ? '<span class="opt-warn">心情低落，这类事更难撑下来</span>' : '';
-      b.innerHTML = (rk ? '<span class="risk-badge ' + rk.cls + '">' + rk.text + '</span>' : '') +
+      b.innerHTML = '<span class="emoji opt-emoji" aria-hidden="true">' + esc(optionEmoji(opt, e)) + '</span>' +
+        '<span class="opt-main" style="flex:1 1 0;min-width:0">' +
+        (rk ? '<span class="risk-badge ' + rk.cls + '">' + rk.text + '</span>' : '') +
         esc(tpl(opt.label)) + (opt.hint ? '<span class="opt-cost">' + esc(tpl(opt.hint)) + '</span>' : '') +
-        hardWarn + '<span class="opt-arrow">›</span>';
+        hardWarn + '</span>' +
+        '<span class="opt-arrow">›</span>';
       b.addEventListener('click', function () { onChoose(i); });
       opts.appendChild(b);
     });
 
     $('storyPanel').scrollTop = 0;
+    paintMood();
     if (DEBUG_MODE) buildDebugPanel();
   }
 
@@ -1472,6 +1840,7 @@
     $('sbAge').textContent = game.age + ' 岁';
     $('sbStage').textContent = stageBarText();
     $('sbAttrs').innerHTML = chips();
+    paintMood();
     paintSbMoney();
     paintArchive();
     paintSocialBar();
@@ -1490,10 +1859,11 @@
 
     var e = game.current;
     if (!e) {
-      $('eventTitle').textContent = '这一年无事发生';
+      var calmEmoji = icon('event', 'daily', '🍃');
+      $('eventTitle').innerHTML = '<span class="emoji ev-title-emoji" aria-hidden="true">' + esc(calmEmoji) + '</span> 这一年无事发生';
       $('storyText').textContent = '没有新的节点，也没有意外。日子按原来的样子继续。';
-      $('eventType').innerHTML = '平静一年';
-      $('eventType').className = 'event-type tier-daily';
+      $('eventType').innerHTML = emojiSpan('tier', 'daily', 'tier-emoji', '🍃') + '日常';
+      $('eventType').className = 'event-type tier-tag tier-daily';
       $('eventTitle').className = 'tier-title tier-daily';
       $('turnNo').textContent = '第 ' + game.turn + ' 回合';
       $('options').innerHTML = '';
@@ -1503,8 +1873,9 @@
       $('evCast').hidden = true;
       $('evCast').innerHTML = '';
       $('annotationBar').hidden = true;
-      $('storyPanel').className = 'story tier-daily';
+      $('storyPanel').className = 'story ev-card tier-daily';
       paintQuietNote(null);
+      paintMood();
       return;
     }
 
@@ -1798,6 +2169,9 @@
 
   function applyLoaded(g) {
     game = g;
+    if (!Array.isArray(game.talents)) game.talents = [];
+    if (typeof game.reduceMotion === 'boolean') reduceMotion = game.reduceMotion;
+    syncReduceMotion();
     closeModal();
     closeOverlay();
     show('screen-game');
@@ -1811,6 +2185,7 @@
       $('sbAge').textContent = game.age + ' 岁';
       $('sbStage').textContent = stageBarText();
       $('sbAttrs').innerHTML = chips();
+      paintMood();
       paintSbMoney();
       if (game.pendingStage) showStageOverlay(game.pendingStage, false, game.stageSummary);
       else showStageSummary(game.stageSummary);
@@ -1822,6 +2197,7 @@
       $('sbAge').textContent = game.age + ' 岁';
       $('sbStage').textContent = stageBarText();
       $('sbAttrs').innerHTML = chips();
+      paintMood();
       paintSbMoney();
       showBroadcast(b);
       return;
@@ -1849,8 +2225,66 @@
     showToast._timer = setTimeout(function () { t.classList.remove('show'); }, 2800);
   }
 
+  /* v3.6 承诺清单：三类（答应 / 人情 / 缺席），可翻旧账 */
+  var PROMISE_TYPE = {
+    promise: { icon: '🤝', label: '答应过的事' },
+    debt: { icon: '🪙', label: '欠下的人情' },
+    absence: { icon: '🕯️', label: '缺席的场合' }
+  };
+  function promiseRowsHtml(list) {
+    if (!list.length) return '<div class="empty-note">还没有留下承诺。你答应过别人的事，会记在这里。</div>';
+    return '<div class="promise-list">' + list.map(function (p) {
+      var t = PROMISE_TYPE[p.type] || PROMISE_TYPE.promise;
+      var st = { open: '未兑现', kept: '已兑现', broken: '已失约' }[p.status] || '未兑现';
+      return '<div class="promise-row ' + esc(p.status) + '">' +
+        '<span class="promise-icon">' + t.icon + '</span>' +
+        '<span class="promise-main"><b>' + esc(p.text) + '</b>' +
+        '<span class="promise-meta">' + t.label + ' · ' + p.madeYear + ' 年许下 · 约定 ' + p.dueYear + ' 年 · ' + st + '</span></span>' +
+        '<button type="button" class="btn tiny" data-pid="' + esc(p.id) + '">翻旧账</button>' +
+        '</div>';
+    }).join('') + '</div>';
+  }
+
+  function openPromises() {
+    if (!game || !LS.PROMISE) return;
+    var list = (game.promises || []).slice();
+    list.sort(function (x, y) {
+      var rank = { open: 0, broken: 1, kept: 2 };
+      var d = (rank[x.status] === undefined ? 0 : rank[x.status]) - (rank[y.status] === undefined ? 0 : rank[y.status]);
+      return d || (Number(x.dueYear) || 0) - (Number(y.dueYear) || 0);
+    });
+    openModal('承诺清单 · ' + LS.PROMISE.open(game).length + ' 件未兑现', promiseRowsHtml(list));
+    var body = $('modalBody');
+    var btns = body.querySelectorAll('[data-pid]');
+    for (var i = 0; i < btns.length; i++) {
+      (function (btn) {
+        btn.addEventListener('click', function () { openPromiseLedger(btn.dataset.pid); });
+      })(btns[i]);
+    }
+  }
+
+  function openPromiseLedger(pid) {
+    if (!game) return;
+    var p = null;
+    (game.promises || []).forEach(function (x) { if (x.id === pid) p = x; });
+    if (!p) return;
+    var logs = (game.eventLog || []).filter(function (x) { return x && x.promiseId === pid; });
+    var rows = logs.map(function (x) {
+      return '<div class="promise-log"><span class="promise-log-year">' + esc(x.year) + ' 年</span>' +
+        '<span class="promise-log-title">' + esc(x.title || '') + '</span>' +
+        '<span class="promise-log-text">' + esc(x.resultText || '') + '</span></div>';
+    }).join('');
+    openModal('翻旧账 · ' + p.text,
+      '<div class="promise-ledger-head">' +
+      '<span class="promise-meta">' + p.madeYear + ' 年许下 · 约定 ' + p.dueYear + ' 年 · ' +
+      ({ open: '未兑现', kept: '已兑现', broken: '已失约' }[p.status] || '未兑现') + '</span></div>' +
+      (rows ? '<div class="promise-ledger">' + rows + '</div>' : '<div class="empty-note">这条承诺还没有在流水里留下记录。</div>'));
+  }
+
   function bindGame() {
     $('btnDetail').addEventListener('click', openDetail);
+    var promiseBtn = $('btnPromises');
+    if (promiseBtn) promiseBtn.addEventListener('click', openPromises);
     var relBtn = $('btnRelation');
     if (relBtn) relBtn.addEventListener('click', openRelationModal);
     $('btnSave').addEventListener('click', function () { openSaveModal('save'); });
@@ -2234,6 +2668,7 @@
   }
 
   function renderEnd() {
+    clearMood();
     var s = game.summary || LS.engine.finish(game, game.death.reason || '身体机能衰竭');
     var ach = s.achievements || [];
     var got = s.gotAchievements || [];
@@ -2450,16 +2885,28 @@
      初始化
      ========================================================= */
   function init() {
+    reduceMotion = systemReduceMotion();
+    syncReduceMotion();
+    bindReduceMotion();
     fillSelects();
     bindWelcome();
     bindCreate();
     bindGame();
     resetCreate();
+    LS.fillTalents = fillTalents;
     // 暴露给测试脚本使用
     LS.ui = {
       getGame: function () { return game; },
-      setGame: function (g) { game = g; show('screen-game'); renderGame(); },
+      setGame: function (g) {
+        game = g;
+        if (!Array.isArray(game.talents)) game.talents = [];
+        if (typeof game.reduceMotion === 'boolean') reduceMotion = game.reduceMotion;
+        syncReduceMotion();
+        show('screen-game');
+        renderGame();
+      },
       render: renderGame,
+      fillTalents: fillTalents,
       renderEnd: renderEnd,
       openDetail: openDetail,
       openRelationModal: openRelationModal,

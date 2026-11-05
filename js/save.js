@@ -195,6 +195,12 @@
     if (!Array.isArray(g.achievementsV3)) g.achievementsV3 = [];
     if (g.lastSummaryAt === undefined || isNaN(g.lastSummaryAt)) g.lastSummaryAt = -99;
     if (!g.stageStart && LS.stageSnapshot) g.stageStart = LS.stageSnapshot(g);
+    /* v3.6：九条线 / 身世 / 承诺 / 线索（旧档补空状态，不补造剧情） */
+    if (LS.LINES && LS.LINES.init) LS.LINES.init(g);
+    if (!Array.isArray(g.clues)) g.clues = [];
+    if (!Array.isArray(g.promises)) g.promises = [];
+    if (!g.colSeen) g.colSeen = {};
+    if (!g.lineAP) g.lineAP = { year: g.year, used: 0, max: 2 };
     g.migratedTo = LS.VERSION;
     return g;
   }
