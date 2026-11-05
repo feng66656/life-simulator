@@ -968,6 +968,7 @@
       resultText: e.resultText || '',
       declared: e.declared || [],
       changes: e.changes || '',
+      promiseId: e.promiseId || '',
       echoOf: e.echoOf || null
     };
     g.eventLog.push(rec);

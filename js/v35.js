@@ -100,16 +100,26 @@
     if (opt.req) {
       try { if (!opt.req(g)) return false; } catch (x) {}
     }
-    if (opt.npc) {
-      for (var k in opt.npc) {
+    /* npc 效果可能在 opt.npc，也可能在 opt.fx.npc / outcomes[].fx.npc。
+       已故或不存在的关系不提供该选项，避免选项效果凭空造出一个亲属。 */
+    function npcBad(npcs) {
+      if (!npcs) return false;
+      for (var k in npcs) {
         if (k === '子女' || k === '孩子') {
-          if (!V.hasLivingChild(g)) return false;
+          if (!V.hasLivingChild(g)) return true;
         } else if (k === '父亲' || k === '母亲') {
-          if (!alive(g, k)) return false;
+          if (!alive(g, k)) return true;
         } else if (k === '配偶' || k === '妻子' || k === '丈夫') {
-          if (!V.spouseAlive(g)) return false;
+          if (!V.spouseAlive(g)) return true;
         }
       }
+      return false;
+    }
+    if (npcBad(opt.npc)) return false;
+    if (opt.fx && npcBad(opt.fx.npc)) return false;
+    var os = opt.outcomes || [], i;
+    for (i = 0; i < os.length; i++) {
+      if (os[i].fx && npcBad(os[i].fx.npc)) return false;
     }
     return true;
   };
@@ -166,8 +176,10 @@
       else addGuard(e, 'aliveGuard', [e.npcRole]);
     }
 
-    /* 日常兜底事件永不设硬性守卫，保证随机池不空 */
-    if (e.type === 'daily' || e.tier === 'daily') {
+    /* 真正的日常兜底事件（type='daily'）永不设硬性守卫，保证随机池不空；
+       注意：tier='daily' 只是分层标签，几乎所有随机事件都会被标成 daily，
+       不能用它来豁免，否则守卫会整体失效。 */
+    if (e.type === 'daily') {
       e._guardExempt = 'daily';
       e.familyExempt = e.familyExempt || 'daily';
       return;
@@ -364,7 +376,13 @@
   V.applyAlt = function () {
     for (var id in ALT_TEXT) {
       var e = (L.EVENT_INDEX && L.EVENT_INDEX[id]) || null;
-      if (e) e.textAlt = ALT_TEXT[id];
+      if (e) {
+        e.textAlt = ALT_TEXT[id];
+        /* 这些事件本身写了独居版正文，不再按“有子女”整条过滤；
+           涉及子女的选项由 optOk 单独隐藏。 */
+        e.hasChildrenGuard = false;
+        e.childAliveGuard = false;
+      }
     }
     /* f_house70 在无子女时只剩“立遗嘱”一个选项，补一条独居选项 */
     var house = L.EVENT_INDEX && L.EVENT_INDEX.f_house70;
