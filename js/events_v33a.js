@@ -21,13 +21,45 @@
   }
   L.V33.W = W;
   L.V33.O = O;
+  /* v3.10：童年不再一条一句。每组 3 条碎事并成一节，用场景化的起头/接续/
+     落在物件上的收尾把正文撑到 100–150 字，一节只问一次。 */
+  L.V33.CHILD_PAD = {
+    classroom: { head: '那阵子你还在村小，教室的窗子关不严。', mid1: '上午的课过得慢。', mid2: '下午风从窗缝里钻进来。', tail: '多年后你还记得讲台边那盒粉笔，白色的粉一直沾在袖口上，怎么拍都拍不掉。' },
+    village_gate: { head: '从家到学校要走一段土路。', mid1: '放学时你总在路口磨蹭。', mid2: '天晴时路好走，下雨全是泥。', tail: '后来你离开村子，再回去时那棵老槐树还在，树下的石墩被坐得发亮。' },
+    corner_shop: { head: '村口的小卖部是你童年里最亮的地方。', mid1: '柜台不高，你趴着看很久。', mid2: '老板从不催你。', tail: '多年后你路过同样的店，还会想起那只装话梅的玻璃罐，和罐底黏着的糖纸。' },
+    playground: { head: '童年的操场其实只是一片压实的土。', mid1: '下课铃一响，所有人往外冲。', mid2: '鞋底踩起一层灰。', tail: '你后来记不清赢过几场，只记得那只被踢破皮的球，最后滚进了排水沟。' },
+    homework: { head: '你家的饭桌兼作书桌，桌角垫着一块折起来的报纸。', mid1: '晚饭后灯泡亮起来，母亲在一边缝东西。', mid2: '铅笔削了又断。', tail: '那盏台灯罩上留着一道烫痕，很多年后还在，像一个没说出口的提醒。' },
+    chores: { head: '家里活多，你很小就学着搭手。', mid1: '母亲做事快，你跟不上她的节奏。', mid2: '做不好时她也不骂，只是重做一遍。', tail: '厨房门后挂着一块洗得发白的抹布，那个角一直缺着，是你那年剪坏的。' },
+    relative: { head: '亲戚来家里，总带一点不属于这个院子的气味。', mid1: '大人们在屋里说话，声音忽高忽低。', mid2: '你被叫过去认人。', tail: '那箱水果里的苹果后来烂了一个，母亲舍不得扔，削掉坏的地方自己吃了。' },
+    newyear: { head: '过年是童年里少数几件能提前很多天开始盼的事。', mid1: '腊月里家里一直有油烟味。', mid2: '母亲把该洗的都洗了。', tail: '那副没贴正的春联在门板上留了一整年，边角被风掀起，谁也没顾上重贴。' }
+  };
   L.V33.stage = function (stage, prefix, scenes) {
     scenes.forEach(function (sc) {
+      if (stage === '童年' && sc.variants.length >= 9) {
+        var pad = (L.V33.CHILD_PAD || {})[sc.key] || { head: '', mid1: '', mid2: '', tail: '' };
+        var parts = 3;
+        for (var c = 0; c < parts; c++) {
+          var from = Math.round(c * sc.variants.length / parts);
+          var to = Math.round((c + 1) * sc.variants.length / parts);
+          var group = sc.variants.slice(from, to);
+          if (!group.length) continue;
+          var mid = group.length > 1 ? group[Math.floor(group.length / 2)] : group[0];
+          var end = group[group.length - 1];
+          var id = 'v33_' + prefix + '_' + sc.key + '_m' + (c + 1);
+          L.EVENTS.push({
+            id: id, type: 'random', stage: stage, tier: sc.tier || 'daily',
+            weight: sc.weight || 1.1, family: id, title: group[0][0],
+            text: pad.head + group[0][1] + pad.mid1 + mid[1] + pad.mid2 + end[1] + pad.tail,
+            opts: sc.opts
+          });
+        }
+        return;
+      }
       sc.variants.forEach(function (v, i) {
         var id = 'v33_' + prefix + '_' + sc.key + '_' + (i + 1);
         L.EVENTS.push({
           id: id, type: 'random', stage: stage, tier: sc.tier || 'daily',
-          weight: sc.weight || 1.1, family: id, title: v[0], text: v[1], opts: sc.opts
+          weight: sc.weight || 1.1, family: id, title: v[0], text: v[1] + (sc.tail || ''), opts: sc.opts
         });
       });
     });
@@ -39,6 +71,7 @@
   A.stage('婴幼儿', 'inf', [
     {
       key: 'cradle', weight: 1.2,
+      tail: '母亲把摇篮边的被角掖好，手在布偶上停了一下才收回去。',
       variants: [
         ['摇篮里的光', '午后的光落在摇篮上，你盯着晃动的布偶看了很久。'],
         ['第一次翻身', '你终于从仰面翻到侧身，母亲在门口拍了下手。'],

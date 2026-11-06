@@ -115,6 +115,178 @@
     return map[stage] || [0, 120];
   };
 
+  /* v3.8：事件年龄闸门——「这个事件能不能在这个年龄出场」全链路只此一处判定。
+     age 为数字＝只在该岁；age 为 [lo,hi]＝区间；ageMin/ageMax 同区间；
+     stage 为字符串或数组＝必须落在对应阶段。都没有＝不作限制。 */
+  LS.eventAgeRange = function (e) {
+    if (!e) return [0, 120];
+    var a = e.age, i, r;
+    if (typeof a === 'number') return [a, a];
+    if (Object.prototype.toString.call(a) === '[object Array]' && a.length >= 2) {
+      return [Number(a[0]) || 0, Number(a[1]) || 120];
+    }
+    if (e.ageMin !== undefined || e.ageMax !== undefined) {
+      return [e.ageMin === undefined ? 0 : Number(e.ageMin),
+        e.ageMax === undefined ? 120 : Number(e.ageMax)];
+    }
+    if (e.stage) {
+      var st = Object.prototype.toString.call(e.stage) === '[object Array]' ? e.stage : [e.stage];
+      var lo = 120, hi = 0;
+      for (i = 0; i < st.length; i++) {
+        r = LS.stageRange(st[i]);
+        if (r[0] < lo) lo = r[0];
+        if (r[1] > hi) hi = r[1];
+      }
+      if (hi >= lo) return [lo, hi];
+    }
+    return [0, 120];
+  };
+
+  LS.eventAgeGuard = function (e, age) {
+    if (!e) return false;
+    age = Number(age);
+    if (!isFinite(age)) return false;
+    if (e.stage) {
+      var st = Object.prototype.toString.call(e.stage) === '[object Array]' ? e.stage : [e.stage];
+      var now = LS.stageOf(age), hit = false, i;
+      for (i = 0; i < st.length; i++) {
+        if (st[i] && st[i] === now) { hit = true; break; }
+      }
+      if (!hit) return false;
+    }
+    var r = LS.eventAgeRange(e);
+    return age >= r[0] && age <= r[1];
+  };
+
+  /* ---------------- v3.9 人生骨架（archetype） ----------------
+     一局只开 2 条主干线；未抽中的线彻底不进池（不是降权，是不存在）。 */
+  LS.ARCHETYPES = [
+    { id: 'study_family', label: '求学 + 家庭', lines: ['exam', 'childedu'],
+      intro: '这一世你要面对的是：一张越考越远的书桌，和家里越来越重的期待。' },
+    { id: 'work_romance', label: '打工 + 感情', lines: ['jobhunt', 'longdist'],
+      intro: '这一世你要面对的是：一份接一份的工作，和一段隔着距离的关系。' },
+    { id: 'startup_body', label: '创业 + 身体', lines: ['startup', 'illness'],
+      intro: '这一世你要面对的是：一门可能成的生意，和一副可能先垮的身体。' },
+    { id: 'heal_family', label: '求医 + 家族', lines: ['illness', 'parentcare'],
+      intro: '这一世你要面对的是：医院的走廊，和家里越来越需要你的人。' },
+    { id: 'home_debt', label: '安家 + 债务', lines: ['house', 'debt'],
+      intro: '这一世你要面对的是：一套要还很多年的房子，和一笔说不清来路的账。' },
+    { id: 'abroad_partner', label: '出走 + 合伙', lines: ['abroad', 'partner'],
+      intro: '这一世你要面对的是：一次离开，和一个要把身家押上去的合伙人。' }
+  ];
+  LS.ALL_CHAIN_LINES = ['exam', 'jobhunt', 'romance', 'business', 'postgrad', 'civil',
+    'abroad', 'jump', 'partner', 'debt', 'house', 'childedu', 'parentcare', 'longdist', 'illness'];
+
+  LS.pickArchetype = function (seed) {
+    var list = LS.ARCHETYPES || [];
+    if (!list.length) return null;
+    return list[Math.abs(Number(seed) || 0) % list.length];
+  };
+
+  LS.archetypeLines = function (a) {
+    var out = [];
+    (a && a.lines || []).forEach(function (id) { out.push(LS.LINE_ALIAS[id] || id); });
+    return out;
+  };
+
+  /* ---------------- v3.8 叙事线开关（line lock） ----------------
+     一条线必须是显式状态机，不能只靠定时器：线关了，线上的回响/链节点一律不许出。 */
+  LS.LINE_LABEL = {
+    exam: '备考线', jobhunt: '求职线', romance: '感情线', business: '创业线',
+    postgrad: '考研线', civil: '考公线', abroad: '出国线', jump: '跳槽线',
+    partner: '合伙线', debt: '债务线', house: '买房线', childedu: '子女教育线',
+    parentcare: '照护线', longdist: '异地线', illness: '健康线'
+  };
+  /* chainKey 归并到四条主线，避免同一件事开两套状态 */
+  LS.LINE_ALIAS = { postgrad: 'exam', civil: 'exam', jump: 'jobhunt', partner: 'business' };
+
+  LS.lineIdOf = function (e) {
+    if (!e) return '';
+    var id = e.line || e.chainKey || e.lineId || '';
+    return (LS.LINE_ALIAS[id] || id) || '';
+  };
+
+  LS.lineOpen = function (g, id) {
+    if (!id) return true;
+    var l = g && g.lines && g.lines[id];
+    return !l || l.state !== 'closed';
+  };
+
+  LS.lineStart = function (g, id) {
+    if (!g || !id) return;
+    g.lines = g.lines || {};
+    if (!g.lines[id]) g.lines[id] = { state: 'open', openedAt: g.age, closedAt: null, closedReason: '', closure: false };
+    else if (g.lines[id].openedAt === null || g.lines[id].openedAt === undefined) g.lines[id].openedAt = g.age;
+  };
+
+  /* 关线：返回 true 表示「这条线本来在走，现在被关断」，此时才需要写收尾句 */
+  LS.lineClose = function (g, id, reason) {
+    if (!g) return false;
+    id = LS.LINE_ALIAS[id] || id;
+    g.lines = g.lines || {};
+    var l = g.lines[id];
+    if (!l) {
+      g.lines[id] = { state: 'closed', openedAt: null, closedAt: g.age, closedReason: reason || '', closure: false };
+      return false;
+    }
+    if (l.state === 'closed') return false;
+    l.state = 'closed';
+    l.closedAt = g.age;
+    l.closedReason = reason || '';
+    return true;
+  };
+
+  /* 收尾文案：作者写死，说明为什么停、停在哪、留下了什么 */
+  LS.LINE_CLOSE_TEXT = {
+    exam: {
+      young: { title: '资料收进纸箱', text: '书桌上那摞资料你收进了纸箱，塞在柜子最里层。你跟自己说等稳定了再考。' },
+      adult: { title: '那摞书搬了三次', text: '备考的书跟着你搬了三次家。最后一次你把它放进柜子最上层，没再打开过。' }
+    },
+    jobhunt: {
+      young: { title: '简历不再改了', text: '那份改到第七版的简历停在桌面上。你把它拖进一个叫“以后”的文件夹。' },
+      adult: { title: '招聘网站不再打开', text: '招聘网站还留在浏览器收藏夹里。你换了工作之后，就再没点开过那个标签。' }
+    },
+    romance: {
+      young: { title: '那句没说出口的话', text: '那句准备很久的话最后还是没说。你们照常联系，只是你知道它过期了。' },
+      adult: { title: '联系方式还在', text: '联系方式还在通讯录里，头像换过一次。你没删，也没再点开。' }
+    },
+    business: {
+      young: { title: '计划书夹进抽屉', text: '写了一半的商业计划书夹进抽屉。你跟自己说，等有本钱了再来。' },
+      adult: { title: '公章收进盒子', text: '公司的公章收进铁盒，压在一叠旧合同下面。你没有注销，也没再启动。' }
+    }
+  };
+
+  LS.lineCloseEntry = function (g, id) {
+    if (!g || !id) return null;
+    var set = LS.LINE_CLOSE_TEXT[id];
+    if (!set) return null;
+    var band = (Number(g.age) <= 18) ? 'young' : 'adult';
+    var c = set[band] || set.adult;
+    var label = LS.LINE_LABEL[id] || id;
+    var seq = LS.pushEventLog(g, {
+      turn: g.turn, age: g.age, year: g.year, stage: g.stage, tier: 'daily',
+      eventId: 'line_close_' + id, title: c.title,
+      resultText: c.text + '（' + label + '到此为止）',
+      source: 'line', auto: true, echoOf: null
+    });
+    var l = g.lines && g.lines[id];
+    if (l) l.closure = true;
+    return seq;
+  };
+
+  /* 职业落定 → 相关叙事线全部关闭，并各写一条收尾 */
+  LS.closeLinesOnJob = function (g, reason) {
+    if (!g) return [];
+    var out = [];
+    ['exam', 'jobhunt', 'business'].forEach(function (id) {
+      if (LS.lineClose(g, id, reason || 'employed')) {
+        var s = LS.lineCloseEntry(g, id);
+        if (s !== null && s !== undefined) out.push({ id: id, seq: s });
+      }
+    });
+    return out;
+  };
+
   /* ---------------- 教育 ---------------- */
   /* 事件三档：daily 普通日常 / echo 因果回响 / crossroad 命运岔路 */
   LS.TIERS = {
@@ -766,6 +938,13 @@
       eventLog: [],
       eventSeq: 0,
       eventLogLegacy: false,
+      /* v3.8：年龄闸门的审计流水——事件因年龄不符被丢弃时记一条，便于回归统计 */
+      ageLeaks: [],
+      /* v3.8：叙事线状态机——exam/jobhunt/romance/business 等线的开/关显式落库 */
+      lines: {},
+      lineDrops: [],
+      unlocked: {},
+      locked: {},
       fired: [],
       history: [],
       stats: {
@@ -840,6 +1019,16 @@
       skippedChains: []
     };
 
+    /* v3.9：本局骨架——2 条主干线，其余线不进池 */
+    var arch = LS.pickArchetype(seed);
+    g.archetype = arch ? arch.id : '';
+    g.archetypeLabel = arch ? arch.label : '';
+    g.archetypeIntro = arch ? arch.intro : '';
+    g.activeLines = LS.archetypeLines(arch);
+    g.bannedLines = (LS.ALL_CHAIN_LINES || []).filter(function (id) {
+      return g.activeLines.indexOf(LS.LINE_ALIAS[id] || id) < 0;
+    });
+
     g.npcs.push(LS.makeNPC('父亲', {
       id: 'father', age: fatherAge, health: LS.clamp(68 + bg.parentHealth, 30, 95),
       intimacy: bg.fatherFavor, note: '家里的顶梁柱', gender: '男',
@@ -889,6 +1078,8 @@
           LS.LINES.ensureSelected(g);
         }
       }
+      /* v3.9：两条主干弧各塞入第一节，之后按节点顺序推进 */
+      if (LS.ARCS && LS.ARCS.seed) LS.ARCS.seed(g);
     }
 
     var birthText = '出生在' + g.birthplace + '的一个' + g.background + '家庭。父亲 ' + fatherAge + ' 岁，母亲 ' + motherAge + ' 岁。';
@@ -1044,6 +1235,7 @@
       declared: e.declared || [],
       changes: e.changes || '',
       promiseId: e.promiseId || '',
+      careerOnboard: !!e.careerOnboard,
       echoOf: e.echoOf || null
     };
     g.eventLog.push(rec);
@@ -1068,36 +1260,69 @@
       if (g.eventLogLegacy) out.push({ legacy: true, text: '这一世没有留下记录' });
       return out;
     }
-    var hasChoice = {};
-    log.forEach(function (x) { if (x.choiceId) hasChoice[x.choiceId] = true; });
+    var hasEvent = {};
+    log.forEach(function (x) { if (x.eventId) hasEvent[x.eventId] = true; });
+
+    /* v3.8：0 岁是出生流程，多个初始化事件合并成一条，不在时间线里排三条同岁同主题 */
+    var birth = null;
+
     log.forEach(function (x) {
       var tier = x.tier || 'daily';
-      var text;
-      if (tier === 'sys') {
-        text = x.resultText || x.title;
-      } else if (tier === 'echo') {
-        if (x.echoOf && !hasChoice[x.echoOf]) {
-          /* 有源头但源头选择已丢：降级为旧页，不伪造 */
-          text = '这一世没有留下记录（无法指回源选择）';
-          tier = 'legacy';
-        } else if (x.echoOf) {
-          text = '因果回响：' + (x.title || '') + (x.resultText ? '。' + x.resultText : '');
-        } else {
-          /* v3.7：因果事件本身没有源选择可指回（社会事件等），照实呈现 */
-          text = '因果：' + (x.title || '') + (x.resultText ? '。' + x.resultText : '');
+      var title = String(x.title || '').trim();
+      var body = String(x.resultText || '').trim();
+
+      if (Number(x.age) === 0) {
+        if (!birth) {
+          birth = {
+            seq: x.seq, eventId: x.eventId, choiceId: x.choiceId || null,
+            age: x.age, year: x.year, tier: 'sys', title: '出生',
+            text: '', echoOf: null, legacy: false
+          };
         }
+        /* 只合并实质正文；标题单独出现（如“妇幼保健院的三楼”）说明那年是流程占位，不拼半句 */
+        if (body && birth.text.indexOf(body) < 0) birth.text += body;
+        return;
+      }
+
+      /* 空正文：宁可整条不显示，也不留悬空冒号或半句话 */
+      if (!body) return;
+      /* “无事发生”类填充不进回忆录：回忆录只记有事发生的年份 */
+      if (LS.memoirIsFiller(title, body)) return;
+
+      var text;
+      if (tier === 'echo') {
+        /* 回响必须指得回源事件；指不回的不叫回响。
+           入职事件本身即源，按普通条目呈现。 */
+        var idxEv = LS.EVENT_INDEX ? LS.EVENT_INDEX[x.eventId] : null;
+        var arcEv = !!(idxEv && idxEv.line && LS.ARCS && LS.ARCS.isArc && LS.ARCS.isArc(idxEv.line));
+        if (!x.careerOnboard && !arcEv && (!x.echoOf || !hasEvent[x.echoOf])) return;
+        text = body;
       } else if (tier === 'crossroad') {
-        text = '命运岔路：' + (x.title || '') + (x.choiceLabel ? '。你选择了「' + x.choiceLabel + '」' : '') + (x.resultText ? '。' + x.resultText : '');
+        text = (title ? '命运岔路：' + title + '。' : '') +
+          (x.choiceLabel ? '你选择了「' + x.choiceLabel + '」。' : '') + body;
+      } else if (tier === 'sys') {
+        text = body;
       } else {
-        text = (x.title ? x.title + '：' : '') + (x.resultText || (x.auto ? '日子照旧。' : ''));
+        text = (title && body.indexOf(title) !== 0) ? (title + '。' + body) : body;
       }
       out.push({
         seq: x.seq, eventId: x.eventId, choiceId: x.choiceId || null,
-        age: x.age, year: x.year, tier: tier, title: x.title || '',
+        age: x.age, year: x.year, tier: tier, title: title,
         text: text, echoOf: x.echoOf || null, legacy: false
       });
     });
+
+    if (birth && birth.text) out.unshift(birth);
     return out;
+  };
+
+  /* v3.8：回忆录去噪——“没有什么特别的事发生”“日子照旧”这类填充不算事 */
+  LS.memoirIsFiller = function (title, body) {
+    var t = String(body || '').trim();
+    if (!t) return true;
+    if (/^(没有什么特别的事发生|没什么特别的事发生|什么也没发生|无事发生|日子照旧|一切如常|平静地过了一年)[。！…\s]*$/.test(t)) return true;
+    if (t.length <= 8 && /^(还好|还行|照旧|平淡)[。！…\s]*$/.test(t)) return true;
+    return false;
   };
 
   LS.snapshot = function (g) {

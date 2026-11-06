@@ -1015,7 +1015,7 @@
       baseChance: 0.00034,
       riskBoost: 0.00032,
       title: '便利店后门的监控',
-      text: '三个人撬开便利店后门，拿走了收银机里的钱和两条烟。第二天，监控截图传到了派出所。',
+      text: '三个人撬开便利店后门，拿走了收银机里的钱和两条烟。第二天，监控截图传到了派出所。派出所把电话打到家里，父亲接完电话，坐在门口抽了半包烟。',
       cond: {},
       risk: { debtMin: 15000, riskMin: { highStress: 50 } },
       choices: [
@@ -1203,7 +1203,7 @@
       baseChance: 0.00029,
       riskBoost: 0.00042,
       title: '一笔还不上的账',
-      text: '他跟着朋友去要一笔债，对方不肯给，推搡中他抄起了桌上的玻璃烟灰缸。',
+      text: '他跟着朋友去要一笔债，对方不肯给，推搡中他抄起了桌上的玻璃烟灰缸。楼下传来警笛声，警察在问路。',
       cond: {},
       risk: { debtMin: 30000, marksAny: ['v38_gamble_debt'], riskMin: { highStress: 55 } },
       choices: [
@@ -1920,7 +1920,7 @@
       weight: 2.5, baseChance: 0.00038, riskBoost: 0.0050,
       stageTarget: 'child', requires: {},
       title: '水缸盖没盖',
-      text: '院子里那口大水缸刚挑满水，缸沿只到孩子胸口。母亲在屋里择菜，听见“扑通”一声。',
+      text: '院子里那口大水缸刚挑满水，缸沿只到孩子胸口。母亲在屋里择菜，父亲蹲在门槛上抽烟，隔壁邻居家的门开着，忽然听见“扑通”一声。',
       cond: {}, risk: { healthMax: 50 },
       choices: [
         { id: 'pull', label: '立刻捞起来压胸口', hint: '村里老人教过', tone: 'safe', route: 'survive',

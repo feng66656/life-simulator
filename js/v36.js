@@ -65,7 +65,8 @@
         abandon: { role: role, tag: tag, drop: drop },
         cost: cost || {},
         promise: { who: role, text: promiseText || label, dueYears: 2, consequence: tag },
-        echo: { afterYears: 5 + (n(drop) % 4), text: echoText || (role + '没说什么，但你一直记得' + tag + '那两个字。') }
+        /* v3.8：回响正文只能由作者写（echoText）；没写就不回响，绝不套通用句 */
+        echo: echoText ? { afterYears: 5 + (n(drop) % 4), text: echoText } : null
       },
       outcomes: [{ w: 1, label: '', text: outText, fx: fx || {} }]
     };
@@ -243,7 +244,7 @@
         '孩子考得不错。查分那晚，他/她第一个抱住的是你。'),
       o('去总部', '听说孩子很独立', '子女', '失望', 16, { relation: -16, career: 12, money: 15000, health: 0 },
         '你在总部开会时，孩子正在考场。成绩出来那天，你只收到一条短信：“还行。”', { money: { cash: 15000 }, at: { stress: 5, happiness: -4 } },
-        '很多年后孩子说“我高考那年你不在”，语气很轻。'), { minAge: 37 }),
+        '孩子上大学那年说“我高考那年你不在”，语气很轻。'), { minAge: 37 }),
 
     D('dil_kid_transfer', '转学与升职', '孩子被重点学校录取，但要搬到城另一头陪读。你刚拿到升职机会，新岗位需要你常驻公司。搬家那天，孩子在旧书桌上刻了一行小字。', MID, ['子女'],
       o('搬家陪读', '听说那学校很好', '子女', '缺席', 11, { relation: 0, career: -12, money: -30000, health: -3 },
@@ -276,7 +277,7 @@
         '你后来再没被提名过。他升了，偶尔请你喝酒。'),
       o('劝他自首', '听说交警查得严', '同事', '记恨', 18, { relation: -18, career: 6, fame: 3, money: 0 },
         '你陪他去自首，他丢了工作，老婆跟他离了。他走前说“你满意了”。', { at: { stress: 8, happiness: -5 } },
-        '很多年后他重新站起来，唯独不接你的电话。')),
+        '几年后他重新站起来，唯独不接你的电话。')),
 
     D('dil_sign', '验收单上的空格', '你负责的项目验收，数据差一点。老同学是甲方代表，私下说“签了吧，补个报告就行”。签了，你能拿到尾款；不签，项目重做，团队半年白干。', MID, ['同学'],
       o('签字放行', '听说数据差一点', '同学', '失望', 12, { relation: 0, career: 6, money: 8000, fame: -6 },
@@ -355,7 +356,7 @@
     D('dil_abroad_family', '一家人的机票', '你拿到移民资格，能带全家走。父母年纪大了，不愿意离开老家。走，可能几年见不到；留，孩子的教育和你的职业都卡在这里。', MID, ['父母'],
       o('留下', '听说老人离不开故土', '父母', '缺席', 10, { relation: 0, career: -13, money: -25000, health: -2 },
         '你留下了。孩子上了本地学校，父母每天能看见孙子/孙女。你的职业停在了原地。', { money: { cash: -25000 }, at: { stress: 8, happiness: 2 } },
-        '很多年后孩子问你“我们为什么没走”，你说“因为家在这儿”。'),
+        '孩子十岁那年问你“我们为什么没走”，你说“因为家在这儿”。'),
       o('带小家走', '听说那边机会多', '父母', '失望', 18, { relation: -18, career: 14, money: 30000, health: -1 },
         '你带着伴侣和孩子走了。父母站在门口，一直挥到手看不见。', { money: { cash: 30000 }, at: { stress: 7, happiness: -5 } },
         '父亲走的那年，你因为签证没能回来。视频里，灵堂很白。'))
@@ -405,6 +406,8 @@
         g.echoQueue.push({
           dueYear: g.year + n(dm.echo.afterYears, 6),
           text: dm.echo.text,
+          title: dm.echo.title || '',
+          fromEventId: ev.id,
           role: role,
           fromAge: g.age,
           fromYear: g.year,
@@ -581,7 +584,16 @@
   /* 时代锚点只作为独立事件出现（V.eraAnchor），不再并入任何事件的正文 */
   V.attachOverlays = function (g, e) {
     if (!g || !e) return e;
+    /* v3.10：童年每节正文控制在 100–150 字；并节/收尾偶尔溢出时按标点裁回 */
+    if ((g.stage === '童年' || e.stage === '童年') && String(e.text || '').length > 150) {
+      var t0 = String(e.text);
+      var cut0 = Math.max(t0.lastIndexOf('。', 149), t0.lastIndexOf('；', 149), t0.lastIndexOf('，', 149));
+      e.text = cut0 >= 100 ? t0.slice(0, cut0 + 1) : t0.slice(0, 150);
+    }
+    /* 童年不挂“多年后路过老地方”的成年回望，避免把一节的字数顶过 150；
+       rollPlace 仍照常调用，保持随机序列与投骰结果不变 */
     var pl = V.rollPlace(g, e);
+    if (g.age <= 12) return e;
     if (pl) {
       e.placeNote = pl;
       e.text = (e.text || '') + '\n\n【' + (pl.empty ? pl.name + '（空了）' : pl.name) + '】' + pl.text;
@@ -708,25 +720,21 @@
       var id = 'v36_echo_' + i + '_' + e.dueYear;
       if (!L.EVENT_INDEX[id]) {
         (function (ee) {
+          /* v3.8：回响事件只负责把作者写好的那段话送回来；正文、标题都来自源事件，
+             系统不再拼任何通用句，也不再给“承认/沉默”这类模板选项。 */
           L.EVENT_INDEX[id] = {
-            id: id, type: 'random', stage: null, tier: 'crossroad', layer: 'chain',
+            id: id, type: 'random', stage: null, tier: 'echo', layer: 'chain',
             weight: 0, family: 'v36_echo', prio: 70,
-            title: '他记得那天',
-            text: (ee.fromYear ? ee.fromYear + '年' : '') + '你以为' + (ee.role || '对方') + '已经把「' + (ee.fromTitle || '旧事') + '」放下了。' + (ee.text || ''),
+            echoParent: ee.fromEventId || '',
+            title: ee.fromTitle || '',
+            text: ee.text || '',
             opts: [
               {
-                label: '承认', hint: '有些账躲不掉', tone: 'risk',
+                label: '记下这件事', hint: '有些事不会真的过去', tone: 'switch',
+                outcomes: [{ w: 1, label: '', text: ee.text || '', fx: {} }],
                 apply: function (g2) {
-                  L.addMemory(g2, ee.text || ((ee.fromYear ? ee.fromYear + '年' : '') + '你对' + (ee.role || '对方') + '选了「' + (ee.fromChoice || '') + '」'), 'echo');
-                  g2.attrs.happiness = clamp(n(g2.attrs.happiness, 50) - 3, 0, 100);
-                  return '你说“是我不好”。对方愣了一下，没接话。';
-                }
-              },
-              {
-                label: '什么也不说', hint: '沉默也是一种回答', tone: 'switch',
-                apply: function (g2) {
-                  L.addMemory(g2, ee.text || '你什么也没说。', 'echo');
-                  return '你张了张嘴，最后什么也没说。' + (ee.fromTitle || '那一次') + '又沉回去了。';
+                  L.addMemory(g2, ee.text || '', 'echo');
+                  return '';
                 }
               }
             ],
@@ -736,6 +744,7 @@
       }
       g.pending.push({
         event: id, dueAge: g.age, choiceId: '', choiceAge: e.fromAge || g.age,
+        sourceEventId: e.fromEventId || '',
         choiceTitle: e.fromTitle || '', choiceLabel: e.fromChoice || '',
         choiceScene: (e.fromYear ? e.fromYear + '年' : '') + '，' + (e.role || '对方') + '记得「' + (e.fromTitle || '') + '」'
       });

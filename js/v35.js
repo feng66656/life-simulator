@@ -99,7 +99,11 @@
     if (e.friendGuard && !V.friendOk(g)) return false;
     /* 3) 文本级硬过滤：不依赖作者是否写了 guard。
        v36 两难、职业事件、daily 兜底都从这里过一遍，已故亲属永不再出共同生活事件。 */
-    if (!e.requiresDeceased && !e._deceasedOk) {
+    /* v3.9：主干弧（A/B/C/D）是作者锁定的接力链，正文里出现的「他闺女 / 他媳妇」
+       指的是 NPC 的家眷，不是主角的亲属；不能按主角亲属存活状态做文本级过滤，
+       否则整条弧会卡在 pending 里永不触发。 */
+    var arcEv = !!(e.line && L.ARCS && L.ARCS.isArc && L.ARCS.isArc(e.line));
+    if (!e.requiresDeceased && !e._deceasedOk && !arcEv) {
       var s = textOf(e);
       if (PARENT.test(s) && !REFLECT.test(s)) {
         if (/父亲|爸爸|老爸|父母|爸妈/.test(s) && !alive(g, '父亲')) return false;
@@ -514,7 +518,7 @@
       text: '家具都被搬空以后，屋里露出墙上贴画留下的浅色印子。你站在门口不肯进去，说那不是我们家了。',
       opts: [
         O('把旧门上的一颗钉子带走', '你偷偷揣进兜里', 'calm', [
-          W2(70, '很多年后你还留着那颗钉子，放在装奖状的那个铁盒里。', { at: { happiness: 1 }, tag: '搬走时带走了一颗旧门钉' }),
+          W2(70, '搬了三次家，你还留着那颗钉子，放在装奖状的那个铁盒里。', { at: { happiness: 1 }, tag: '搬走时带走了一颗旧门钉' }),
           W2(30, '钉子在半路掉了，你找了很久也没找到。', { at: { happiness: -1 } })
         ]),
         O('在新家的阳台上重新种一盆花', '母亲说重新开始', 'bold', [
@@ -571,7 +575,7 @@
     pushEvent({
       id: 'v35o_open_air_cinema', type: 'random', stage: '童年', tier: 'daily', weight: 1.2,
       family: 'v35o_open_air_cinema', theme: '节庆', title: '露天电影',
-      text: '打谷场上拉起了白布，放映机嗡嗡地转。你挤在最前面，幕布背面也坐满了人，风一吹，画面就跟着皱一下。',
+      text: '打谷场上拉起了白布，放映机嗡嗡地转。母亲从家里搬来一条长凳，你挤在最前面，幕布背面也坐满了人，风一吹，画面就跟着皱一下。',
       opts: [
         O('挤到幕布背面去看', '那边人也很多', 'bold', [
           W2(70, '你发现背面的人都是反的，笑得停不下来，电影演了什么倒忘了。', { at: { happiness: 2, charm: 1 } }),

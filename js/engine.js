@@ -9,6 +9,51 @@
   var HEALTH_LIMIT = 0;
   var MAX_TURNS = 200;
 
+  /* v3.9：归属补全——每条事件要么挂在某条线的某个节点上，要么显式标 daily。
+     已有 owner 的不动；链节点按 chainKey/chainStep 自动生成归属。 */
+  function normalizeOwners() {
+    var markToEvent = {};
+    (LS.EVENTS || []).forEach(function (e) {
+      (e && e.opts || []).forEach(function (o) {
+        var set = o && o.fx && o.fx.set;
+        if (!set) return;
+        for (var k in set) {
+          if (k.charAt(0) === 'c' && !markToEvent[k]) markToEvent[k] = e.id;
+        }
+      });
+    });
+    (LS.EVENTS || []).forEach(function (e) {
+      if (!e) return;
+      /* 童年库的 pending 回响：用源事件留下的 *_armed 标记找回源事件 id */
+      if (e.tier === 'echo' && !e.echoParent && markToEvent[e.id + '_armed']) {
+        e.echoParent = markToEvent[e.id + '_armed'];
+      }
+      /* 上学类条目只在「求学」骨架下可用，避免没上过学却出现教室 */
+      if (!e.arch && /教室|老师|同学|作业|考试|课本|黑板|书包|班主任|同桌|校门口|班主任/.test(String(e.title || '') + String(e.text || ''))) {
+        e.arch = ['school'];
+      }
+      if (e.owner && e.owner.line) return;
+      if (e.chainKey && e.chainStep) {
+        e.owner = { line: (LS.LINE_ALIAS[e.chainKey] || e.chainKey), node: e.chainStep };
+        e.ownerLayer = 'line';
+        return;
+      }
+      if (e.chainKey && e.chainTail) {
+        e.owner = { line: (LS.LINE_ALIAS[e.chainKey] || e.chainKey), node: 4 };
+        e.ownerLayer = 'line';
+        return;
+      }
+      /* ownerLayer 只用于归属审计与配额，不参与调度（调度仍看 layer/tier） */
+      if (e.layer) e.ownerLayer = e.layer;
+      else if (e.tier === 'echo') e.ownerLayer = 'echo';
+      else if (e.type === 'causal' || e.tier === 'causal') e.ownerLayer = 'causal';
+      else if (e.careerOnboard || e.career) e.ownerLayer = 'career';
+      else e.ownerLayer = 'daily';
+    });
+  }
+  normalizeOwners();
+
+
   /* v3.8：非自然终局包的年度预算在引擎侧统一调参（只动 annualBudget），
      并按包内文档的归一化规则把 baseChance 重新归一到该预算。
      引擎按“回合年龄”掷骰，31–55 段实际只有 12 个不同年龄，故该段预算按 12 次回合折算。 */
@@ -332,6 +377,77 @@
   }
   LS.jobTagsOf = jobTagsOf;
 
+  /* ---------------- v3.10：童年碎事合并 ---------------- */
+  /* 童年原本是「三句一个事件」，读起来是流水账。这里在选中一条童年短节时，
+     把它同族的 1–2 条未触发碎事并进同一节，再落一个有物件的收尾，
+     正文撑到 100–150 字，同时减少童年回合数（故事推进更快）。 */
+  var CHILD_CLOSERS = [
+    '这些事后来没人再提起，只有门槛上那道被鞋底磨出的凹痕一直留着。',
+    '多年后你才明白，那天大人脸上的为难，和灶台上那口没刷的锅是一回事。',
+    '你记住的不是道理，是那盏灯、那只碗，还有大人压低声音时屋里的安静。',
+    '那件小事很快被新的日子盖过去，只有墙角那只旧木箱还锁着那时的东西。',
+    '后来你走得很远，可一闻到柴火味，就会想起那些没头没尾的下午。',
+    '这些细碎的事没有人替你记，只有你自己还记得那只缺角的碗放在哪。'
+  ];
+  var CHILD_LINKS = ['那阵子，', '再后来，', '还有一回，'];
+  function mergeChildhood(g, e) {
+    if (!e) return e;
+    if (e.stage !== '童年' && (!g || g.stage !== '童年')) return e;
+    var txt = String(e.text || '');
+    /* 已够长的童年正文也可能超过 150；先按标点裁回 100–150，再决定要不要并 */
+    if (txt.length > 150) {
+      var c0 = Math.max(txt.lastIndexOf('。', 150), txt.lastIndexOf('；', 150), txt.lastIndexOf('，', 150));
+      txt = c0 >= 100 ? txt.slice(0, c0 + 1) : txt.slice(0, 150);
+      e.text = txt;
+      return e;
+    }
+    if (txt.length >= 100) return e;
+    /* 童年阶段出场的弧线节点/时代锚点不是童年碎事（stage 为 null），同族池为空；
+       只补一句收尾把它撑过 100 字，不硬塞无关碎事 */
+    if (e.stage !== '童年') {
+      var h2 = 0, k2;
+      for (k2 = 0; k2 < String(e.id || '').length; k2++) h2 = (h2 * 31 + String(e.id).charCodeAt(k2)) % 997;
+      e.text = txt + CHILD_CLOSERS[h2 % CHILD_CLOSERS.length];
+      return e;
+    }
+    var pre = String(e.id || '').replace(/[^_]+$/, '');
+    var seen = g.eventSeen || (g.eventSeen = []);
+    var same = [], other = [], i, c;
+    for (i = 0; i < LS.EVENTS.length; i++) {
+      c = LS.EVENTS[i];
+      if (!c || c.id === e.id || c.stage !== '童年') continue;
+      if (seen.indexOf(c.id) >= 0) continue;
+      if (!c.text || c.text.length < 10 || c.text.length > 48) continue;
+      if (pre.length >= 4 && String(c.id).indexOf(pre) === 0) same.push(c);
+      else other.push(c);
+    }
+    /* 同族碎事先并；同族不够时用其它童年碎事补。最多并 4 条，尽量凑到 105 字，
+       候选耗尽仍不足 100 的保留原样（审计会点名具体 id） */
+    var body = txt, n = 0;
+    while (body.length < 105 && n < 4 && (same.length || other.length)) {
+      var from = same.length ? same : other;
+      var idx = Math.floor(LS.rand() * from.length);
+      c = from.splice(idx, 1)[0];
+      if (!c) {
+        if (!from.length) continue;
+        continue;
+      }
+      body += (n < CHILD_LINKS.length ? CHILD_LINKS[n] : '还有一回，') + c.text;
+      seen.push(c.id);
+      n++;
+    }
+    var h = 0, k;
+    for (k = 0; k < e.id.length; k++) h = (h * 31 + e.id.charCodeAt(k)) % 997;
+    body += CHILD_CLOSERS[h % CHILD_CLOSERS.length];
+    /* 目标 100–150 字：超了在最近的句号/分号处收住，不硬切半句 */
+    if (body.length > 150) {
+      var cut = Math.max(body.lastIndexOf('。', 150), body.lastIndexOf('；', 150), body.lastIndexOf('，', 150));
+      body = cut >= 100 ? body.slice(0, cut + 1) : body.slice(0, 150);
+    }
+    e.text = body;
+    return e;
+  }
+
   function setJob(g, spec) {
     if (!spec) return;
     var id = typeof spec === 'string' ? spec : spec.id;
@@ -363,6 +479,16 @@
       changes: '岗位：' + LS.JOBS[id].name + ' · ' + g.job.title + ' · 年薪 ' + LS.fmtMoney(g.job.salary) +
         '；标签：加班' + (g.job.tags ? g.job.tags.overtime : '—') + ' · 健康消耗' + (g.job.tags ? g.job.tags.health : '—')
     });
+    /* v3.10：岗位一落地就启用职业弧——没登记路径的（求职上岸/中途换岗）在这里补登记，
+       随后先出“入职”这一节，再按 order 推进。抽没抽中职业主干都一样推进。 */
+    if (LS.CAREER && LS.CAREER.inferFromJob && LS.CAREER.init) {
+      var cp = LS.CAREER.inferFromJob(g);
+      if (cp) {
+        var cs = LS.CAREER.init(g);
+        if (!cs.path || cs.path !== cp) LS.CAREER.enter(g, cp, { since: g.age, job: true });
+        else if (!cs.jobId) cs.jobId = LS.CAREER.PATHS[cp].jobId;
+      }
+    }
   }
 
   function clearJob(g, reason) {
@@ -564,6 +690,30 @@
       });
     }
     if (fx.edu !== undefined) eduSet(g, fx.edu);
+    /* v3.9 后果图：解锁/锁定事件组；lock 永久不可逆，存档保留 */
+    g.unlocked = g.unlocked || {};
+    g.locked = g.locked || {};
+    var ult = fx.unlock ? (Array.isArray(fx.unlock) ? fx.unlock : [fx.unlock]) : [];
+    ult.forEach(function (k) { if (k) g.unlocked[k] = g.age; });
+    var lck = fx.lock ? (Array.isArray(fx.lock) ? fx.lock : [fx.lock]) : [];
+    lck.forEach(function (k) { if (k) g.locked[k] = g.age; });
+    /* 延迟后果：year 年后把一条事件塞回池子（不是数值动画，是文本） */
+    if (fx.later) {
+      var laters = Array.isArray(fx.later) ? fx.later : [fx.later];
+      laters.forEach(function (l) {
+        if (!l || !l.event) return;
+        var lctx = g._ctxChoice || null;
+        g.pending.push({
+          event: l.event,
+          dueAge: (g.age || 0) + (l.at || 3),
+          choiceId: lctx ? lctx.key : '',
+          choiceAge: lctx ? lctx.age : null,
+          choiceTitle: lctx ? lctx.title : '',
+          choiceLabel: lctx ? lctx.label : '',
+          choiceScene: lctx ? (lctx.scene || '') : ''
+        });
+      });
+    }
     /* v3.2：路径分化 */
     if (fx.track) {
       g.track = fx.track;
@@ -1046,8 +1196,29 @@
     if (!e) return false;
     /* v3.7：未抽中的隐藏线事件一律不进可选池（含撞车/身世/线索） */
     if (e.line && LS.LINES && LS.LINES.match && !LS.LINES.match(g, e.line)) return false;
+    /* v3.9：主干弧模式下，旧链线（exam/romance/...）与九条支线全部静默。
+       只有抽中的 A/B/C 弧可以出场；日常事件照旧，但让位给弧节点。 */
+    if (LS.ARCS && LS.ARCS.lines && LS.ARCS.lines.length) {
+      if (!e.line) {
+        var lid = LS.lineIdOf ? LS.lineIdOf(e) : '';
+        if (lid && LS.LINES && LS.LINES.match && !LS.LINES.match(g, lid)) return false;
+      }
+    }
+    /* v3.9：主干弧节点的 cond 仍然要判（它负责在 C 线末尾 10a/10b/10c
+       三个收束变体里只放行与玩家选择匹配的那一个）；判不过时由 takeDueChain
+       走「弧救援」：跳过本节点、顺延到它的后继，保证整条弧不中断。 */
     if (e.cond) {
       try { if (!e.cond(g)) return false; } catch (err) { return false; }
+    }
+    /* v3.10：在职禁弹备考/求职类事件。考研/复读/招聘会只能在失业待业的分支里
+       作为并列选项出现（见 buildJobHuntEvent），不许作为独立事件再弹一次。 */
+    if (g.job && g.job.id && e.type !== 'career' && !e.ignoreJobGate) {
+      /* dueFork 跳过后事件仍可能被 forced 槽重新捞起，这里按 id 兜底 */
+      var gateId = String(e.id || '');
+      if (gateId === 'v2_exam_path' || gateId === 'v37_fork_grad' ||
+          gateId === 'v37_fork_postgrad') return false;
+      var jobSig = String(e.id || '') + ' ' + String(e.title || '');
+      if (/考研|复读|二战|招聘会|投简历|校招|宣讲会|调剂|投档/.test(jobSig)) return false;
     }
     /* v3.5：亲属状态守卫（父母/配偶/子女/手足/朋友） */
     if (LS.V35 && LS.V35.pass && !LS.V35.pass(g, e)) return false;
@@ -1224,9 +1395,24 @@
       ' · 人脉 ' + (g.flags && g.flags.referralUsed ? '已消耗一次内推' : '尚可动用') +
       ' · 证书 ' + (g.marks.has_cert ? '有' : '无') +
       ' · 已求职 ' + tries + ' 次。';
+    /* v3.10：正文必须点名选项里出现的岗位/简历，避免选项凭空引用正文没提过的名词 */
+    var poolNames = [];
+    var nameSeen = {};
+    var addPoolNames = function (strategy) {
+      var ids = huntPool(g, strategy);
+      for (var pi = 0; pi < ids.length; pi++) {
+        var nm = LS.JOBS[ids[pi]] ? LS.JOBS[ids[pi]].name : ids[pi];
+        if (!nameSeen[nm]) { nameSeen[nm] = 1; poolNames.push(nm); }
+      }
+    };
+    addPoolNames('safe');
+    addPoolNames('up');
+    addPoolNames('low');
+    if (LS.repTotal(g) >= 40) addPoolNames('referral');
+    var nameLine = poolNames.slice(0, 12).join('、');
     var text = (tries === 0
-      ? '毕业之后，工作不会自己找上门。招聘软件上挂着上百个岗位，真正愿意给你面试机会的却不多。你的学历、学识、声望与过往经历，共同决定了能碰到哪一档门槛。'
-      : '又是一年。存款在减少，简历上的空档越来越显眼。招聘市场没有变好，你只能调整策略，再赌一次。') +
+      ? '毕业之后，工作不会自己找上门。招聘软件上挂着上百个岗位：' + nameLine + '。你投出去的简历大多没有回音，真正愿意给你面试机会的却不多。你的学历、学识、声望与过往经历，共同决定了能碰到哪一档门槛。'
+      : '又是一年。存款在减少，简历上的空档越来越显眼。招聘市场还是那几行岗位：' + nameLine + '。你只能调整策略，再赌一次。') +
       '\n\n' + chips;
     /* v3.2：选项文案按当前路径的实际岗位池生成，避免四条路线共用同一套选项 */
     var poolLabel = function (strategy, n) {
@@ -1246,6 +1432,39 @@
       opts.push({ label: '托熟人内推：' + poolLabel('referral', 2), hint: '成功率约 ' + pct(pRef) + ' · 消耗人脉（社会声望 -5）', tone: 'switch',
         apply: function (g2) { return resolveHunt(g2, 'referral'); } });
     }
+    /* v3.10：考研/考公只在待业这里出现，和「再找工作」并排；在职时不允许单独弹。
+       选项必须回指正文里的「空档」「岗位」，不能凭空冒出一个抽象的「去考试」。 */
+    opts.push({
+      label: '考研：把简历上空档的两年改成学籍', hint: '学费 3 万元 · 学历 +1 · 两年后再回来投简历', tone: 'switch',
+      apply: function (g2) {
+        g2.edu.level = Math.min(6, Number(g2.edu.level || 5) + 1);
+        g2.attrs.knowledge = LS.clamp((g2.attrs.knowledge || 0) + 4, 0, 100);
+        g2.attrs.stress = LS.clamp((g2.attrs.stress || 0) + 6, 0, 100);
+        g2.money.cash = Math.max(0, g2.money.cash - 30000);
+        g2.job.huntTries = (g2.job.huntTries || 0) + 1;
+        g2.job.lastHunt = { age: g2.age, ok: false, strategy: 'kaoyan' };
+        g2.marks = g2.marks || {};
+        g2.marks.fork22_kaoyan = true;
+        g2.flags.needJob = true;
+        return '你把招聘软件卸了，报名、交费、搬进合租房。两年后学历那一栏确实好看了一些，空档也变成了「在读」。';
+      }
+    });
+    opts.push({
+      label: '考公：报街道办那个岗位', hint: '备考半年 · 上岸率约三成 · 稳定但晋升慢', tone: 'safe',
+      apply: function (g2) {
+        g2.job.huntTries = (g2.job.huntTries || 0) + 1;
+        var ok = LS.chance((g2.attrs.knowledge || 0) >= 60 ? 0.38 : 0.24);
+        if (ok) {
+          setJob(g2, 'civil');
+          g2.marks = g2.marks || {};
+          g2.marks.fork22_work = true;
+          return '笔试过线，面试那天你穿了唯一一件白衬衫。录取通知贴在公示栏上，名字在倒数第三行。';
+        }
+        g2.job.lastHunt = { age: g2.age, ok: false, strategy: 'civil' };
+        g2.flags.needJob = true;
+        return '成绩出来差了四分。街道办的岗位只招一个，你连面试名单都没进，只能把资料收进纸箱。';
+      }
+    });
     return {
       id: 'jobhunt',
       type: 'forced',
@@ -1319,11 +1538,9 @@
     LS.addMemory(g, '时代换成了' + pick.name + '，日子的算法跟着变了。', 'era');
   }
 
+  /* v3.8：年龄判定收敛——这里只做转发，真正的规则全在 LS.eventAgeGuard 一处 */
   function ageMatch(e, age) {
-    if (!e) return false;
-    if (typeof e.age === 'number') return e.age === age;
-    if (Object.prototype.toString.call(e.age) === '[object Array]') return age >= e.age[0] && age <= e.age[1];
-    return false;
+    return !!(LS.eventAgeGuard && LS.eventAgeGuard(e, age));
   }
 
   /* 关键年：强制剧情、到期回响、命运岔路、时代切换、高权重随机事件 */
@@ -1343,7 +1560,6 @@
       e = E[i];
       if (!e || e.type !== 'forced') continue;
       if (!ageMatch(e, nextAge)) continue;
-      if (e.stage && e.stage !== stage) continue;
       if (isFired(g, e) || isPendingFuture(g, e.id)) continue;
       if (!condOk(g, e)) continue;
       return true;
@@ -1354,7 +1570,6 @@
     for (i = 0; i < E.length; i++) {
       e = E[i];
       if (!e || e.tier !== 'crossroad') continue;
-      if (e.stage && e.stage !== stage) continue;
       if (!ageMatch(e, nextAge)) continue;
       if (isFired(g, e) || seenBefore(g, e)) continue;
       if (!condOk(g, e)) continue;
@@ -1471,6 +1686,38 @@
   /* UI 直接调用：从当前状态推进到下一个关键节点前（v3.2 已删除“跳过平淡年”） */
 
   /* v3.7：隐藏线节点优先于强制剧情年，否则一条线会被升学/工作节点整年挤掉 */
+  /* v3.9 弧救援：主干弧节点若因亲属离世 / 分支 mark 对不上而永远 condOk=false，
+     整条弧会卡死在 pending 里。此时跳过该节点，按它的默认选项把后继节点顺延进 pending，
+     保证弧从第一节一路走到最后一节。 */
+  function arcNodeFlags(e) {
+    var out = [], seen = {}, i, j;
+    if (!e || !e.opts) return out;
+    for (i = 0; i < e.opts.length; i++) {
+      var fl = e.opts[i].fx && e.opts[i].fx.flag;
+      if (!fl || !fl.length) continue;
+      /* 多选项分别指向不同后继时，取第一个选项的后继，保持单线推进 */
+      for (j = 0; j < fl.length; j++) {
+        if (!fl[j] || !fl[j].event || seen[fl[j].event]) continue;
+        seen[fl[j].event] = 1;
+        out.push(fl[j]);
+      }
+      break;
+    }
+    return out;
+  }
+
+  function arcRescue(g, e, why) {
+    var fl = arcNodeFlags(e), i;
+    for (i = 0; i < fl.length; i++) {
+      var next = LS.EVENT_INDEX[fl[i].event];
+      if (!next || !next.line) continue;
+      if (g.fired && g.fired.indexOf(fl[i].event) >= 0) continue;
+      g.pending.push({ event: fl[i].event, dueAge: g.age + (fl[i].delay || 1) });
+    }
+    g.arcSkipped = g.arcSkipped || [];
+    g.arcSkipped.push({ id: e.id, age: g.age, why: why || 'cond' });
+  }
+
   function takeDueChain(g) {
     if (!Array.isArray(g.pending) || !LS.LINES || !LS.LINES.match) return null;
     var best = null, bestIdx = -1;
@@ -1481,7 +1728,13 @@
       if (!pe || !pe.line) continue;
       if (!LS.LINES.match(g, pe.line)) continue;
       if (g.fired && g.fired.indexOf(pe.id) >= 0) continue;
-      if (!condOk(g, pe)) continue;
+      if (!condOk(g, pe)) {
+        if (LS.ARCS && LS.ARCS.isArc && LS.ARCS.isArc(pe.line)) {
+          g.pending.splice(i, 1); i--;
+          arcRescue(g, pe, 'cond');
+        }
+        continue;
+      }
       if (!best || item.dueAge < best.dueAge) { best = item; bestIdx = i; }
     }
     if (!best) return null;
@@ -1544,12 +1797,110 @@
     return b;
   }
 
+  /* v3.8：越界丢弃审计——不是静默丢，记进 g.ageLeaks 供回归统计
+     （eventId / 触发年龄 / 应然区间 / 应然阶段） */
+  function noteAgeLeak(g, e) {
+    if (!g) return;
+    if (!g.ageLeaks) g.ageLeaks = [];
+    if (!g.ageBlocked) g.ageBlocked = {};
+    var id = (e && e.id) || '?';
+    var key = String(id) + '@' + g.age;
+    if (g.ageBlocked[key]) return;
+    g.ageBlocked[key] = true;
+    var r = LS.eventAgeRange(e);
+    g.ageLeaks.push({
+      turn: g.turn, age: g.age, year: g.year, stage: g.stage,
+      eventId: id, title: (e && e.title) || '',
+      ageMin: r[0], ageMax: r[1], stageNeed: (e && e.stage) || ''
+    });
+  }
+  function ageBlocked(g, e) {
+    if (!e || !e.id || !g.ageBlocked) return false;
+    return !!g.ageBlocked[String(e.id) + '@' + g.age];
+  }
+
+  /* v3.8：线已关却仍被抽到——记一条，不进回忆录 */
+  function noteLineDrop(g, e, lineId) {
+    if (!g) return;
+    if (!g.lineDrops) g.lineDrops = [];
+    if (!g.lineBlocked) g.lineBlocked = {};
+    var key = String((e && e.id) || '?') + '@' + g.age + '@' + lineId;
+    if (g.lineBlocked[key]) return;
+    g.lineBlocked[key] = true;
+    g.lineDrops.push({
+      turn: g.turn, age: g.age, year: g.year, line: lineId,
+      eventId: (e && e.id) || '', title: (e && e.title) || ''
+    });
+  }
+  function lineBlocked(g, e) {
+    var lid = LS.lineIdOf ? LS.lineIdOf(e) : '';
+    if (!lid) return false;
+    var key = String((e && e.id) || '') + '@' + g.age + '@' + lid;
+    return !!(g.lineBlocked && g.lineBlocked[key]);
+  }
+
+  /* v3.9：本局骨架闸门——只放行 activeLines 里的线，其余线彻底不进池 */
+  function archetypeOpen(g, e) {
+    var lid = LS.lineIdOf ? LS.lineIdOf(e) : '';
+    if (!lid) return true;
+    var act = g.activeLines;
+    if (!act || !act.length) return true;
+    return act.indexOf(lid) >= 0;
+  }
+
+  /* v3.9：节点顺序闸门——N 只能接在 N-1 之后，尾巴接在第 3 节之后 */
+  function chainStepFired(g, key, step) {
+    var idx = LS.CHAIN_INDEX;
+    if (!idx) {
+      idx = LS.CHAIN_INDEX = {};
+      (LS.EVENTS || []).forEach(function (x) {
+        if (x.chainKey && x.chainStep) idx[x.chainKey + '#' + x.chainStep] = x.id;
+      });
+    }
+    var id = idx[key + '#' + step];
+    return !!id && g.fired.indexOf(id) >= 0;
+  }
+
+  function chainReady(g, e) {
+    if (!e || !e.chainKey) return true;
+    if (e.chainStep && e.chainStep > 1) return chainStepFired(g, e.chainKey, e.chainStep - 1);
+    if (e.chainTail) return chainStepFired(g, e.chainKey, 3);
+    return true;
+  }
+
+  function noteNodeBlock(g, e, kind) {
+    if (!g) return;
+    if (!g.nodeBlocks) g.nodeBlocks = [];
+    if (g.nodeBlocks.length > 200) return;
+    g.nodeBlocks.push({ age: g.age, turn: g.turn, eventId: (e && e.id) || '', kind: kind });
+  }
+
   function slotUsable(g, e, slot) {
     if (!e || !e.id) return false;
     if (isFired(g, e)) return false;
     if (isPendingFuture(g, e.id)) return false;
-    if (slot === 'forced') {
-      if (!ageMatch(e, g.age)) return false;
+    /* v3.9：daily 不抢主干槽位，且单局上限 25 条。
+       主干弧在跑时放宽到 60 条——弧节点横跨到晚年，日常封顶过早会把剩下几十年直接判死。 */
+    var dailyCap = (LS.ARCS && LS.ARCS.lines && LS.ARCS.lines.length) ? 140 : 25;
+    if (slot !== 'forced' && (e.ownerLayer || 'daily') === 'daily' && (g.dailyCount || 0) >= dailyCap) return false;
+    /* v3.8：所有槽位统一过年龄闸门，散落的年龄判断全部收进 LS.eventAgeGuard */
+    if (!ageMatch(e, g.age)) return false;
+    if (ageBlocked(g, e)) return false;
+    var lid = LS.lineIdOf ? LS.lineIdOf(e) : '';
+    if (lid && LS.lineOpen && !LS.lineOpen(g, lid)) return false;
+    if (lineBlocked(g, e)) return false;
+    /* v3.9：被永久 lock 的事件组不再进池（不可逆，存档也保留） */
+    if (e.group && g.locked && g.locked[e.group]) return false;
+    if (e.needsUnlock && (!g.unlocked || !g.unlocked[e.needsUnlock])) return false;
+    if (!archetypeOpen(g, e)) return false;
+    if (!chainReady(g, e)) return false;
+    if (e.arch && e.arch.indexOf('school') >= 0 &&
+      (g.activeLines || []).indexOf('exam') < 0) return false;
+    /* v3.9：回响必须有源事件已经在案，指不回去的“假回响”一律不进池
+       入职事件虽然挂在 echo 档，但它本身就是源，不受此限 */
+    if (e.tier === 'echo' && !e.careerOnboard) {
+      var src = e.echoParent || e.echoOf || e._echoParent || '';
+      if (!src || g.fired.indexOf(src) < 0) return false;
     }
     if ((slot === 'relation' || slot === 'side' || slot === 'daily') && seenBefore(g, e)) return false;
     if (slot !== 'forced' && riskBlocked(g, e)) return false;
@@ -1640,6 +1991,7 @@
       choiceLabel: chosen.item.choiceLabel || '',
       choiceId: chosen.item.choiceId || '',
       parentChoiceId: chosen.item.choiceId || '',
+      sourceEventId: chosen.item.sourceEventId || (chosen.ev && chosen.ev.echoParent) || '',
       sourceText: chosen.item.choiceScene || '',
       note: chosen.item.note || '',
       riskKey: chosen.item.riskKey || (chosen.ev && chosen.ev.riskKey) || '',
@@ -1766,8 +2118,10 @@
     }
     plan.due = hasDuePending(g);
     plan.dilemma = dilemmaAvailable(g);
-    /* 职业事件同样走槽位，不再无条件抢占回合；due 内部自带 2 回合冷却 */
+    /* 职业事件同样走槽位，不再无条件抢占回合；due 内部自带冷却 */
     if (LS.CAREER && LS.CAREER.due) plan.careerEv = LS.CAREER.due(g);
+    /* v3.10：主干弧不再封杀职业组——抽中职业弧只是加厚，没抽中也要有基础职业推进。
+       弧节点仍由 takeDueChain 先占回合，职业事件只填剩余的空位。 */
     return plan;
   }
 
@@ -1859,7 +2213,20 @@
       if (forkEv) return forkEv;
     }
 
-    /* v3.7 P4：职业路径专属事件已并入槽位调度（career 槽），不再无条件抢回合 */
+    /* v3.10：在岗即启用职业主序列。放在死亡/刑满/分流之后，时代锚点与隐藏线之前，
+       保证任意连续 3 个展示回合内至少 1 条职业事件（阈值 2 = 两条职业事件之间最多
+       夹 2 条叙事）。order 主序列永远优先；只有 due 返回 null（下一条未到龄/序列
+       已空）时才用缓冲事件填空档，反过来会把 order 事件饿死。C.due 只推进未触发的
+       新事件、入职只发生一次，不会重复出场。 */
+    if (LS.CAREER && LS.CAREER.due) {
+      var careerHard = LS.CAREER.due(g);
+      if (!careerHard && LS.CAREER.buffer) careerHard = LS.CAREER.buffer(g);
+      if (careerHard) {
+        var cst = LS.CAREER.init(g);
+        var cLast = cst.lastTurn === undefined ? -99 : cst.lastTurn;
+        if (g.turn - cLast >= 2) return careerHard;
+      }
+    }
 
     /* v3.7 P4.0：为时代锚点预留的追加回合，直接返回锚点事件 */
     if (g.eraPending && LS.V36 && LS.V36.eraAnchor) {
@@ -1923,7 +2290,7 @@
       if (dueK.length) {
         var kev = LS.buildEchoEvent ? LS.buildEchoEvent(g, dueK[0], 'kind') : null;
         if (kev) {
-          kev._echoParent = kev._echoParent || (dueK[0].choiceId || '');
+          kev._echoParent = kev._echoParent || dueK[0].eventId || '';
           if (!g.echoInfo) {
             g.echoInfo = {
               kind: 'echo', fromAge: dueK[0].age, years: Math.max(1, g.age - dueK[0].age),
@@ -1938,7 +2305,7 @@
       if (dueR.length) {
         var rev = LS.buildEchoEvent ? LS.buildEchoEvent(g, dueR[0], 'revenge') : null;
         if (rev) {
-          rev._echoParent = rev._echoParent || (dueR[0].choiceId || '');
+          rev._echoParent = rev._echoParent || dueR[0].eventId || '';
           if (!g.echoInfo) {
             g.echoInfo = {
               kind: 'echo', fromAge: dueR[0].age, years: Math.max(1, g.age - dueR[0].age),
@@ -1964,11 +2331,9 @@
       if (slot === 'causal') plan.due = false;
     }
 
-    /* 4. 兜底日常 */
-    for (var d = 0; d < E.length; d++) {
-      var de = E[d];
-      if (de.type === 'daily' && de.stage === g.stage) return de;
-    }
+    /* 4. 兜底日常（走与槽位完全相同的闸门：年龄 / 线锁 / 归属 / daily 配额） */
+    var fallback = slotPool(g, 'daily');
+    if (fallback.length) return fallback[Math.floor(LS.rand() * fallback.length)];
     return null;
   }
 
@@ -2587,6 +2952,18 @@
       careerPathId = (g.career && g.career.path) || null;
     }
 
+    /* v3.10：结局点名没来得及了结的钩子，保证“开了头”的东西都有交代 */
+    var undoneText = (info && info.undone) || '';
+    if (!undoneText && g.hookLog && g.hookLog.length) {
+      var un = [];
+      for (var hi = 0; hi < g.hookLog.length; hi++) {
+        var hh = g.hookLog[hi];
+        if (!hh || hh.usedAt || hh.settled) continue;
+        hh.settled = true;
+        if (hh.noun && un.indexOf(hh.noun) < 0) un.push(hh.noun);
+      }
+      if (un.length) undoneText = '没来得及了结的：' + un.slice(-3).join('、');
+    }
     g.summary = {
       name: g.name,
       gender: g.gender,
@@ -2600,7 +2977,7 @@
       whoWasThere: (info && info.whoWasThere) || [],
       relics: (info && info.relics) || [],
       lastWords: (info && info.lastWords) || '',
-      undone: (info && info.undone) || '',
+      undone: undoneText,
       careerEnd: careerEnd,
       careerPath: careerPathId,
       edu: LS.eduName(g.edu.level),
@@ -2706,6 +3083,98 @@
     return s.join('');
   }
 
+  /* ---------------- v3.10 节尾钩子 → 下节回指 ----------------
+     每节落地后从正文里挑一个具体物件/单据留下，下一节开头先回指它；
+     没被回指、也没在结局点名的钩子才算 dangling。 */
+  /* 钩子只认“具体的人/物”，不做量词瞎猜，避免出现「上回留下的月三百八」这类假钩子 */
+  var HOOK_OBJ = /(缴费单|收据|收条|发票|账单|欠条|借条|合同|通知书|录取通知|病历|诊断书|药单|处方|车票|火车票|工资条|工牌|钥匙|照片|相片|请柬|罚单|传票|卷宗|档案|名单|账本|日记|奖状|证书|简历|名片|手机|戒指|手表|自行车|木箱|房产证|存折|银行卡|押金条|红包|礼金|离婚证|户口本|保单|体检报告|化验单|药盒|轮椅|拐杖|骨灰盒|墓碑|店面|摊位|三轮车|工具箱|扳手|菜刀|锅铲|那只碗|旧碗|信封|信纸|那封信|一封信)/;
+  var HOOK_PERSON = /(父亲|母亲|爸爸|妈妈|爷爷|奶奶|姥姥|姥爷|舅舅|姨妈|姑姑|叔叔|哥哥|姐姐|弟弟|妹妹|班主任|同桌|发小|邻居|老板|师傅|同事|客户|医生|护士|警察|房东|工头|同学|室友)/;
+  function hookOf(text) {
+    var t = String(text || '');
+    var m = HOOK_OBJ.exec(t);
+    if (m) return { noun: m[1], kind: 'obj' };
+    m = HOOK_PERSON.exec(t);
+    if (m) return { noun: m[1], kind: 'person' };
+    return null;
+  }
+  function hookBridge(hk) {
+    var i = num0(hk.seq) % 3;
+    if (hk.kind === 'person') {
+      if (i === 1) return '上次' + hk.noun + '说的那件事，还没个结果。';
+      if (i === 2) return hk.noun + '那边，你一直没给个准话。';
+      return '上回' + hk.noun + '留下的那句话，还悬着。';
+    }
+    if (i === 1) return '上次的' + hk.noun + '，你还没处置。';
+    if (i === 2) return '你还没忘了' + hk.noun + '那一档子事。';
+    return '上回留下的' + hk.noun + '，还搁在那儿没动。';
+  }
+  function noteHook(g, ev, text) {
+    /* 求职决定当回合就给出结果（入职或继续待业），不留下跨节钩子：
+       它没有“下一节要交代”的悬念，硬留会变成收不掉的短线索 */
+    if (ev && /^jobhunt$/.test(String(ev.id || ''))) return;
+    var hk = hookOf(text);
+    if (!hk) hk = hookOf(ev && ev.text);
+    if (!hk) return;
+    if (!g.hookLog) g.hookLog = [];
+    hk.id = (ev && ev.id) || '';
+    hk.age = g.age;
+    hk.turn = g.turn;
+    hk.seq = g.hookLog.length;
+    /* 距上一节超过 5 年仍未回指的，记为短线，结局要点名 */
+    var prev = g.hook;
+    if (prev && !prev.usedAt && num0(g.age) - num0(prev.age) > 5) prev.settled = false;
+    g.hookLog.push(hk);
+    if (g.hookLog.length > 80) g.hookLog = g.hookLog.slice(-80);
+    g.hook = hk;
+  }
+
+  /* v3.10 审计探针：给出当前回合最靠前的候选与落选原因，用于回答
+     “职业/偶发事件为什么不出”——不是猜测，是逐条闸门的判定结果。 */
+  LS.debugCandidates = function (g, n) {
+    var E = LS.EVENTS || [], out = [];
+    var c = (LS.CAREER && LS.CAREER.init) ? LS.CAREER.init(g) : null;
+    var hasJob = !!(g.job && g.job.id);
+    for (var i = 0; i < E.length; i++) {
+      var e = E[i];
+      if (!e || !e.id) continue;
+      var stg = e.stage || '';
+      if (stg && stg !== g.stage) continue;
+      var rg = LS.eventAgeRange(e);
+      if (num0(g.age) < num0(rg[0]) - 2 || num0(g.age) > num0(rg[1]) + 2) continue;
+      var reason = '';
+      if (g.fired && g.fired.indexOf(e.id) >= 0) reason = '已触发';
+      else if (!ageMatch(e, g.age)) reason = '不在阶段/年龄区间';
+      else if (e.type === 'career' || e.careerOnboard || (e.path && e.order)) {
+        if (!hasJob) reason = '职业未启用（无岗）';
+        else if (!c || !c.path) reason = '职业未启用（无路径）';
+        else if (!c.onboarded) reason = '等待入职事件';
+        else if (e.cond) { try { if (!e.cond(g)) reason = '条件不满足（非本职业）'; } catch (x0) { reason = '条件不满足'; } }
+      } else {
+        if (e.line && LS.LINES && LS.LINES.match && !LS.LINES.match(g, e.line)) reason = '主线未抽中';
+        else if (!archetypeOpen(g, e)) reason = '主线未抽中';
+        else if (!chainReady(g, e)) reason = 'order 未轮到';
+        else if (e.cond) { try { if (!e.cond(g)) reason = '条件不满足'; } catch (x1) { reason = '条件不满足'; } }
+        else if (e.tier === 'echo' && !e.careerOnboard) {
+          var src = e.echoParent || e.echoOf || e._echoParent || '';
+          if (!src || g.fired.indexOf(src) < 0) reason = '回响源不在案';
+        }
+      }
+      if (!reason) reason = '在池';
+      out.push({
+        id: e.id, title: e.title || '', type: e.type || '', order: e.order,
+        reason: reason, inPool: reason === '在池'
+      });
+    }
+    out.sort(function (a, b) {
+      if (a.inPool !== b.inPool) return a.inPool ? -1 : 1;
+      var ca = (a.type === 'career' || /^car_/.test(a.id)) ? 0 : 1;
+      var cb = (b.type === 'career' || /^car_/.test(b.id)) ? 0 : 1;
+      if (ca !== cb) return ca - cb;
+      return num0(a.order) - num0(b.order);
+    });
+    return out.slice(0, n || 5);
+  };
+
   /* ---------------- 对外接口 ---------------- */
   function prepEvent(g, e) {
     var out = {};
@@ -2717,6 +3186,21 @@
       if (out.title && out.title.indexOf('{{') >= 0) out.title = out.title.replace(/\{\{risk\}\}/g, riskLabel);
       if (out.text) out.text = out.text.replace(/\{\{risk\}\}/g, riskLabel);
       out.riskKey = out.riskKey || riskKey;
+    }
+    /* v3.10：本节开头回指上一节留下的钩子（同一事件不自我回指，超过 5 年不再硬贴）。
+       正文本来就已经提到该名词，也算完成回指，必须记 usedAt，否则审计会误判悬空。 */
+    var hk = g.hook;
+    if (hk && hk.noun && (!e.id || e.id !== hk.id)) {
+      var hkBody = String(out.text || '');
+      var hkFresh = num0(g.age) - num0(hk.age) <= 5;
+      if (hkBody.indexOf(hk.noun) < 0 && hkFresh) {
+        out.text = hookBridge(hk) + hkBody;
+        hkBody = out.text;
+      }
+      if (hkFresh && hkBody.indexOf(hk.noun) >= 0) {
+        hk.usedAt = g.age;
+        hk.usedTurn = g.turn;
+      }
     }
     /* v3：选项条件过滤 + 风险标注（不改事件库本体） */
     var src = e.opts || [];
@@ -2771,9 +3255,12 @@
   }
 
   /* v3.3：回响的父选择必须能指回一条真实 choiceId；指不回就不写 */
+  /* v3.8：echoOf 一律指向**源事件 id**（回忆录按 eventLog 的 eventId 校验存在性），
+     不再回落到 choiceId——那会造出“来源对不上”的假回响。 */
   function echoParentOf(g, e) {
     if (!e || e.tier !== 'echo') return null;
-    var pid = e._echoParent || e.echoParent || (g.echoInfo && g.echoInfo.parentChoiceId) || '';
+    var pid = e._echoParent || e.echoParent ||
+      (g.echoInfo && (g.echoInfo.sourceEventId || g.echoInfo.echoOf)) || '';
     return pid || null;
   }
 
@@ -2807,8 +3294,37 @@
 
       var e = selectEvent(g);
       if (!e) return null;
+      /* v3.8：出场前唯一闸门——槽位、兜底、动态回响都从这里过；越界丢弃并记审计 */
+      if (!ageMatch(e, g.age)) {
+        noteAgeLeak(g, e);
+        continue;
+      }
+      /* v3.8：线闸门——线关了（如已入职还挂备考线）一律不出，丢弃并计数 */
+      var lid = LS.lineIdOf ? LS.lineIdOf(e) : '';
+      if (lid && LS.lineOpen && !LS.lineOpen(g, lid)) {
+        noteLineDrop(g, e, lid);
+        continue;
+      }
+      /* v3.9：回响必须有在案的源事件；指不回去的不出，也不写假 echoOf。
+         主干弧节点自带走线（由 pending 与上一节承接），本身就是源，不受此限 */
+      var arcEv = !!(e.line && LS.ARCS && LS.ARCS.isArc && LS.ARCS.isArc(e.line));
+      /* v3.10：职业组事件自带入职源（career.onboarded），不需要 echoOf 回响源；
+         之前它们被这条闸门整批挡掉，189 条职业事件一局都没出过 */
+      var careerEvFlag = e.type === 'career' || e.careerOnboard;
+      if (e.tier === 'echo' && !careerEvFlag && !arcEv) {
+        var ep = echoParentOf(g, e);
+        if (!ep || g.fired.indexOf(ep) < 0) {
+          noteNodeBlock(g, e, 'echo');
+          if (!g.ageBlocked) g.ageBlocked = {};
+          g.ageBlocked[String(e.id) + '@' + g.age] = true;
+          continue;
+        }
+      }
+      if (e.stage === '童年' || g.stage === '童年') e = mergeChildhood(g, e);
       e = prepEvent(g, e);
       if (LS.V36 && LS.V36.attachOverlays) e = LS.V36.attachOverlays(g, e);
+      /* v3.10：职业事件真正出场时才写冷却，保证节奏不被空探测推后 */
+      if (careerEvFlag && LS.CAREER && LS.CAREER.init) LS.CAREER.init(g).lastTurn = g.turn;
 
       if (autoResolvable(e) && !e.eraNote &&
           !(LS.V37 && LS.V37.isDouble(g.age) && (e.opts || []).length)) {
@@ -2818,6 +3334,7 @@
         g.currentLogSeq = LS.pushEventLog(g, {
           turn: g.turn, age: g.age, year: g.year, stage: g.stage, tier: e.tier || 'daily',
           eventId: e.id, title: e.title, source: layerOf(e), auto: true,
+          careerOnboard: !!e.careerOnboard,
           echoOf: echoParentOf(g, e)
         });
         g._auto = true;
@@ -2850,6 +3367,11 @@
     if (!g.fireAge) g.fireAge = {};
     g.fireAge[e.id] = g.age;
     if (g.fired.indexOf(e.id) < 0 && !e.repeatable) g.fired.push(e.id);
+    /* v3.9：daily 层配额——主干节点优先，日常只补位且一局不超过 25 条 */
+    if ((e.ownerLayer || 'daily') === 'daily') {
+      g.dailyCount = (g.dailyCount || 0) + 1;
+      if (!e.owner) g.sharedCount = (g.sharedCount || 0) + 1;
+    }
 
     /* v3：去重记录（每日/随机/支线）与冷却统计 */
     var layer = layerOf(e);
@@ -2867,6 +3389,7 @@
     g.currentLogSeq = LS.pushEventLog(g, {
       turn: g.turn, age: g.age, year: g.year, stage: g.stage, tier: e.tier || 'daily',
       eventId: e.id, title: e.title, source: layer, auto: false,
+      careerOnboard: !!e.careerOnboard,
       echoOf: echoParentOf(g, e)
     });
     /* v3.2：事件流水保留用于统计，但不再作为回忆录来源 */
@@ -2988,6 +3511,15 @@
     if (LS.CAREER && LS.CAREER.applyChoice) LS.CAREER.applyChoice(g, ev, opt);
     if (LS.V37 && LS.V37.applyFork && opt && opt.fork) LS.V37.applyFork(g, ev, opt);
 
+    /* v3.8：职业落定 → 关闭备考/求职/创业线（各写一条收尾句），并记下这条线的开场 */
+    var jobNow = (g.job && g.job.id) ? g.job.id : '';
+    if (jobNow && jobNow !== g._jobSnapshot) {
+      g._jobSnapshot = jobNow;
+      if (LS.closeLinesOnJob) LS.closeLinesOnJob(g, 'employed');
+    }
+    var lineNow = LS.lineIdOf ? LS.lineIdOf(ev) : '';
+    if (lineNow && LS.lineStart) LS.lineStart(g, lineNow);
+
     /* v3.6：两难记账、放弃方降亲密、承诺与多年回响 */
     if (LS.V36 && LS.V36.onChoice) LS.V36.onChoice(g, ev, opt, outcomeLabel);
     g._ctxChoice = null;
@@ -3036,6 +3568,8 @@
       };
     }
 
+    /* v3.10：本节落地后留一个钩子，供下一节开头回指 */
+    noteHook(g, ev, text);
     g.current = null;
     g.currentId = null;
     LS.snapshot(g);
@@ -3415,7 +3949,14 @@
     /* v3.7：分流点被同年死亡等强制事件挤占时，当年追加一回合补上，避免整段路径丢失 */
     if (LS.V37 && LS.V37.FORK_AGE && LS.EVENT_INDEX) {
       var dueForkId = LS.V37.FORK_AGE[g.age];
-      if (dueForkId && LS.EVENT_INDEX[dueForkId] &&
+      /* v3.10：在职时 22/25 的毕业去向已被 dueFork 主动跳过（fork_skipped_employed）。
+         此时不能再为它空转追加回合，否则年龄永远停在 22/25，职业 order 序列全部卡死、
+         缓冲事件被无限重复。只有 dueFork 真能给出事件时才补回合。 */
+      var forkPending = false;
+      if (dueForkId && LS.V37.dueFork) {
+        try { forkPending = !!LS.V37.dueFork(g); } catch (errFork) { forkPending = false; }
+      }
+      if (dueForkId && LS.EVENT_INDEX[dueForkId] && forkPending &&
           !(g.fired && g.fired.indexOf(dueForkId) >= 0) &&
           !(g.current && g.current.id === dueForkId) &&
           !g.pendingStage && !g.pendingSummary) {

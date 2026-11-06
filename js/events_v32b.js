@@ -205,7 +205,7 @@
     id: 'v32_soc_parent_meeting', type: 'random', layer: 'random', stage: '童年',
     weight: 2, art: 'home', cond: A(8, 12, parentAlive),
     title: '家长会点名',
-    text: '家长会结束，班主任把母亲留了下来，说你上课爱走神，但脑子不笨。母亲出来时手里攥着成绩单，脸上看不出情绪。',
+    text: '家长会结束，班主任把母亲留了下来，转述老师的话：你上课爱走神，但脑子不笨。母亲出来时手里攥着成绩单，脸上看不出情绪。',
     opts: [
       o2('主动认错，说以后会改', { at: { happiness: -1, knowledge: 3 }, npc: { '母亲': { intimacy: 4 } }, tag: '家长会后主动向母亲认错' },
         W('母亲没骂你，只把成绩单折好，说“知道就行”。', { npc: { '母亲': { intimacy: 6, anchor: { kind: 'promise', text: '你在家长会后答应母亲会改' } } } }),
@@ -262,7 +262,7 @@
     text: '晚自习后，发小把你拉到操场边，说他家里出了事，让你千万别跟别人讲。风很大，他说话时一直看着地面。',
     opts: [
       o2('答应发小，一个字都不说', { ensureNpc: EN.faxiao, npc: { '发小': { intimacy: 0 } }, at: { happiness: 3, stress: 1 }, tag: '少年时替发小守住过秘密' },
-        W('很多年后他还记得那天晚上，说你是唯一没拿这事当谈资的人。', { npc: { '发小': { intimacy: 9, anchor: { kind: 'secret', text: '你把他的秘密守了很多年' } } } }),
+        W('二十年过去，他还记得那天晚上，说你是唯一没拿这事当谈资的人。', { npc: { '发小': { intimacy: 9, anchor: { kind: 'secret', text: '你把他的秘密守了很多年' } } } }),
         W('你无意中说漏了半句，话传回他耳朵里，他很久没理你。', { npc: { '发小': { intimacy: -7, favor: -1 } }, at: { happiness: -2 } }, 35)),
       o2('劝发小告诉老师或家里人', { ensureNpc: EN.faxiao, npc: { '发小': { intimacy: 0 } }, at: { charm: 3, happiness: 1 }, tag: '少年时劝发小向家里求助' },
         W('他照做了，事情没有变好，但至少不再一个人扛。', { npc: { '发小': { intimacy: 6 } } }),
@@ -350,7 +350,7 @@
     id: 'v32_soc_tongxue_refer', type: 'random', layer: 'random', stage: '青年',
     weight: 2, art: 'jobfair', cond: A(22, 28, function (g) { return alive(g, '同学'); }),
     title: '向{{npc:同学}}打听一个岗位',
-    text: '你听说同学在一家不错的公司，正好在招人。你在聊天框里打了几行字，删了又写，最后还是发出去了。',
+    text: '你听说同学在一家不错的公司，正好在招人。你把自己的简历翻出来改了两处，又在聊天框里打了几行字，删了又写，最后还是发出去了。',
     opts: [
       o2('直接开口请他内推', { at: { stress: 2 }, npc: { '同学': { intimacy: 3 } }, tag: '年轻时请同学内推过工作' },
         W('他把你的简历递了上去，还帮你说了几句好话。', { npc: { '同学': { intimacy: 8, favor: 1 } }, money: { cash: 3000 }, at: { happiness: 3, finance: 2 } }),
@@ -368,7 +368,7 @@
     id: 'v32_soc_boss_overtime', type: 'random', layer: 'random', stage: '青年',
     weight: 3, art: 'office', cond: A(23, 32, function (g) { return hasJob(g) && !!bossOf(g); }),
     title: '{{npc:boss}}留下你加班',
-    text: '下班前十分钟，上司把一叠材料放在你桌上，说客户明天一早要看。办公室里其他人都在收东西，只有你的电脑还亮着。',
+    text: '下班前十分钟，上司把一叠材料放在你桌上，说客户明天一早要看。办公室里其他同事都在收东西，只有你的电脑还亮着。',
     opts: [
       o2('接下来，做到凌晨', { at: { stress: 5, health: -3, finance: 2 }, npc: { '上司': { intimacy: 5 } }, tag: '年轻时替上司熬过通宵' },
         W('第二天客户很满意，上司在会上点了你的名。', { npc: { '上司': { intimacy: 9, anchor: { kind: 'work', text: '你替他熬过一个通宵，方案一次通过' } } }, rep: { industry: 4 } }),
@@ -531,7 +531,7 @@
     id: 'v32_soc_boss_layoff', type: 'random', layer: 'random', stage: '中年',
     weight: 3, art: 'emptyDesk', cond: A(40, 55, function (g) { return hasJob(g) && !!bossOf(g); }),
     title: '裁员名单',
-    text: '上司把你叫到会议室，关上门。桌上放着一张名单，你的名字在最后一行。他说公司难，给你两个选择：降薪留下，或者拿补偿走。',
+    text: '上司把你叫到会议室，关上门。桌上放着一张名单，你的名字在最后一行。他说公司难，给你两个选择：降薪留下，或者拿补偿走。这个位置你坐了六年，手上还攒着几个老客户。',
     opts: [
       o2('接受降薪，先保住位置', { at: { stress: 5, happiness: -4, finance: 1 }, npc: { '上司': { intimacy: 3 } }, tag: '中年时接受过降薪留下' },
         W('一年后公司缓过来，上司把薪水补回了一部分。', { npc: { '上司': { intimacy: 6, favor: 1 } }, money: { cash: 6000 } }),
@@ -980,7 +980,7 @@
         W('伴侣觉得你含糊其辞，问题一直没解决。', { npc: { '配偶': { intimacy: -5 } }, at: { happiness: -3 } }, 45)),
       o2('说伴侣小题大做', { wrong: { role: '配偶', kind: 'offend', text: '伴侣和家人闹矛盾时，你说伴侣小题大做', intimacy: -10, favor: -2 }, tag: '伴侣和家人闹矛盾时你说了重话' },
         W('伴侣没再吵，第二天开始自己做饭、自己出门。', { npc: { '配偶': { intimacy: -6 } }, at: { happiness: -4 } }),
-        W('这件事变成了一根刺，很多年后还会被翻出来。', { npc: { '配偶': { favor: -3, anchor: { kind: 'conflict', text: '你说她/他小题大做，这句话被记了很多年' } } }, at: { happiness: -6 } }, 50))
+        W('这件事变成了一根刺，二十年后还会被翻出来。', { npc: { '配偶': { favor: -3, anchor: { kind: 'conflict', text: '你说她/他小题大做，这句话被记了很多年' } } }, at: { happiness: -6 } }, 50))
     ]
   });
 
@@ -1336,7 +1336,7 @@
         W('聊到最后他说，其实这本书是当年你借给他没要回去的。', { npc: { '同学': { intimacy: 6, favor: 1 } } }),
         W('电话没人接，后来他回了一条“在忙”。', { npc: { '同学': { intimacy: -1 } }, at: { happiness: -1 } }, 40)),
       o2('把书放上书架，不联系', { at: { happiness: 1 }, npc: { '同学': { intimacy: 1 } }, tag: '收到旧书后你没有联系同学' },
-        W('很多年后你再翻这本书，才发现扉页上还有一句话。', { at: { happiness: 2 } }),
+        W('多年以后你再翻这本书，才发现扉页上还有一句话。', { at: { happiness: 2 } }),
         W('书被孩子拿去垫桌脚，你找回来时封面已经折了。', { at: { happiness: -2 } }, 40))
     ]
   });

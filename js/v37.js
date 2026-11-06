@@ -492,6 +492,13 @@
     var id = V.FORK_AGE[g.age];
     if (!id) return null;
     if (g.fired && g.fired.indexOf(id) >= 0) return null;
+    /* v3.10：人已在岗时，22/25 的“毕业去向”不再弹。否则会出现「上班上得好好的，
+       突然被问要不要考研、投简历」；考研只留在待业分支里当并列选项。 */
+    if (g.job && g.job.id && (id === 'v37_fork_grad' || id === 'v37_fork_postgrad')) {
+      g.marks = g.marks || {};
+      g.marks.fork_skipped_employed = true;
+      return null;
+    }
     return (LS.EVENT_INDEX && LS.EVENT_INDEX[id]) || null;
   };
   V.applyFork = function (g, ev, opt) {

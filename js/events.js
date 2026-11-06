@@ -56,7 +56,7 @@
     ev({
       id: 'f_vaccine', type: 'forced', stage: '婴幼儿', age: 1, prio: 90, family: 'vaccine',
       title: '第一针自费疫苗',
-      text: '镇上的防疫站排起长队，免费疫苗登记台前挤满了抱孩子的家长。隔壁窗口在推一种自费肺炎疫苗，一针两百多，护士说“有条件就打”。母亲翻了翻钱包，又看了看你。',
+      text: '镇上的防疫站排起长队，免费疫苗登记台前挤满了抱孩子的家长。隔壁窗口在推一种自费肺炎疫苗，一针两百多，护士说“有条件就打”。排在前面的邻居压低声音说，这疫苗伤身体，能不打就别打。母亲翻了翻钱包，又看了看你。',
       opts: [
         o('只打免费的，够用就行', { money: { cash: -200 }, at: { health: 1 }, tag: '只打了免费疫苗' }, {
           hint: '绝大多数孩子打完都没事，极少数会低烧两天', tone: 'safe',
@@ -290,7 +290,7 @@
       id: 'f_voc', type: 'forced', stage: '少年', age: 18, prio: 95,
       cond: function (g) { return !g.marks.highschool; },
       title: '中职毕业',
-      text: '三年中职读完，学校组织了一场招聘会。来的企业大多是本地工厂、汽修店和物流公司，起薪一千八到两千五。班主任说，想继续读可以考高职，但家里不一定拿得出学费。',
+      text: '三年中职读完，学校组织了一场招聘会。来的企业大多是本地工厂、汽修店和物流公司，起薪一千八到两千五。班主任说，想继续读可以考高职，但家里不一定拿得出学费。旁边汽修店的师傅插了句嘴，说愿意带个徒弟，边干边教。',
       opts: [
         o('考高职，继续读书', { edu: 4, money: { cash: -7000 }, at: { knowledge: 4, happiness: 3 }, tag: '中职升入高职' }, { hint: '还要再读三年' }),
         o('进本地工厂', { money: { cash: 2000 }, at: { finance: 3, health: -2 }, job: { id: 'gig', level: 1 }, tag: '中职毕业进厂上班' }),
@@ -1453,7 +1453,7 @@
     ev({
       id: 'r_teacher_praise', type: 'random', stage: '童年', weight: 3,
       title: '被老师念了作文',
-      text: '语文老师把你的作文当范文在班上念，念到一半停下来，说这个比喻写得好。下课有同学围过来问你怎么想的。你其实只是写了村口那条河，和你奶奶家院子里的枣树。',
+      text: '语文老师把你的作文当范文在班上念，念到一半停下来，说这个比喻写得好。下课有同学围过来问你怎么想的。你其实只是写了村口那条河，和你奶奶家院子里的枣树，回家想讲给母亲听。',
       opts: [
         o('从此更愿意写东西', { at: { knowledge: 4, happiness: 4 }, rep: { school: 3 }, tag: '小学时作文被老师当范文' }),
         o('觉得很不好意思，低头不说话', { at: { knowledge: 2, happiness: 1 }, tag: '被表扬时会不好意思' }),
@@ -1494,7 +1494,7 @@
     ev({
       id: 'r_bully_scene', type: 'random', stage: '童年', weight: 2,
       title: '走廊上的推搡',
-      text: '课间，几个高年级学生在走廊上围住一个戴眼镜的男生，把他的作业本扔在地上踩。周围有人笑，也有人装作没看见。你站在教室门口，离得很近。',
+      text: '课间，几个高年级学生在走廊上围住一个戴眼镜的同学，把他的作业本扔在地上踩。周围有人笑，也有人装作没看见，办公室里的老师还没出来。你站在教室门口，离得很近。',
       opts: [
         o('去告诉老师', { rep: { school: 3 }, at: { happiness: 2, stress: 2 }, set: { stood_up: true }, tag: '小学时曾为被欺负的同学出头' }),
         o('把作业本捡起来还给他', { at: { charm: 3, happiness: 3 }, npc: { '同学': { favor: 8 } }, tag: '帮被欺负的同学捡过作业本' }),
@@ -1597,7 +1597,7 @@
     ev({
       id: 'r_sports_meet', type: 'random', stage: '少年', weight: 2,
       title: '运动会报名表',
-      text: '班主任拿着运动会报名表，八百米还差一个人。体育委员说你平时跑得还行，问你要不要上。你想起上次体测跑完扶着膝盖喘了十分钟。',
+      text: '班主任拿着运动会报名表，八百米还差一个人。体育委员说你平时跑得还行，班里同学也跟着起哄，问你要不要上。你想起上次体测跑完扶着膝盖喘了十分钟。',
       opts: [
         o('报名，练了两周', { at: { health: 4, charm: 3, stress: -2 }, rep: { school: 2 }, gamble: { p: 0.5, win: { at: { happiness: 6 }, rep: { school: 3 }, tag: '校运会八百米进了前三' }, lose: { at: { happiness: 1, health: -2 }, tag: '校运会跑了最后一名' }, winText: '你冲过终点时，班上一片喊声。', loseText: '你最后一个跑完，但走回了看台。' } }),
         o('推给别的同学', { at: { happiness: -1 }, tag: '高中时尽量不出风头' })
@@ -1800,7 +1800,7 @@
     ev({
       id: 'r_friend_wedding', type: 'random', stage: '青年', weight: 3,
       title: '同学的婚礼',
-      text: '大学同学结婚，酒店在城郊，随礼行情六百起。你和他不算特别熟，但同一个群里的人都去。婚礼定在周六，你那天可能要加班。',
+      text: '大学同学结婚，酒店在城郊，红包行情六百起。你和他不算特别熟，但同一个群里的人都去。婚礼定在周六，你那天可能要加班。',
       opts: [
         o('请假去，随六百', { money: { cash: -600 }, at: { happiness: 3, stress: 1 }, npc: { '同学': { favor: 6 } }, tag: '参加过大学同学的婚礼' }),
         o('人不去，红包到', { money: { cash: -600 }, at: { happiness: 1 }, npc: { '同学': { favor: 2 } }, tag: '没去参加同学婚礼但随了礼' }),
@@ -2393,7 +2393,7 @@
     prio: 88, repeatable: false, art: 'exam',
     title: '命运岔路：继续读书，还是先挣钱',
     text: '毕业就在眼前。考研、考公、直接找工作，三条路都有人走，也都没有保证。家里希望你再读几年，招聘网站上的岗位又要求工作经验。你必须先选一条。',
-    cond: function (g) { return g.edu.level >= 4 && !g.marks.exam_path; },
+    cond: function (g) { return g.edu.level >= 4 && !g.marks.exam_path && !(g.job && g.job.id); },
     opts: [
       { label: '准备考研，把学历再往上推一层', hint: '成功率取决于学识 · 备考消耗金钱与精力', tone: 'risk',
         fx: { set: { exam_path: true, prep_kaoyan: true }, money: { cash: -5000 }, at: { stress: 8, happiness: -2 },

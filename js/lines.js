@@ -431,6 +431,22 @@
 
   /* 加权抽 1–2 条：60% 一条，40% 两条 */
   function selectLines(g) {
+    /* v3.9：主干弧接入后，一局只从 A/B/C 三条主干里抽 2 条；
+       九条支线仍保留定义，但本期不启用（抽不中即不进池）。 */
+    if (L.ARCS && L.ARCS.lines && L.ARCS.lines.length) {
+      var arcRnd = seedRng((g.seed || 1) + 7717);
+      var arcPool = [];
+      /* 只从三篇可抽主干里选：[A 家庭, B 职业, C 情感]，弧四 D 本轮不抽 */
+      var poolIds = L.ARCS.selectable || [];
+      for (var ai = 0; ai < poolIds.length; ai++) arcPool.push(poolIds[ai]);
+      var arcPick = [];
+      while (arcPick.length < 2 && arcPool.length) {
+        var aidx = Math.floor(arcRnd() * arcPool.length);
+        arcPick.push(arcPool[aidx]);
+        arcPool.splice(aidx, 1);
+      }
+      return arcPick;
+    }
     var rnd = seedRng((g.seed || 1) + 7717);
     var count = rnd() < 0.6 ? 1 : 2;
     var pool = [], i;
@@ -483,6 +499,28 @@
   function ensureSelected(g) {
     if (!g) return g;
     var valid = [], i;
+    var arcIds = [];
+    if (L.ARCS && L.ARCS.selectable) {
+      for (i = 0; i < L.ARCS.selectable.length; i++) arcIds.push(L.ARCS.selectable[i]);
+    }
+    if (arcIds.length) {
+      /* v3.9：主干弧模式下，只认 A/B/C，固定 2 条；旧支线不进池 */
+      if (Array.isArray(g.selectedLines)) {
+        for (i = 0; i < g.selectedLines.length && valid.length < 2; i++) {
+          var asid = g.selectedLines[i];
+          if (arcIds.indexOf(asid) >= 0 && valid.indexOf(asid) < 0) valid.push(asid);
+        }
+      }
+      if (valid.length < 2) {
+        var arcFill = selectLines(g);
+        for (i = 0; i < arcFill.length && valid.length < 2; i++) {
+          if (valid.indexOf(arcFill[i]) < 0) valid.push(arcFill[i]);
+        }
+      }
+      g.selectedLines = valid;
+      markSelected(g);
+      return g;
+    }
     if (Array.isArray(g.selectedLines)) {
       for (i = 0; i < g.selectedLines.length && valid.length < 2; i++) {
         var sid = g.selectedLines[i];
@@ -1673,7 +1711,7 @@
     ], 15, 20);
 
   node('st_l5_4', 'l5', 4, '很多年以后的重逢',
-    '很多年后，你在一个很普通的地方遇见他。他变了，也没全变。', [
+    '过了些年，你在一个很普通的地方遇见他。他变了，也没全变。', [
       { label: '坐下来喝一杯', hint: '和解或翻旧账', tone: 'safe', apply: function (g) {
         L.LINES.set(g, 'l5', 5);
         ensureNpcRole(g, '同桌', '同桌');

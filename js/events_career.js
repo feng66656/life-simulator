@@ -40,7 +40,9 @@
     var hi = s.ageMax === undefined ? 58 : s.ageMax;
     var ev = {
       id: id, type: 'career', layer: 'career', family: 'career_' + s.path,
-      path: s.path, n: s.n, kind: s.kind, cat: 'work', tier: 'echo',
+      path: s.path, n: s.n, kind: s.kind,
+      order: s.order === undefined ? s.n : s.order,
+      cat: 'work', tier: 'echo',
       prio: 68, weight: 6, stage: null,
       ageMin: lo, ageMax: hi, age: [lo, hi],
       title: s.title, text: s.text, opts: s.opts,
@@ -510,7 +512,7 @@
   E({
     path: 'teacher', n: 5, kind: '冲突', ageMin: 38,
     title: '天台上的学生',
-    text: '月考成绩出来，初三（7）班一个女生从年级前十掉到四十名。晚自习时她不在座位上，有人看见她往教学楼天台走。你跑到楼梯口，看到她站在栏杆外侧。',
+    text: '月考成绩出来，初三（7）班一个女生从年级前十掉到四十名。晚自习时她不在座位上，有人看见她往教学楼天台走。你跑到楼梯口，看到她站在栏杆外侧；走廊那头，班主任也正往这边跑。',
     opts: [
       O('慢慢靠近，跟她说话', '代价：任何一句话说错，都是一辈子的阴影', {
         at: { stress: 9, health: -3 }, rep: { school: 5, society: 5 },
@@ -1199,7 +1201,7 @@
   E({
     path: 'shop', n: 2, kind: '道德', ageMin: 25,
     title: '记在账上的烟',
-    text: '隔壁修车铺的老王拿了两条烟、一箱奶，说月底一起结。月底你翻账本，他已经欠了一千八。他坐在门口喝茶，像什么都没发生。',
+    text: '隔壁修车铺的老王拿了两条烟、一箱奶，说月底一起结。月底你翻账本，他已经欠了一千八，连张欠条都没留下。他坐在门口喝茶，像什么都没发生。',
     opts: [
       O('继续赊，抹不开面子', '代价：欠账越滚越大，年底可能变成坏账', {
         money: { cash: -1800 }, at: { stress: 3 }, npc: { '朋友': { favor: 2 } }
@@ -1307,7 +1309,7 @@
   E({
     path: 'shop', n: 7, kind: '突发', ageMin: 45,
     title: '水漫过门槛',
-    text: '凌晨暴雨，街面排水口堵了，水从卷帘门缝里灌进来。仓库里堆着刚到的两百箱货，最底下一层已经开始泡水。电闸还在门口。',
+    text: '凌晨暴雨，街面排水口堵了，水从卷帘门缝里灌进来。仓库里堆着刚到的两百箱货，最底下一层已经开始泡水。电闸还在门口，你先拍了几张照片，墙上贴着的保险单早就过了期。',
     opts: [
       O('先断电，再抢搬货物', '代价：泡水的货救不回来，今天也开不了门', {
         at: { health: -4, stress: 5 }, money: { cash: -3000 },
@@ -1610,7 +1612,7 @@
   E({
     path: 'engineer', n: 4, kind: '冲突', ageMin: 34,
     title: '村口的路',
-    text: '工地要修临时便道，占了村口一块菜地。十几个村民扛着锄头堵在挖掘机前，分包队的工人也不让，双方从骂到推搡，只差动手。',
+    text: '工地要修临时便道，占了村口一块菜地。十几个村民扛着锄头堵在挖掘机前，分包队的工人也不让，双方从骂到推搡，只差动手；人群外已经有人拨了警察的电话。',
     opts: [
       O('站出来谈判，先停工', '代价：工期拖一天罚两万，项目部不会替你说话', {
         at: { stress: 6 }, rep: { society: 3, industry: 2 },
@@ -1987,7 +1989,7 @@
   E({
     path: 'gang', n: 4, kind: '冲突', ageMin: 29,
     title: '被砸的场子',
-    text: '对方堂口带了十几个人，把你看着的台球厅砸了，还留下话：“这条街以后归我们。”老大在外地，电话里只说：“你自己看着办。”',
+    text: '对方堂口带了十几个人，把你看着的台球厅砸了，还留下话：“这条街以后归我们。”老大在外地，电话里只说：“你自己看着办。”隔壁店的人报了警，警察来看了现场，只做了个笔录。',
     opts: [
       O('带人打回去', '代价：刀棍无眼，进医院或进局子都是你', {
         at: { health: -8, stress: 9 }, set: { c_violence: true },
@@ -2195,7 +2197,7 @@
   E({
     path: 'mechanic', n: 5, kind: '冲突', ageMin: 34,
     title: '第二天失灵的刹车',
-    text: '你刚保养完的车，第二天车主带着三个人堵在店门口，说刹车踩下去发软，差点追尾。车举起来一看，刹车油管接头有渗油。',
+    text: '你刚保养完的车，第二天客户带着三个人堵在店门口，说刹车踩下去发软，差点追尾。车举起来一看，刹车油管接头有渗油。',
     opts: [
       O('立刻返工，赔礼道歉', '代价：工时白干，还得搭一桶刹车油', {
         money: { cash: -800 }, at: { stress: 3, reputation: 1 },
@@ -2301,5 +2303,1890 @@
       }, B(2, 'c_fraud'))
     ]
   });
+
+  /* =======================================================
+     v3.8 扩充区：v3.7 的 96 条之上再加 93 条
+     写法：E({...}) 逐条追加；末尾统一按年龄线重排 order
+     ======================================================= */
+
+  /* ---------------- 医生：+10（共 18） ---------------- */
+  E({
+    path: 'doctor', n: 9, kind: '道德', ageMin: 23, ageMax: 33,
+    title: '信封里的三百块',
+    text: '护士长在换药室把信封塞进你口袋：“科里每人三百，夜班餐补，不走账。”信封上没写字，里面是三张一百。',
+    opts: [
+      O('收下，别人都拿', '代价：以后再有人塞，你就没有理由拒绝', {
+        money: { cash: 1200 }, at: { stress: 2 }
+      }, B(2, 'c_bribe')),
+      O('退回，去财务问清楚', '代价：护士长觉得你不给面子，排班表上多了两个夜班', {
+        rep: { industry: 2 }, npc: { '护士长': { favor: -2 } }, at: { stress: 2 }
+      }, G(2, 'c_clean')),
+      O('收下，但记在自己的本子上', '代价：这本子一旦被人看到，性质就变了', {
+        at: { stress: 3 }, set: { c_coverup: true }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'doctor', n: 10, kind: '道德', ageMin: 25, ageMax: 34,
+    title: '楼梯间的两张卡',
+    text: '医药代表姓周，在住院部楼梯间拦住你，塞来两张五百的购物卡：“就是资料费，不用你做什么。”',
+    opts: [
+      O('收下，反正只是购物卡', '代价：下个月他会拿着用药清单来找你', {
+        money: { cash: 1000 }, at: { stress: 2 }
+      }, B(2, 'c_bribe')),
+      O('当面退回，报告科主任', '代价：科室的采购会上有人替周代表说话', {
+        rep: { industry: 3 }, npc: { '科主任': { favor: -2 } }, at: { stress: 2 }
+      }, G(3, 'c_clean')),
+      O('只收一张，说下不为例', '代价：你开始替自己的处方找理由', {
+        money: { cash: 500 }, at: { stress: 3 }, set: { c_coverup: true }
+      }, B(1, 'c_bribe'))
+    ]
+  });
+  E({
+    path: 'doctor', n: 11, kind: '道德', ageMin: 27, ageMax: 35,
+    title: '主任不在的签字栏',
+    text: '下午三点，主任上台前把一张耗材单放你桌上：“签个字，我回来补。”签字栏是主任的名字，笔已经拧开。',
+    opts: [
+      O('签了，等他回来跟他说一声', '代价：单子上的数量比实际多用了两支', {
+        at: { stress: 4 }, set: { c_coverup: true }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 1 } },
+          lose: { at: { reputation: -4 }, set: { c_fired: true } },
+          winText: '主任回来在单子背面补了两个字。',
+          loseText: '耗材科查库，多出的两支对不上。'
+        }
+      }, B(2, 'c_coverup')),
+      O('不签，等他下台再说', '代价：手术延误半小时，主任在走廊里没理你', {
+        rep: { industry: 2 }, npc: { '主任': { favor: -3 } }, at: { stress: 3 }
+      }, G(2, 'c_clean')),
+      O('打电话问主任这单怎么填', '代价：他在台上，护士替他接了电话', {
+        npc: { '主任': { favor: 1 } }, at: { stress: 2 }
+      }, N(1))
+    ]
+  });
+  E({
+    path: 'doctor', n: 12, kind: '道德', ageMin: 34, ageMax: 44,
+    title: '走廊里的加床',
+    text: '老同学刘强带着他舅舅来，拎两箱牛奶：“你在这儿说得上话，给加张床，走廊也行。”走廊已经排了四个加床。',
+    opts: [
+      O('想办法挤一张出来', '代价：护士站少了一张推车，夜班的人多跑十趟', {
+        npc: { '老同学': { favor: 3 } }, at: { stress: 4 }, set: { c_coverup: true }
+      }, B(1, 'c_coverup')),
+      O('按急诊顺序排，加床也要等', '代价：刘强在电话里说你“变了”', {
+        rep: { society: 2 }, npc: { '老同学': { favor: -2 } }, at: { stress: 1 }
+      }, G(2, 'c_clean')),
+      O('介绍他去分院，那边有空床', '代价：分院要多收一份转诊费，你得欠个人情', {
+        at: { stress: 2, charm: 1 }, npc: { '同事': { favor: -1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'doctor', n: 13, kind: '冲突', ageMin: 36, ageMax: 44,
+    title: '抢台的那把刀',
+    text: '急诊送来一个脾破裂，二线值班的是老宋。你比他先到手术室，洗手衣都换好了，他站在门口说：“这台我来。”',
+    opts: [
+      O('让台，去补术前记录', '代价：这台手术的台上经验又归了别人', {
+        at: { stress: 3 }, rep: { industry: -1 }
+      }, N(-2)),
+      O('争这台，说你已经洗手了', '代价：老宋在科室里资历比你深十年', {
+        rep: { industry: 3 }, at: { stress: 4 }, npc: { '老宋': { favor: -3 } }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 2 } },
+          lose: { at: { reputation: -3 } },
+          winText: '主任同意你上，老宋在观察室站了一整台。',
+          loseText: '台上出了点血，主任中途接手。'
+        }
+      }, G(3, 'c_hero')),
+      O('打电话让主任定', '代价：主任说“这种事也要问我”', {
+        at: { stress: 2 }, npc: { '主任': { favor: -2 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'doctor', n: 14, kind: '冲突', ageMin: 38, ageMax: 46,
+    title: '被退回来的论文',
+    text: '熬了两年的文章被期刊退回，审稿意见只有一句：“数据不足以支撑结论。”同科室的老赵刚发了同一方向。',
+    opts: [
+      O('补实验，重新投', '代价：又是半年，试剂钱自己先垫', {
+        at: { health: -3, stress: 4 }, money: { cash: -5000 }, gamble: {
+          p: 0.45,
+          win: { rep: { industry: 4 } },
+          lose: { at: { happiness: -3 } },
+          winText: '补的一组数据把结论补住了，文章接收。',
+          loseText: '补的实验和数据对不上，只能推倒重来。'
+        }
+      }, G(3, 'c_clean')),
+      O('把结论改弱一点，硬投出去', '代价：审稿人不是傻子', {
+        at: { stress: 3 }, set: { c_fraud: true }, gamble: {
+          p: 0.35,
+          win: { rep: { industry: 2 } },
+          lose: { rep: { industry: -5 }, set: { c_fraud: true } },
+          winText: '文章发了，引用数一直是个位数。',
+          loseText: '被同行在群里点名，主任让你撤稿。'
+        }
+      }, B(2, 'c_fraud')),
+      O('换个方向，从头开始', '代价：两年白干，评职称又晚一年', {
+        at: { happiness: -2, knowledge: 1 }
+      }, N(-1))
+    ]
+  });
+  E({
+    path: 'doctor', n: 15, kind: '冲突', ageMin: 40, ageMax: 48,
+    title: '急诊与病房之间',
+    text: '晚上九点，急诊喊你下去会诊，病房这边 8 床刚下了病危。两个护士站在门口，等你决定先去哪边。',
+    opts: [
+      O('先去急诊', '代价：8 床的家属在走廊里拦你', {
+        rep: { industry: 2 }, at: { stress: 4 }, gamble: {
+          p: 0.6,
+          win: { rep: { society: 2 } },
+          lose: { at: { happiness: -4 }, rep: { society: -2 } },
+          winText: '急诊那个病人抢回来了。',
+          loseText: '等你回来，8 床已经推走。'
+        }
+      }, G(2, 'c_hero')),
+      O('守在 8 床，让急诊叫二线', '代价：急诊主任第二天在院周会上点了你的名', {
+        at: { stress: 3 }, rep: { industry: -2 }, npc: { '急诊主任': { favor: -2 } }
+      }, N(-1)),
+      O('先打电话叫二线下来顶一边', '代价：欠一个人情，夜里两点才回家', {
+        at: { stress: 3 }, npc: { '同事': { favor: -1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'doctor', n: 16, kind: '冲突', ageMin: 42, ageMax: 50,
+    title: '主任的锅',
+    text: '一台胆囊手术术后出血，主任在晨会上说“术中判断是下级医生做的”。所有人的目光都落在你身上。',
+    opts: [
+      O('认下来，先把事压住', '代价：这一年的考核表上会多一行字', {
+        rep: { industry: -3 }, at: { stress: 4 }, npc: { '主任': { favor: 3 } }, set: { c_coverup: true }
+      }, B(3, 'c_coverup')),
+      O('当场把手术记录念出来', '代价：主任下不来台，你在这个科室也待不久', {
+        rep: { industry: 2 }, npc: { '主任': { favor: -4 } }, at: { stress: 5 }, set: { c_fired: true }
+      }, G(3, 'c_clean')),
+      O('散会后单独找主任谈', '代价：他说“年轻人别太计较”', {
+        at: { stress: 3 }, npc: { '主任': { favor: 1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'doctor', n: 17, kind: '突发', ageMin: 52, ageMax: 58,
+    title: '停电后的第六小时',
+    text: '台风把配电房淹了，ICU 备用电源只能撑四小时。第六小时，3 床的呼吸机开始报警，走廊里全是手电的光。',
+    opts: [
+      O('用手压球囊顶住', '代价：连续按压四十分钟，手臂第二天抬不起来', {
+        at: { health: -4, stress: 5 }, rep: { industry: 4, society: 3 }
+      }, G(3, 'c_hero')),
+      O('把病人转到分院', '代价：转运路上没有监护，风险全在你身上', {
+        at: { stress: 5 }, gamble: {
+          p: 0.55,
+          win: { rep: { industry: 3 } },
+          lose: { rep: { industry: -6 }, set: { c_malpractice: true } },
+          winText: '病人到了分院，血氧撑住了。',
+          loseText: '救护车在半路停了八分钟，人没抢回来。'
+        }
+      }, N(1)),
+      O('先保其他床，等电来', '代价：3 床的家属记住了你站在门口的样子', {
+        rep: { industry: -4 }, set: { c_malpractice: true }, at: { stress: 4 }
+      }, B(4, 'c_malpractice'))
+    ]
+  });
+  E({
+    path: 'doctor', n: 18, kind: '突发', ageMin: 55, ageMax: 58,
+    title: '凌晨的会诊电话',
+    text: '凌晨两点，县医院转来一个主动脉夹层的病人，电话里说“路上可能撑不住”。你是当晚唯一能上台的人。',
+    opts: [
+      O('接，马上通知手术室', '代价：这种台子，失败率写在教科书上', {
+        at: { health: -5, stress: 5 }, rep: { industry: 3 }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 5, society: 4 } },
+          lose: { at: { happiness: -5 }, rep: { industry: -2 } },
+          winText: '天亮时病人的血压稳住了，家属在走廊里给你鞠了一躬。',
+          loseText: '台上没下来，你在更衣室坐了半小时。'
+        }
+      }, G(4, 'c_hero')),
+      O('让转省城，路上带监护', '代价：家属认为你在推', {
+        rep: { society: -2 }, at: { stress: 2 }
+      }, N(0)),
+      O('先远程指导县医院稳住', '代价：你只能对着电话喊，出事责任还是你的', {
+        at: { knowledge: 2, stress: 4 }, gamble: {
+          p: 0.4,
+          win: { rep: { industry: 2 } },
+          lose: { at: { happiness: -3 } },
+          winText: '县医院按你说的降压，病人撑到了省城。',
+          loseText: '电话那头突然没声音了。'
+        }
+      }, N(1))
+    ]
+  });
+
+  /* ---------------- 警察：+10（共 18） ---------------- */
+  E({
+    path: 'police', n: 9, kind: '道德', ageMin: 24, ageMax: 33,
+    title: '师父的“顺手”',
+    text: '师父老周把暂扣的电动车骑走，说“所里没地方放，我先替你保管”。车钥匙在你手里，登记本上还写着“入库”。',
+    opts: [
+      O('装没看见', '代价：下次盘点，这辆车不在库里', {
+        at: { stress: 2 }, npc: { '老周': { favor: 2 } }, set: { c_coverup: true }
+      }, B(2, 'c_coverup')),
+      O('补一条出库记录', '代价：记录上的签字只有你一个人', {
+        at: { stress: 3 }, set: { c_fraud: true }
+      }, B(3, 'c_fraud')),
+      O('上报所长', '代价：老周以后不再带你出警', {
+        rep: { industry: 3 }, npc: { '老周': { favor: -4 } }, at: { stress: 3 }
+      }, G(3, 'c_clean'))
+    ]
+  });
+  E({
+    path: 'police', n: 10, kind: '道德', ageMin: 27, ageMax: 36,
+    title: '失物招领处的手机',
+    text: '失物招领处有部没设密码的手机，微信里躺着两万块。值班的协警说，放三个月没人领就归所里处理。',
+    opts: [
+      O('按登记信息联系失主', '代价：失主在外地，你得替他保管一个月', {
+        rep: { society: 3 }, at: { stress: 2 }
+      }, G(3, 'c_clean')),
+      O('按公告流程走，不碰手机', '代价：失主找来时，手机已经没电关机', {
+        at: { stress: 1 }, rep: { society: 1 }
+      }, N(1)),
+      O('把手机交给协警“看着办”', '代价：后来没人说得清手机去哪了', {
+        at: { stress: 2 }, npc: { '协警': { favor: 1 } }, set: { c_coverup: true }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'police', n: 11, kind: '道德', ageMin: 31, ageMax: 40,
+    title: '辖区老板的年礼',
+    text: '辖区 KTV 的老板年前来所里“慰问”，每人一个纸袋，里面是两条烟和一张卡。老周说这是“人情往来”。',
+    opts: [
+      O('收下', '代价：以后再查他的场子，你会先想一想', {
+        money: { cash: 2000 }, npc: { '老板': { favor: 3 } }, at: { stress: 1 }
+      }, B(3, 'c_bribe')),
+      O('原样退回', '代价：所里有人说你“不合群”', {
+        rep: { industry: 3 }, npc: { '老板': { favor: -2 } }
+      }, G(3, 'c_clean')),
+      O('烟留下，卡退回去', '代价：两边都觉得你不干脆', {
+        money: { cash: 400 }, at: { stress: 2 }, set: { c_coverup: true }
+      }, B(1, 'c_bribe'))
+    ]
+  });
+  E({
+    path: 'police', n: 12, kind: '道德', ageMin: 35, ageMax: 44,
+    title: '一份改过的笔录',
+    text: '一起斗殴案，当事人是副所长外甥。副所长把你叫到办公室：“时间写早半小时，就对不上了。”笔录原件在你抽屉里。',
+    opts: [
+      O('改', '代价：监控时间对不上，案子移交时会被退', {
+        npc: { '副所长': { favor: 4 } }, at: { stress: 4 }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 1 } },
+          lose: { rep: { industry: -5 }, set: { c_fired: true } },
+          winText: '案子按治安处理，没人再提。',
+          loseText: '检察院退卷，问是谁改的时间。'
+        }
+      }, B(3, 'c_fraud')),
+      O('不改，按原件移交', '代价：副所长在楼道里当没看见你', {
+        rep: { industry: 3 }, npc: { '副所长': { favor: -4 } }, at: { stress: 3 }
+      }, G(3, 'c_clean')),
+      O('说“我再核一下”，先拖着', '代价：拖到最后还是得选一边', {
+        at: { stress: 3 }, set: { c_coverup: true }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'police', n: 13, kind: '冲突', ageMin: 37, ageMax: 46,
+    title: '抓了不该抓的人',
+    text: '你带队抓了一个收保护费的，做完笔录才发现他是区里某主任的司机。电话打到所长手机上，响了三次。',
+    opts: [
+      O('按程序拘留', '代价：所长的电话开始绕开你打', {
+        rep: { industry: 3 }, npc: { '所长': { favor: -3 } }, at: { stress: 4 }
+      }, G(3, 'c_hero')),
+      O('放人，材料先压着', '代价：被打的摊主在派出所门口等了一夜', {
+        npc: { '所长': { favor: 3 } }, rep: { society: -2 }, set: { c_coverup: true }
+      }, B(2, 'c_coverup')),
+      O('请示所长，让他定', '代价：他说“你看着办”，责任还是你的', {
+        at: { stress: 2 }, npc: { '所长': { favor: 1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'police', n: 14, kind: '冲突', ageMin: 39, ageMax: 48,
+    title: '记者的镜头',
+    text: '处置群体事件时，一个记者把镜头怼到你脸上，问你“警察打人是不是真的”。你身后的同事刚把一个人按倒。',
+    opts: [
+      O('伸手挡镜头', '代价：第二天的标题里有你的手', {
+        rep: { society: -3 }, at: { stress: 4 }, set: { c_lawsuit: true }
+      }, B(3, 'c_lawsuit')),
+      O('让开，按规范说明处置流程', '代价：话说多了，容易被断章取义', {
+        rep: { society: 2 }, at: { stress: 3 }
+      }, G(2, 'c_clean')),
+      O('不回答，转身继续处置', '代价：视频里只有你沉默的背影', {
+        at: { stress: 2 }, rep: { society: -1 }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'police', n: 15, kind: '冲突', ageMin: 41, ageMax: 50,
+    title: '同组的老李',
+    text: '老李把一起盗窃案的赃物登记少了一台平板。他说“追回来的时候少一台，很正常”。你是复核人。',
+    opts: [
+      O('签字复核', '代价：失主来认领时，数字对不上', {
+        npc: { '老李': { favor: 3 } }, at: { stress: 3 }, set: { c_coverup: true }
+      }, B(2, 'c_coverup')),
+      O('退回重核', '代价：老李在组里说你“拿着鸡毛当令箭”', {
+        npc: { '老李': { favor: -3 } }, rep: { industry: 3 }, at: { stress: 2 }
+      }, G(3, 'c_clean')),
+      O('私下问他平板去哪了', '代价：他说“你别管”，你们从此有了隔阂', {
+        npc: { '老李': { favor: 1 } }, at: { stress: 2 }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'police', n: 16, kind: '冲突', ageMin: 43, ageMax: 52,
+    title: '所长要的“数字”',
+    text: '季度考核前，所长让你把辖区的“矛盾纠纷化解率”往上报十个百分点。表格已经打印好，只差你签字。',
+    opts: [
+      O('签', '代价：年底抽查，台账对不上', {
+        npc: { '所长': { favor: 3 } }, rep: { industry: -2 }, set: { c_fraud: true }
+      }, B(2, 'c_fraud')),
+      O('不签，写实际情况', '代价：所长在大会上说“有的同志大局观不够”', {
+        npc: { '所长': { favor: -4 } }, rep: { industry: 3 }, at: { stress: 3 }
+      }, G(3, 'c_clean')),
+      O('折中报五个点', '代价：两边都不满意', {
+        at: { stress: 3 }, npc: { '所长': { favor: 1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'police', n: 17, kind: '突发', ageMin: 49, ageMax: 56,
+    title: '追击中的那面墙',
+    text: '追一个盗窃嫌疑人进老旧小区，他翻墙，你跟着翻。墙头的水泥块松了，你落地时右脚先着地。',
+    opts: [
+      O('忍着继续追', '代价：脚踝肿到鞋都穿不进去', {
+        at: { health: -4, stress: 3 }, gamble: {
+          p: 0.6,
+          win: { rep: { industry: 4 } },
+          lose: { at: { health: -3 } },
+          winText: '你在一楼楼道把人按住，脚踝第二天拍了片。',
+          loseText: '人跑了，你坐在地上起不来。'
+        }
+      }, G(3, 'c_hero')),
+      O('停下来呼叫支援', '代价：嫌疑人翻过第二道墙，没了踪影', {
+        at: { health: -2 }, rep: { industry: -1 }
+      }, N(0)),
+      O('先顾自己，放弃追击', '代价：笔录上只能写“嫌疑人逃脱”', {
+        at: { health: -1 }, rep: { industry: -3 }, set: { c_coverup: true }
+      }, B(2, 'c_coverup'))
+    ]
+  });
+  E({
+    path: 'police', n: 18, kind: '突发', ageMin: 53, ageMax: 58,
+    title: '暴雨夜的报警电话',
+    text: '暴雨夜，110 转来一个电话：一个女孩说有人跟着她，地址说不清，只报了一个公交站名，位置很模糊。你是最近的一组。',
+    opts: [
+      O('立刻出警', '代价：雨大到雨刮器没用，路上差点追尾', {
+        at: { health: -3, stress: 4 }, rep: { industry: 3 }
+      }, G(4, 'c_hero')),
+      O('先回拨确认位置', '代价：电话占线，耽误了四分钟', {
+        at: { stress: 2, knowledge: 2 }, gamble: {
+          p: 0.55,
+          win: { rep: { society: 3 } },
+          lose: { at: { happiness: -4 } },
+          winText: '女孩躲进了路边超市，你赶到时她正在哭。',
+          loseText: '再打过去，已经关机。'
+        }
+      }, N(1)),
+      O('让巡防先去看', '代价：巡防到了，人已经不在站台', {
+        rep: { society: -2 }, set: { c_coverup: true }, at: { stress: 2 }
+      }, B(2, 'c_coverup'))
+    ]
+  });
+
+  /* ---------------- 工程师：+10（共 18） ---------------- */
+  E({
+    path: 'engineer', n: 9, kind: '道德', ageMin: 24, ageMax: 33,
+    title: '图纸柜里的旧版',
+    text: '老张让你把新版图纸发给施工方，你打开图纸柜，发现两版都盖了出图章。旧版比新版少两根梁。',
+    opts: [
+      O('只发新版，旧版锁进柜子', '代价：施工方手里还留着旧版的复印件', {
+        at: { stress: 3 }, set: { c_coverup: true }
+      }, B(2, 'c_coverup')),
+      O('两版都发，让施工方书面确认', '代价：甲方嫌你“办事不利索”', {
+        at: { stress: 2 }, rep: { industry: 2 }
+      }, N(1)),
+      O('上报老张，让他处理', '代价：老张被院审叫去问了一下午', {
+        rep: { industry: 3 }, npc: { '老张': { favor: 1 } }
+      }, G(2, 'c_clean'))
+    ]
+  });
+  E({
+    path: 'engineer', n: 10, kind: '道德', ageMin: 27, ageMax: 36,
+    title: '分包队的烟',
+    text: '钢筋分包队的老板在你车里留下两条烟和一个信封：“验收的时候，尺子松一点。”明天就要验钢筋间距。',
+    opts: [
+      O('收下', '代价：尺子松一次，下次就松第二次', {
+        money: { cash: 3000 }, rep: { industry: -2 }, at: { stress: 2 }
+      }, B(3, 'c_bribe')),
+      O('退回，按图验收', '代价：分包队连夜返工，老板在工地门口骂了半小时', {
+        rep: { industry: 3 }, npc: { '分包老板': { favor: -2 } }
+      }, G(3, 'c_clean')),
+      O('只退钱，烟留下', '代价：老板以为你收了，验收时更理直气壮', {
+        money: { cash: 400 }, at: { stress: 3 }, set: { c_coverup: true }
+      }, B(1, 'c_bribe'))
+    ]
+  });
+  E({
+    path: 'engineer', n: 11, kind: '道德', ageMin: 31, ageMax: 40,
+    title: '检测报告的空格',
+    text: '第三方检测报告有一栏“抗压强度”空着，试验员说“试块还在压，先出报告，数字回头补”。甲方在会议室等。',
+    opts: [
+      O('先出报告，数字后补', '代价：补的数字要是低了，整批材料都得退', {
+        at: { stress: 4 }, set: { c_fraud: true }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 1 } },
+          lose: { rep: { industry: -5 }, set: { c_fired: true } },
+          winText: '补上的数字刚好合格，报告归档。',
+          loseText: '试块压出来低了一个等级，甲方要追责。'
+        }
+      }, B(3, 'c_fraud')),
+      O('等数据出来再出报告', '代价：甲方在会议室等到下午，项目节点往后推', {
+        npc: { '甲方': { favor: -2 } }, rep: { industry: 3 }
+      }, G(3, 'c_clean')),
+      O('在报告上写“待补”', '代价：这份报告谁也签不了字', {
+        at: { stress: 2 }, rep: { industry: 1 }
+      }, N(1))
+    ]
+  });
+  E({
+    path: 'engineer', n: 12, kind: '道德', ageMin: 35, ageMax: 44,
+    title: '老同学的电话',
+    text: '老同学在做保温材料，电话里说“就用我们家的，检测报告我帮你搞定”。你的项目正好要用这批材料。',
+    opts: [
+      O('用他的材料，走他的报告', '代价：抽检抽到你这一批，就得解释', {
+        money: { cash: 5000 }, at: { stress: 4 }, set: { c_fraud: true }, gamble: {
+          p: 0.45,
+          win: { rep: { industry: 1 } },
+          lose: { rep: { industry: -5 }, set: { c_fired: true } },
+          winText: '材料进场，抽检没抽到。',
+          loseText: '抽检不合格，整批退场。'
+        }
+      }, B(3, 'c_fraud')),
+      O('走公开比选，让他正常投标', '代价：他没中标，饭桌上说你不够意思', {
+        npc: { '老同学': { favor: -2 } }, rep: { industry: 3 }
+      }, G(3, 'c_clean')),
+      O('让他把报告先发来，你再决定', '代价：拖了三天，工期等不起', {
+        at: { stress: 2 }, npc: { '老同学': { favor: 1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'engineer', n: 13, kind: '冲突', ageMin: 37, ageMax: 46,
+    title: '停工令',
+    text: '甲方代表在例会上拍桌子：“再不开挖，工期就误了。”监测数据显示基坑边位移已经到警戒值。',
+    opts: [
+      O('坚持停工，先加固', '代价：工期拖一个月，甲方要你写情况说明', {
+        rep: { industry: 3 }, npc: { '甲方': { favor: -4 } }, at: { stress: 4 }
+      }, G(3, 'c_hero')),
+      O('边挖边加密监测', '代价：位移再涨两毫米，就得停', {
+        at: { stress: 4 }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 2 } },
+          lose: { rep: { industry: -6 }, set: { c_malpractice: true } },
+          winText: '位移稳住了，工期抢回来十天。',
+          loseText: '东侧滑了两米，所幸没人。'
+        }
+      }, N(1)),
+      O('按甲方意见继续开挖', '代价：真出事，签字的是你', {
+        npc: { '甲方': { favor: 3 } }, rep: { industry: -3 }, set: { c_coverup: true }
+      }, B(4, 'c_coverup'))
+    ]
+  });
+  E({
+    path: 'engineer', n: 14, kind: '冲突', ageMin: 39, ageMax: 48,
+    title: '甲方的饭局',
+    text: '饭局上甲方老总说“设计变更就走个形式，你先施工，手续后补”。一桌人都在看你，酒杯停在半空。',
+    opts: [
+      O('答应，先干起来', '代价：手续补不下来，这段工程就是违建', {
+        npc: { '甲方': { favor: 3 } }, rep: { industry: -2 }, set: { c_coverup: true }
+      }, B(3, 'c_coverup')),
+      O('拒绝，手续齐全再动', '代价：这顿饭之后，甲方绕开你找别人', {
+        npc: { '甲方': { favor: -3 } }, rep: { industry: 3 }, at: { stress: 2 }
+      }, G(3, 'c_clean')),
+      O('说回去开会研究', '代价：拖到第三天，甲方直接下了指令', {
+        at: { stress: 2 }, npc: { '甲方': { favor: -1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'engineer', n: 15, kind: '冲突', ageMin: 41, ageMax: 50,
+    title: '背锅的技术员',
+    text: '一段管线标高错了，施工员说是你给的图。你翻出 CAD 记录，最后修改时间是他改的，就在交底前一晚。',
+    opts: [
+      O('把修改记录发到项目群', '代价：施工员被调走，他走前说你“太狠”', {
+        rep: { industry: 3 }, npc: { '施工员': { favor: -3 } }, at: { stress: 2 }
+      }, G(3, 'c_clean')),
+      O('私下找他改回来', '代价：返工的钱得项目部出，经理记你一笔', {
+        at: { stress: 3 }, npc: { '施工员': { favor: 1 } }, money: { cash: -2000 }
+      }, N(0)),
+      O('认下', '代价：这一年的绩效评定里多了一条“技术失误”', {
+        rep: { industry: -3 }, at: { stress: 3 }, set: { c_coverup: true }
+      }, B(3, 'c_coverup'))
+    ]
+  });
+  E({
+    path: 'engineer', n: 16, kind: '冲突', ageMin: 43, ageMax: 52,
+    title: '坍塌后的清点',
+    text: '一段临时支护塌了，没死人，但甲方要一份“原因说明”。项目经理让你写“极端天气导致”，那晚其实没下大雨。',
+    opts: [
+      O('按实际情况写', '代价：报告交上去，项目经理被公司约谈', {
+        rep: { industry: 3 }, npc: { '项目经理': { favor: -4 } }, at: { stress: 3 }
+      }, G(3, 'c_clean')),
+      O('写极端天气', '代价：监测数据在档案里，随时能翻出来', {
+        npc: { '项目经理': { favor: 3 } }, set: { c_fraud: true }, at: { stress: 3 }
+      }, B(3, 'c_fraud')),
+      O('只写事实，不写原因', '代价：甲方退回来，让你重写', {
+        at: { stress: 3 }, rep: { industry: 1 }
+      }, N(1))
+    ]
+  });
+  E({
+    path: 'engineer', n: 17, kind: '突发', ageMin: 49, ageMax: 56,
+    title: '暴雨夜的基坑',
+    text: '暴雨下了六小时，基坑东侧的排水沟堵了，水位离坑底只剩四十公分。值班室只有你和两个工人。',
+    opts: [
+      O('下去疏通排水沟', '代价：水已经到膝盖，脚下是泥', {
+        at: { health: -4, stress: 4 }, gamble: {
+          p: 0.6,
+          win: { rep: { industry: 4 } },
+          lose: { at: { health: -3 }, rep: { industry: -1 } },
+          winText: '水排出去了，坑底保住了。',
+          loseText: '你滑进水里，工人把你拉上来。'
+        }
+      }, G(3, 'c_hero')),
+      O('紧急调两台水泵', '代价：租金和加班费两万，项目部事后要算账', {
+        money: { cash: -20000 }, at: { stress: 3 }, rep: { industry: 3 }
+      }, N(1)),
+      O('撤人，等雨停', '代价：水淹了配电箱，停工半个月', {
+        rep: { industry: -3 }, set: { c_malpractice: true }, at: { stress: 3 }
+      }, B(3, 'c_malpractice'))
+    ]
+  });
+  E({
+    path: 'engineer', n: 18, kind: '突发', ageMin: 53, ageMax: 58,
+    title: '通车前的最后一测',
+    text: '通车前夜，第三方复测发现一段桥面平整度超了 3 毫米。甲方说“看不出来，先通”，剪彩的红绸已经挂上。',
+    opts: [
+      O('坚持返工', '代价：剪彩推迟，公司赔一笔违约金', {
+        rep: { industry: 4 }, npc: { '甲方': { favor: -4 } }, money: { cash: -20000 }
+      }, G(4, 'c_hero')),
+      O('签字放行', '代价：这段桥以后每次出事，都会有人翻出这张表', {
+        set: { c_fraud: true }, rep: { industry: -3 }, at: { stress: 3 }
+      }, B(4, 'c_fraud')),
+      O('限速通车，一个月内整改', '代价：限速牌一挂，甲方在电视上不好看', {
+        at: { stress: 3 }, rep: { industry: 2 }, gamble: {
+          p: 0.55,
+          win: { rep: { industry: 2 } },
+          lose: { at: { stress: -1 }, rep: { industry: -2 } },
+          winText: '一个月后整改完，限速牌撤了。',
+          loseText: '整改拖了三个月，成了行业里的笑话。'
+        }
+      }, N(1))
+    ]
+  });
+
+  /* ---------------- 教师：+7（共 15） ---------------- */
+  E({
+    path: 'teacher', n: 9, kind: '道德', ageMin: 24, ageMax: 32,
+    title: '教师节的那束花',
+    text: '家长在校门口把花塞给你，花里夹着一张超市卡。她说“孩子就拜托你了”，转身就走，没给你退的机会。',
+    opts: [
+      O('收下，反正只是张卡', '代价：以后排座位，你会先想到她家孩子', {
+        money: { cash: 500 }, at: { stress: 1 }
+      }, B(2, 'c_bribe')),
+      O('第二天原样退回', '代价：家长在群里说你“不近人情”', {
+        rep: { school: 3 }, npc: { '家长': { favor: -1 } }
+      }, G(3, 'c_clean')),
+      O('花留下，卡让班长送回去', '代价：班长问了一句“为什么”，你解释了半天', {
+        at: { stress: 2 }, set: { c_coverup: true }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'teacher', n: 10, kind: '道德', ageMin: 27, ageMax: 35,
+    title: '补课班的邀请',
+    text: '同年级老师拉你去校外机构代课，一小时 300，用晚自习时间。她说“大家都去，没人知道”。',
+    opts: [
+      O('去，一周排三个晚自习', '代价：被查到就是违规补课', {
+        money: { cash: 3000 }, at: { stress: 3 }, gamble: {
+          p: 0.55,
+          win: { money: { cash: 2000 } },
+          lose: { rep: { school: -5 }, set: { c_fired: true } },
+          winText: '一学期下来，补课费比工资多。',
+          loseText: '教育局突击检查，机构把名单交了上去。'
+        }
+      }, B(3, 'c_bribe')),
+      O('不去，也不举报', '代价：同年级老师觉得你不合群', {
+        rep: { school: 2 }, at: { stress: 1 }
+      }, G(2, 'c_clean')),
+      O('只在周末去一次，试水', '代价：周一上课困得睁不开眼', {
+        money: { cash: 800 }, at: { stress: 2 }
+      }, N(1))
+    ]
+  });
+  E({
+    path: 'teacher', n: 11, kind: '道德', ageMin: 31, ageMax: 39,
+    title: '转学名额',
+    text: '一个家长拎着两瓶酒来家里，说孩子想转进你班，名额就差你点头。酒盒底下压着一个信封。',
+    opts: [
+      O('收下，帮他把材料递上去', '代价：名额只有一个，另一个孩子在等', {
+        money: { cash: 2000 }, at: { stress: 3 }, gamble: {
+          p: 0.6,
+          win: { npc: { '家长': { favor: 3 } } },
+          lose: { rep: { school: -4 }, set: { c_fired: true } },
+          winText: '材料过了，孩子进了你班。',
+          loseText: '教务查出来，让你把东西退回去。'
+        }
+      }, B(3, 'c_bribe')),
+      O('按学校流程，让他去教务排队', '代价：他在门口站了半小时才走', {
+        rep: { school: 3 }, npc: { '家长': { favor: -2 } }, at: { stress: 1 }
+      }, G(3, 'c_clean')),
+      O('酒留下，信封退回去', '代价：你开始替自己找理由', {
+        money: { cash: 300 }, at: { stress: 2 }, set: { c_coverup: true }
+      }, B(1, 'c_bribe'))
+    ]
+  });
+  E({
+    path: 'teacher', n: 12, kind: '冲突', ageMin: 35, ageMax: 43,
+    title: '家长群里的截图',
+    text: '你批评学生的语音被截成 15 秒发到家长群，配文“老师骂人”。群里已经有 47 条未读。',
+    opts: [
+      O('在群里把前因后果说清楚', '代价：越解释，截图传得越广', {
+        rep: { school: 2 }, at: { stress: 3 }
+      }, N(1)),
+      O('私聊那位家长', '代价：她说“我也是转发的”，不肯删', {
+        npc: { '家长': { favor: 3 } }, at: { stress: 2 }
+      }, N(0)),
+      O('不回应，等学校处理', '代价：校长在教师会上点了你的名', {
+        rep: { school: -2 }, at: { stress: 3 }
+      }, B(2, 'c_coverup'))
+    ]
+  });
+  E({
+    path: 'teacher', n: 13, kind: '冲突', ageMin: 39, ageMax: 47,
+    title: '被改掉的分数',
+    text: '教务主任让你把某学生的期末分从 58 改成 61，说“他家长是家委会的，闹起来不好看”。成绩单还没上传。',
+    opts: [
+      O('改', '代价：这个学生的卷子还在档案袋里', {
+        npc: { '教务主任': { favor: 3 } }, set: { c_fraud: true }, at: { stress: 3 }
+      }, B(3, 'c_fraud')),
+      O('不改，按 58 上报', '代价：主任会记你一辈子，评优没你的份', {
+        npc: { '教务主任': { favor: -4 } }, rep: { school: 3 }, at: { stress: 2 }
+      }, G(3, 'c_clean')),
+      O('让他重新考一次', '代价：主任说“你这是在教我做事”', {
+        at: { stress: 2 }, npc: { '教务主任': { favor: -1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'teacher', n: 14, kind: '突发', ageMin: 44, ageMax: 50,
+    title: '教室里的晕倒',
+    text: '上课时一个女生突然趴在桌上，脸色发白，叫了两声没应。班里四十多个同学都看着你。',
+    opts: [
+      O('抱去医务室，边走边喊人', '代价：她比你想象的沉，你腰闪了一下', {
+        at: { health: -2, stress: 3 }, rep: { school: 4, society: 2 }
+      }, G(3, 'c_hero')),
+      O('打 120，让同学疏散', '代价：救护车进校门，家长群炸了', {
+        at: { stress: 3 }, rep: { school: 2 }
+      }, N(1)),
+      O('让两个同学扶她去医务室', '代价：校医说再晚两分钟就麻烦了', {
+        rep: { school: -2 }, at: { stress: 3 }
+      }, N(-1))
+    ]
+  });
+  E({
+    path: 'teacher', n: 15, kind: '突发', ageMin: 48, ageMax: 56,
+    title: '毕业前的举报信',
+    text: '一封匿名信寄到校长室，说你收过家长购物卡，附了照片。照片里的手是你的，卡是那张。',
+    opts: [
+      O('配合调查，把能说清的都写下来', '代价：调查期间停课，毕业班换了老师', {
+        rep: { school: 3 }, at: { stress: 5 }
+      }, G(3, 'c_clean')),
+      O('找家长对质，让她出面澄清', '代价：她反咬一口，说你想串供', {
+        at: { stress: 4 }, gamble: {
+          p: 0.4,
+          win: { rep: { school: 2 } },
+          lose: { rep: { school: -6 }, set: { c_fired: true } },
+          winText: '家长承认卡是自愿送的，调查不了了之。',
+          loseText: '教育局介入，你的名字上了通报。'
+        }
+      }, N(1)),
+      O('托关系把信压下来', '代价：欠下的人情，比那张卡贵得多', {
+        npc: { '领导': { favor: -3 } }, set: { c_coverup: true }, at: { stress: 4 }
+      }, B(4, 'c_coverup'))
+    ]
+  });
+
+  /* ---------------- 科研：+7（共 15） ---------------- */
+  E({
+    path: 'research', n: 9, kind: '道德', ageMin: 27, ageMax: 35,
+    title: '通讯作者的顺序',
+    text: '导师把你做了两年的实验写成文章，第一作者给了合作方，通讯作者是他自己。你的名字排在第三。',
+    opts: [
+      O('去争第一作者', '代价：导师说“你还没毕业，别想太多”', {
+        rep: { industry: 3 }, npc: { '导师': { favor: -2 } }, at: { stress: 4 }
+      }, G(3, 'c_hero')),
+      O('接受，先毕业再说', '代价：这篇不算你的代表作', {
+        npc: { '导师': { favor: 2 } }, rep: { industry: -1 }
+      }, N(-1)),
+      O('要求共同第一作者', '代价：合作方那边也得点头', {
+        at: { stress: 3 }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 3 } },
+          lose: { npc: { '导师': { favor: -2 } } },
+          winText: '导师同意挂共同一作。',
+          loseText: '拖了两个月，最后还是按他的顺序发。'
+        }
+      }, N(1))
+    ]
+  });
+  E({
+    path: 'research', n: 10, kind: '道德', ageMin: 28, ageMax: 36,
+    title: '师兄的实验记录',
+    text: '师兄毕业走了，留下三本实验记录，导师让你“接着用”。其中一组的原始数据，师兄从来没跑完。',
+    opts: [
+      O('直接用，反正方法一样', '代价：数据一旦被复现，就说不清', {
+        at: { stress: 3 }, set: { c_fraud: true }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 2 } },
+          lose: { rep: { industry: -6 }, set: { c_fired: true } },
+          winText: '文章发了，没人追问。',
+          loseText: '审稿人要求提供原始记录，你拿不出来。'
+        }
+      }, B(3, 'c_fraud')),
+      O('重做一遍', '代价：半年时间，试剂钱自己垫', {
+        at: { health: -3, stress: 4 }, rep: { industry: 3 }, money: { cash: -6000 }
+      }, G(3, 'c_clean')),
+      O('只用方法，不用他的数据', '代价：进度慢了一半', {
+        at: { stress: 2, knowledge: 1 }
+      }, N(1))
+    ]
+  });
+  E({
+    path: 'research', n: 11, kind: '道德', ageMin: 31, ageMax: 39,
+    title: '基金本子里的名字',
+    text: '写基金申请，导师让你把一个没参与的老师挂进课题组，说“他有人脉，评审时好说话”。',
+    opts: [
+      O('挂上', '代价：这个人以后会来分经费', {
+        npc: { '导师': { favor: 2 } }, set: { c_coverup: true }, at: { stress: 2 }
+      }, B(2, 'c_coverup')),
+      O('不挂，按实际参与人写', '代价：导师把本子拿回去自己改', {
+        npc: { '导师': { favor: -3 } }, rep: { industry: 3 }, at: { stress: 2 }
+      }, G(3, 'c_clean')),
+      O('去问导师为什么', '代价：他说“你还年轻，不懂”', {
+        at: { stress: 2 }, npc: { '导师': { favor: 1 } }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'research', n: 12, kind: '冲突', ageMin: 36, ageMax: 44,
+    title: '被抢发的数据',
+    text: '同一批数据，隔壁组先发了文章。你翻了他们的图，和你三个月前在组会上讲的一模一样。',
+    opts: [
+      O('找对方导师理论', '代价：他说“数据是我们自己做的”', {
+        rep: { industry: 2 }, at: { stress: 4 }, gamble: {
+          p: 0.4,
+          win: { rep: { industry: 3 } },
+          lose: { at: { stress: 2 }, rep: { industry: -2 } },
+          winText: '对方同意在文末致谢你的前期工作。',
+          loseText: '吵到院长那里，各打五十大板。'
+        }
+      }, N(1)),
+      O('换个角度重写一篇', '代价：又得半年，还不一定发得出来', {
+        at: { knowledge: 2, stress: 3 }
+      }, N(0)),
+      O('向导师报告，让他出面', '代价：导师说“先把自己的事做好”', {
+        npc: { '导师': { favor: 1 } }, at: { stress: 2 }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'research', n: 13, kind: '冲突', ageMin: 40, ageMax: 48,
+    title: '组会上的沉默',
+    text: '组会上导师把你的结果否了，说“做不出来就别浪费钱”。全组十几个人没人说话，投影还停在你的图上。',
+    opts: [
+      O('当场把实验设计讲清楚', '代价：导师打断你三次', {
+        rep: { industry: 2 }, npc: { '导师': { favor: -3 } }, at: { stress: 4 }
+      }, G(2, 'c_hero')),
+      O('会后单独找他谈', '代价：他说“先把下一批数据拿出来”', {
+        npc: { '导师': { favor: 1 } }, at: { stress: 2 }
+      }, N(0)),
+      O('自己掏钱把实验做完', '代价：两万块，结果还不一定对', {
+        money: { cash: -20000 }, at: { stress: 3 }, gamble: {
+          p: 0.45,
+          win: { rep: { industry: 4 } },
+          lose: { at: { happiness: -3 } },
+          winText: '数据出来了，导师在组会上说“这个方向可以继续”。',
+          loseText: '钱花了，结果还是不显著。'
+        }
+      }, N(1))
+    ]
+  });
+  E({
+    path: 'research', n: 14, kind: '突发', ageMin: 44, ageMax: 51,
+    title: '液氮罐的报警',
+    text: '半夜液氮罐低压报警，里面是三年的样品。值班表上今晚只有你一个人在楼里。',
+    opts: [
+      O('冲进去换罐', '代价：低温气体，护目镜都没戴', {
+        at: { health: -4, stress: 4 }, gamble: {
+          p: 0.65,
+          win: { rep: { industry: 4 } },
+          lose: { at: { health: -3 }, rep: { industry: -1 } },
+          winText: '样品保住了，你的手冻伤了两根指头。',
+          loseText: '阀门没拧紧，一半样品报废。'
+        }
+      }, G(3, 'c_hero')),
+      O('打电话叫师兄来帮忙', '代价：他住得远，赶过来要四十分钟', {
+        at: { stress: 3 }, rep: { industry: 2 }, npc: { '师兄': { favor: -1 } }
+      }, N(1)),
+      O('等天亮再说', '代价：天亮时罐子已经见底', {
+        rep: { industry: -4 }, set: { c_fraud: true }, at: { stress: 3 }
+      }, B(4, 'c_fraud'))
+    ]
+  });
+  E({
+    path: 'research', n: 15, kind: '突发', ageMin: 52, ageMax: 58,
+    title: '评审意见',
+    text: '一篇改了三年，评审意见终于回来：“建议拒稿，但可以重投。”重投意味着再等一年。',
+    opts: [
+      O('按意见改，重投', '代价：这一年没有新文章，考核表不好看', {
+        at: { stress: 4, knowledge: 2 }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 4 } },
+          lose: { at: { happiness: -4 } },
+          winText: '重投三个月后接收。',
+          loseText: '第二次评审又换了三个问题。'
+        }
+      }, G(2, 'c_clean')),
+      O('改投低一档的期刊', '代价：影响因子掉一半', {
+        rep: { industry: -2 }, at: { stress: 2 }
+      }, N(0)),
+      O('放弃这篇，去做新方向', '代价：三年的数据躺在硬盘里', {
+        at: { happiness: -3 }
+      }, N(-1))
+    ]
+  });
+
+  /* ---------------- 出租车：+7（共 15） ---------------- */
+  E({
+    path: 'taxi', n: 9, kind: '道德', ageMin: 23, ageMax: 31,
+    title: '后座的手机',
+    text: '乘客落下一部手机，屏幕亮着，是他爱人打来的。你已经在三公里外，后座还有下一单的乘客。',
+    opts: [
+      O('掉头送回去', '代价：下一单超时，被扣 20', {
+        money: { cash: -20 }, rep: { society: 3 }
+      }, G(3, 'c_clean')),
+      O('交到车队失物登记处', '代价：失主要多跑一趟', {
+        at: { stress: 1 }, rep: { society: 1 }
+      }, N(1)),
+      O('关机，先收起来', '代价：手机一直响，你一路没敢接', {
+        money: { cash: 1000 }, at: { stress: 3 }, set: { c_coverup: true }
+      }, B(2, 'c_coverup'))
+    ]
+  });
+  E({
+    path: 'taxi', n: 10, kind: '道德', ageMin: 26, ageMax: 34,
+    title: '绕路的那三公里',
+    text: '乘客是外地人，说去火车站。导航显示直走 8 公里，你拐上另一条路，表多跳了 12 块。',
+    opts: [
+      O('就按绕的走', '代价：乘客盯着手机导航看了半天', {
+        money: { cash: 12 }, at: { stress: 1 }
+      }, B(1, 'c_bribe')),
+      O('按最近路线走', '代价：少挣 12 块，还堵了十分钟', {
+        rep: { society: 2 }, money: { cash: -5 }
+      }, G(2, 'c_clean')),
+      O('主动说明，少收 10 块', '代价：乘客下车时说了句“下次还坐你的”', {
+        money: { cash: -10 }, rep: { society: 3 }
+      }, G(2, 'c_clean'))
+    ]
+  });
+  E({
+    path: 'taxi', n: 11, kind: '道德', ageMin: 30, ageMax: 38,
+    title: '发票的抬头',
+    text: '乘客要你把 200 块车费开成 800 的发票，说“公司报销，大家都这么干”。他从包里掏出一张名片。',
+    opts: [
+      O('开 800 的', '代价：发票是真的，钱是假的', {
+        money: { cash: 30 }, set: { c_fraud: true }, at: { stress: 2 }
+      }, B(3, 'c_fraud')),
+      O('只开实际金额', '代价：乘客下车时摔了车门', {
+        rep: { society: 2 }, npc: { '乘客': { favor: -2 } }
+      }, G(3, 'c_clean')),
+      O('说机器坏了，开不了', '代价：他投诉你拒载', {
+        at: { stress: 2 }, rep: { society: -1 }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'taxi', n: 12, kind: '冲突', ageMin: 34, ageMax: 42,
+    title: '醉汉的拳头',
+    text: '乘客喝多了，指路指错，到了地方不给钱，还推了你一把。后座的车门被他踹了一脚。',
+    opts: [
+      O('还手', '代价：两个人都进了派出所', {
+        at: { health: -2, stress: 4 }, set: { c_violence: true }, gamble: {
+          p: 0.5,
+          win: { money: { cash: 200 } },
+          lose: { money: { cash: -1000 } },
+          winText: '他朋友赔了修车钱。',
+          loseText: '你赔了他医药费。'
+        }
+      }, B(3, 'c_violence')),
+      O('报警，让警察来处理', '代价：车停在路边，一晚上没跑单', {
+        rep: { society: 3 }, at: { stress: 3 }, money: { cash: -150 }
+      }, G(3, 'c_clean')),
+      O('自认倒霉，掉头走', '代价：修车门花了三百', {
+        money: { cash: -300 }, at: { stress: 2 }
+      }, N(-1))
+    ]
+  });
+  E({
+    path: 'taxi', n: 13, kind: '冲突', ageMin: 38, ageMax: 46,
+    title: '平台的罚单',
+    text: '平台判定你“绕路”，罚 200 扣服务分。你记得那单是乘客自己要求走高速的。',
+    opts: [
+      O('提交申诉，附行车记录', '代价：申诉要等七个工作日', {
+        at: { stress: 3 }, gamble: {
+          p: 0.55,
+          win: { money: { cash: 200 } },
+          lose: { at: { stress: 2 } },
+          winText: '平台撤销处罚。',
+          loseText: '申诉被驳回，服务分还是扣了。'
+        }
+      }, N(1)),
+      O('认罚', '代价：这个月白跑两天', {
+        money: { cash: -200 }, at: { stress: 1 }
+      }, N(0)),
+      O('联系乘客作证', '代价：乘客早把订单删了', {
+        at: { charm: 1, stress: 2 }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'taxi', n: 14, kind: '突发', ageMin: 42, ageMax: 50,
+    title: '高速上的爆胎',
+    text: '载客上高速，右后胎爆了，方向盘猛抖。后座乘客在睡觉，时速 100。',
+    opts: [
+      O('稳住方向，慢慢靠边', '代价：手心全是汗，后视镜里全是大车', {
+        at: { health: -2, stress: 4 }, rep: { society: 3 }, gamble: {
+          p: 0.7,
+          win: { rep: { society: 2 } },
+          lose: { at: { health: -3 } },
+          winText: '车停在应急车道，人没事。',
+          loseText: '蹭上了护栏。'
+        }
+      }, G(4, 'c_hero')),
+      O('急刹', '代价：后车差点追尾', {
+        at: { stress: 5 }, rep: { society: -3 }, set: { c_malpractice: true }
+      }, B(3, 'c_malpractice')),
+      O('打电话叫救援，慢慢滑行', '代价：救援车一小时才到，乘客改签误了航班', {
+        money: { cash: -300 }, at: { stress: 3 }
+      }, N(0))
+    ]
+  });
+  E({
+    path: 'taxi', n: 15, kind: '突发', ageMin: 50, ageMax: 58,
+    title: '熟客的最后一天',
+    text: '一个跑了十年的熟客，最后一次坐你的车去殡仪馆方向。他一路没说话，下车时说了句“谢谢”。',
+    opts: [
+      O('不收这趟钱', '代价：你在车里坐了很久', {
+        money: { cash: -80 }, rep: { society: 3 }, at: { happiness: -2 }
+      }, G(2, 'c_clean')),
+      O('照常收钱，送他到门口', '代价：他说“你还是这么实在”', {
+        money: { cash: 80 }, at: { happiness: 1 }
+      }, N(0)),
+      O('陪他进去，帮着跑手续', '代价：半天没出车', {
+        money: { cash: -300 }, at: { health: -1 }, rep: { society: 3 }
+      }, G(3, 'c_hero'))
+    ]
+  });
+
+  /* ---------------- 厨师 chef：n9–n15 ---------------- */
+  E({
+    path: 'chef', n: 9, kind: '道德', ageMin: 21,
+    title: '回锅的卤水',
+    text: '晚市前你揭开卤水桶，表面浮着一层灰白的沫，闻着有点发酸。师傅看了一眼说“撇掉，加点料接着用”，这锅卤要浇四十碗面。老板正坐在前厅算账，账本摊开着。',
+    opts: [
+      O('照师傅说的撇掉接着用', '代价：真吃出问题，第一个被查的是操作的人', {
+        at: { stress: 3 }, rep: { industry: -2 }, set: { c_coverup: true }
+      }, B(2, 'c_coverup')),
+      O('自己掏钱换一锅新卤', '代价：六百块，差不多是你半个月的伙食费', {
+        money: { cash: -600 }, at: { stress: 2, happiness: -1 }, rep: { industry: 2 }
+      }, G(2, 'c_clean')),
+      O('报告老板，让他来定', '代价：师傅会记住你越级告状', {
+        at: { stress: 3 }, npc: { '上司': { favor: -4 } }, rep: { industry: 1 }
+      }, N(1))
+    ]
+  });
+
+  E({
+    path: 'chef', n: 10, kind: '道德', ageMin: 25,
+    title: '混在活虾里的死虾',
+    text: '供货商老陈把一箱死虾混进活虾里，进价便宜三成，塞给你两条烟：“后厨谁看得出来。”今晚有十八桌婚宴，主菜是白灼虾。',
+    opts: [
+      O('收下，混着用', '代价：婚宴上桌的虾，吃出事就是全店的事', {
+        money: { cash: 500 }, at: { stress: 3 }, rep: { industry: -3 },
+        set: { c_fraud: true }
+      }, B(2, 'c_fraud')),
+      O('整箱退回，换成活虾', '代价：成本多一千二，老板要问为什么', {
+        money: { cash: -1200 }, at: { stress: 2 }, rep: { industry: 3 }
+      }, G(2, 'c_clean')),
+      O('只挑出死虾，剩下的用', '代价：挑虾的两个小时从你休息里扣', {
+        at: { stress: 4, health: -1 }, rep: { industry: 1 }
+      }, N(1))
+    ]
+  });
+
+  E({
+    path: 'chef', n: 11, kind: '道德', ageMin: 29,
+    title: '徒弟的半个指甲',
+    text: '小王切冻肉时削掉半个指甲，血滴到砧板上。店里报工伤要扣厨师长奖金，他攥着手指求你：“哥，别说是在班上伤的。”',
+    opts: [
+      O('帮他瞒下来，说是自己在家弄的', '代价：伤口感染或留疤，他以后不会替你说话', {
+        money: { cash: -500 }, at: { stress: 3 }, set: { c_coverup: true }
+      }, B(2, 'c_coverup')),
+      O('按工伤上报，奖金照扣', '代价：这个月少拿一千五，厨师长给你脸色', {
+        money: { cash: -1500 }, rep: { industry: 3 }, set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('私下带他去医院，账走自己的', '代价：挂号拍片八百，还得替他顶半天灶', {
+        money: { cash: -800 }, at: { health: -2, stress: 2 }, rep: { industry: 1 }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'chef', n: 12, kind: '冲突', ageMin: 33,
+    title: '空降的厨师长',
+    text: '老板请来一个做过五星酒店的中年人当厨师长，第一周就砍掉你三道招牌菜，重新排了一张菜单，说“太土”。前厅退货率一周涨了两成，老板开始问你的意见。',
+    opts: [
+      O('当面顶回去，招牌菜一道不许动', '代价：两个人在灶台前吵，全店都听见了', {
+        at: { stress: 5, reputation: 2 }, rep: { industry: 2 }, npc: { '上司': { favor: -4 } }
+      }, N(1)),
+      O('配合改菜单，跟着学', '代价：老客人点不到那道菜，慢慢不来了', {
+        at: { stress: 2, happiness: -2 }, rep: { industry: 1 }
+      }, N(0)),
+      O('把老客人的意见整理给老板', '代价：成了背后告状的人', {
+        at: { stress: 3, charm: 1 }, rep: { industry: 1 }, npc: { '上司': { favor: 2 } }
+      }, N(0))
+    ]
+  });
+
+  E({
+    path: 'chef', n: 13, kind: '冲突', ageMin: 37,
+    title: '隔壁酒楼的夜宵',
+    text: '隔壁新开的酒楼老板约你吃夜宵，开出比现在高四成的工资，要你带三个兄弟过去。现在的店刚给你涨过一次，老板说“以后这灶台是你的”。',
+    opts: [
+      O('带三个兄弟一起走', '代价：老店当晚断档，行业里会传你“带走整灶”', {
+        money: { cash: 3000 }, at: { stress: 3 }, rep: { industry: -2 },
+        npc: { '上司': { favor: -5 } }
+      }, N(2)),
+      O('留下，跟老板谈股份', '代价：谈成了也未必兑现，谈崩了里外不是人', {
+        at: { stress: 4 }, gamble: {
+          p: 0.45,
+          win: { money: { cash: 20000 }, rep: { industry: 2 } },
+          lose: { at: { happiness: -3 }, npc: { '上司': { favor: -2 } } },
+          winText: '老板同意给你后厨一成的干股。',
+          loseText: '老板说你“心野了”，涨薪的事再没提。'
+        }
+      }, G(1, 'c_clean')),
+      O('自己走，一个兄弟都不带', '代价：新店从头搭班子，前三个月出菜慢', {
+        money: { cash: 5000 }, at: { stress: 4, health: -1 }, rep: { industry: 1 }
+      }, N(0))
+    ]
+  });
+
+  E({
+    path: 'chef', n: 14, kind: '突发', ageMin: 45,
+    title: '冷库半夜停机',
+    text: '凌晨一点，冷库压缩机停了，里面是明天婚宴三十桌的海鲜和牛羊肉。维修师傅说配件要到早上八点才能送来。',
+    opts: [
+      O('敲开隔壁店的冷库借地方', '代价：欠一份大人情，以后他家忙你得先到', {
+        at: { stress: 4, health: -2 }, rep: { industry: 3 }, set: { c_hero: true }
+      }, G(2, 'c_hero')),
+      O('用冰块和棉被硬扛到天亮', '代价：化冻的货只能扔，损失六千', {
+        money: { cash: -6000 }, at: { stress: 5 }
+      }, N(0)),
+      O('不管，明早再说', '代价：海鲜全坏，婚宴当天换菜', {
+        money: { cash: -12000 }, at: { stress: 6, reputation: -4 }, rep: { industry: -3 }
+      }, B(1, 'c_coverup'))
+    ]
+  });
+
+  E({
+    path: 'chef', n: 15, kind: '突发', ageMin: 52,
+    title: '收档后的煤气味',
+    text: '收档后你闻到一股煤气味，燃气公司的电话打不通。店里还有两个学徒在拖地，总阀在灶台后面，接口正对着常年被火苗燎的位置。',
+    opts: [
+      O('关总阀、开窗、先把人喊出去', '代价：阀门烫手，你得贴着灶台够过去', {
+        at: { health: -2, stress: 5 }, rep: { industry: 4, society: 3 }, set: { c_hero: true }
+      }, G(4, 'c_hero')),
+      O('先关阀门，再打电话', '代价：弯腰时吸进一口浓气，头晕了半宿', {
+        at: { health: -5, stress: 4 }
+      }, G(2, 'c_clean')),
+      O('让学徒去关，自己在门外等', '代价：十九岁的孩子手在抖', {
+        at: { stress: 6, happiness: -3 }, rep: { industry: -2 }
+      }, N(-1))
+    ]
+  });
+
+  /* ---------------- 小店老板 shop：n9–n15 ---------------- */
+  E({
+    path: 'shop', n: 9, kind: '道德', ageMin: 23,
+    title: '账本上的三千二',
+    text: '楼上老太太赊了八个月的米面油，账本上记到三千二。她儿子在外地，退休金刚够吃药，今天她又拎着布袋站在柜台前。',
+    opts: [
+      O('继续赊，把账记上', '代价：这笔钱大概率回不来，进货却要现结', {
+        money: { cash: -500 }, at: { stress: 2, happiness: 1 }, rep: { society: 2 }
+      }, G(1, 'c_clean')),
+      O('把账本给她看，让她儿子转钱', '代价：老太太当场哭了，整条街都知道', {
+        money: { cash: 3200 }, rep: { society: -3 }, at: { stress: 3 }
+      }, N(0)),
+      O('这笔账免了，以后按进价卖她', '代价：三千二，你要多卖六百瓶酱油', {
+        money: { cash: -3200 }, rep: { society: 5 }, at: { happiness: 2 }
+      }, G(2, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'shop', n: 10, kind: '道德', ageMin: 27,
+    title: '临期的酸奶',
+    text: '供货商说有一批还有五天到期的酸奶，进价只要三成，让你“摆最里面，卖得动”。你算了算，这一个夏天能多赚两千。',
+    opts: [
+      O('收下，混在正常货里卖', '代价：喝坏肚子的人会拎着瓶子找上门', {
+        money: { cash: 2000 }, at: { stress: 2 }, rep: { society: -2 },
+        set: { c_fraud: true }
+      }, B(2, 'c_fraud')),
+      O('不收，照常进新货', '代价：少赚两千，冰柜还空着一格', {
+        money: { cash: -600 }, at: { happiness: -1 }
+      }, G(2, 'c_clean')),
+      O('收下，单独摆“临期特价”', '代价：有人嫌你把快过期的货放门口', {
+        money: { cash: 800 }, at: { stress: 2 }, rep: { society: 2 }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'shop', n: 11, kind: '道德', ageMin: 31,
+    title: '锁上的防火门',
+    text: '消防检查下周来。隔壁三家店主约你一起把楼道那扇防火门锁上，说“开着尽丢东西”。锁上以后，真着火就得绕到后门，多走四十米。',
+    opts: [
+      O('跟着一起锁', '代价：真出事，钥匙在你手里', {
+        at: { stress: 3 }, rep: { society: -1 }, set: { c_coverup: true }
+      }, B(1, 'c_coverup')),
+      O('不锁，还自己买两具灭火器', '代价：四百块，隔壁说你“装样子”', {
+        money: { cash: -400 }, at: { happiness: -1 }, rep: { society: 3 }
+      }, G(2, 'c_clean')),
+      O('不锁，但也不出头，检查时躲着', '代价：整条街被罚，你也跑不掉', {
+        money: { cash: -1500 }, at: { stress: 2 }
+      }, N(0))
+    ]
+  });
+
+  E({
+    path: 'shop', n: 12, kind: '冲突', ageMin: 35,
+    title: '房东的第三条短信',
+    text: '二房东发来第三条消息：明年房租从四千八涨到六千七，不签就月底搬。店里刚进了三万块的货，老顾客都认这条街。',
+    opts: [
+      O('咬牙签下', '代价：每个月多一千九，等于白干六天', {
+        money: { cash: -8000 }, at: { stress: 4 }, rep: { society: 1 }
+      }, N(0)),
+      O('搬到街尾便宜的门面', '代价：装修和设备折腾两万，老客流失一半', {
+        money: { cash: -20000 }, at: { stress: 5 }, rep: { society: -3 }
+      }, N(-1)),
+      O('联合隔壁几家一起谈', '代价：谈崩了，房东单独给你断水断电', {
+        at: { stress: 4, charm: 2 }, gamble: {
+          p: 0.5,
+          win: { money: { cash: 4000 }, rep: { society: 2 } },
+          lose: { money: { cash: -3000 }, at: { stress: 3 } },
+          winText: '房东松口，只涨了八百。',
+          loseText: '房东认定你是带头的，合同到期不再续租。'
+        }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'shop', n: 13, kind: '冲突', ageMin: 39,
+    title: '加盟的电话',
+    text: '一个连锁品牌找上门，加盟费八万，承诺“日流水三千、统一供货”。你知道隔壁县那家同品牌开了半年就关门，招牌还挂着。',
+    opts: [
+      O('交钱加盟', '代价：八万块，亏了连押金都退不回', {
+        money: { cash: -80000 }, at: { stress: 5 }, gamble: {
+          p: 0.4,
+          win: { money: { cash: 120000 }, rep: { society: 2 } },
+          lose: { money: { cash: -40000 }, set: { c_debt: true } },
+          winText: '新招牌带来客流，一年回了本。',
+          loseText: '总部供货价比批发市场还高，半年后关门。'
+        }
+      }, N(1)),
+      O('拒绝，继续做自己的店', '代价：隔壁新店开业那天，你会盯着人家的客流', {
+        at: { happiness: -1 }, rep: { society: 1 }
+      }, N(0)),
+      O('先去隔壁县看那家关门的店', '代价：关店两天，少做两千流水', {
+        money: { cash: -2000 }, at: { stress: 2, charm: 2 }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'shop', n: 14, kind: '突发', ageMin: 47,
+    title: '被撬开的卷帘门',
+    text: '早上六点到店，卷帘门被撬开半米，收银箱不见了，货架上的烟少了半条，监控主机也被人拔走。地上留下一个踩灭的烟头；你报了警，警察说最早半小时后到。',
+    opts: [
+      O('报警，等警察来做笔录', '代价：现场不能动，一上午做不成生意', {
+        money: { cash: -2000 }, at: { stress: 4 }, rep: { society: 2 }, set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('自己加装铁门和四个摄像头', '代价：三千块，这个月不进新货', {
+        money: { cash: -3000 }, at: { stress: 2 }
+      }, N(0)),
+      O('找“道上的人”打听是谁干的', '代价：欠一份人情，以后他要你帮的事不好推', {
+        at: { stress: 5, reputation: -2 }, set: { c_violence: true }
+      }, B(1, 'c_violence'))
+    ]
+  });
+
+  E({
+    path: 'shop', n: 15, kind: '突发', ageMin: 53,
+    title: '贴在卷帘门上的拆迁通知',
+    text: '一张红纸贴在门上：这条街要拆，三个月内搬离，补偿按面积算。你的门面只有十二平米，隔壁那家三十平。',
+    opts: [
+      O('按面积签字，拿钱走人', '代价：十二平米，赔的钱不够在别处重开', {
+        money: { cash: 80000 }, at: { stress: 3, happiness: -2 }
+      }, N(0)),
+      O('联合商户要求按经营面积补', '代价：拖一天就少一天流水', {
+        at: { stress: 5, charm: 2 }, gamble: {
+          p: 0.45,
+          win: { money: { cash: 140000 } },
+          lose: { money: { cash: 60000 }, at: { stress: 4 } },
+          winText: '街道同意按经营年限追加补偿。',
+          loseText: '谈到最后一天，还是按面积签了字。'
+        }
+      }, G(1, 'c_clean')),
+      O('拖着不搬，等最后期限', '代价：断水断电，货压在手里', {
+        money: { cash: -6000 }, at: { stress: 6, health: -2 }
+      }, N(-1))
+    ]
+  });
+
+  /* ---------------- 创业 startup：n9–n15 ---------------- */
+  E({
+    path: 'startup', n: 9, kind: '道德', ageMin: 25,
+    title: '刷单方案',
+    text: '合伙人把一份刷单方案推到你面前：三个月做到两千万 GMV，估值能翻三倍，“数据好看，投资人才看”。账上只剩四个月工资。',
+    opts: [
+      O('干，先把融资拿到', '代价：数据造假，下一轮尽调一查就穿', {
+        money: { cash: 20000 }, at: { stress: 4 }, rep: { industry: -2 },
+        set: { c_fraud: true }
+      }, B(2, 'c_fraud')),
+      O('拒绝，拿真实数据去谈', '代价：估值砍半，可能根本融不到', {
+        at: { stress: 5 }, gamble: {
+          p: 0.45,
+          win: { money: { cash: 300000 } },
+          lose: { money: { cash: -10000 }, set: { c_debt: true } },
+          winText: '投资人认可复购率，钱到账了。',
+          loseText: '谈了七家，没有一家愿意投。'
+        }
+      }, G(2, 'c_clean')),
+      O('只刷一小部分，把曲线做好看', '代价：假数据会跟着你进每一份 BP', {
+        money: { cash: 5000 }, at: { stress: 3 }, set: { c_fraud: true }
+      }, B(1, 'c_fraud'))
+    ]
+  });
+
+  E({
+    path: 'startup', n: 10, kind: '道德', ageMin: 29,
+    title: '对赌协议',
+    text: '投资人愿意投五百万，条件是对赌：三年不上市，创始人按年化 15% 回购。律师提醒你，那意味着公司没了，你还欠一屁股债。',
+    opts: [
+      O('签，先把钱拿到手', '代价：三年后上市不了，债务全在你名下', {
+        money: { cash: 500000 }, at: { stress: 6 }, set: { c_debt: true }, gamble: {
+          p: 0.35,
+          win: { money: { cash: 800000 }, rep: { industry: 3 } },
+          lose: { money: { cash: -600000 }, set: { c_jail: true } },
+          winText: '公司赶上风口，顺利挂牌。',
+          loseText: '对赌失败，回购款还不上，被列入失信名单。'
+        }
+      }, B(1, 'c_debt')),
+      O('谈掉对赌，宁可不拿这笔钱', '代价：投资额缩水到两百万，估值也降', {
+        money: { cash: 200000 }, at: { stress: 3 }
+      }, G(1, 'c_clean')),
+      O('放弃这笔投资，继续找', '代价：账上的钱只够撑五个月', {
+        at: { stress: 5, happiness: -2 }
+      }, G(2, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'startup', n: 11, kind: '道德', ageMin: 32,
+    title: '裁员名单',
+    text: '财务把现金流表摊开：账上还能撑九个月，不减人撑不到下一轮。名单十二个人，第一个是跟了你三年的老赵，孩子刚上小学。',
+    opts: [
+      O('按名单裁，补偿给足', '代价：十二个家庭，你一个个谈', {
+        money: { cash: -60000 }, at: { stress: 7, happiness: -4 }, rep: { industry: 2 }
+      }, N(0)),
+      O('全员降薪三成，一个不裁', '代价：骨干先走，团队士气掉到底', {
+        at: { stress: 5, happiness: -2 }, rep: { industry: 2 }, gamble: {
+          p: 0.5,
+          win: { money: { cash: 50000 } },
+          lose: { money: { cash: -30000 }, at: { stress: 5 } },
+          winText: '团队扛住了，下一轮融资到账。',
+          loseText: '三个核心工程师当月提了离职。'
+        }
+      }, G(1, 'c_clean')),
+      O('借钱硬撑，不裁不降', '代价：个人背上二十万贷款', {
+        money: { cash: -200000 }, at: { stress: 6 }, set: { c_debt: true }
+      }, B(1, 'c_debt'))
+    ]
+  });
+
+  E({
+    path: 'startup', n: 12, kind: '冲突', ageMin: 36,
+    title: '合伙人开的“小号”',
+    text: '你发现合伙人用公司账户给另一家公司付了三笔“咨询费”，共二十七万，那家公司的法人是他表弟。他说明年就连本带利还回来；可公司最大的两个客户，一直攥在他手里。',
+    opts: [
+      O('查账、报警，把事摆到桌面上', '代价：公司账被冻结，融资直接停摆', {
+        at: { stress: 6 }, rep: { industry: 3 }, set: { c_lawsuit: true }, gamble: {
+          p: 0.5,
+          win: { money: { cash: 270000 } },
+          lose: { money: { cash: -50000 }, set: { c_fired: true } },
+          winText: '他退回了钱，股份也折价出让。',
+          loseText: '他反咬你管理混乱，董事会把你架空了。'
+        }
+      }, G(1, 'c_clean')),
+      O('摊牌，让他签还款协议', '代价：从此两个人再没有信任', {
+        at: { stress: 4, charm: 1 }, rep: { industry: 1 }
+      }, N(0)),
+      O('装不知道，先抓住客户资源', '代价：等他真把钱转走，你想追也追不回', {
+        at: { stress: 5 }, set: { c_coverup: true }
+      }, B(1, 'c_coverup'))
+    ]
+  });
+
+  E({
+    path: 'startup', n: 13, kind: '冲突', ageMin: 40,
+    title: 'CTO 的辞职信',
+    text: 'CTO 收到大厂 offer，年薪翻倍，还要带走两个核心后端。项目下周上线，投资人已经听到风声，电话打到了你手机上。',
+    opts: [
+      O('加股份留人', '代价：让出八个点，下一轮你的话语权更小', {
+        at: { stress: 4 }, rep: { industry: 1 }, gamble: {
+          p: 0.6,
+          win: { money: { cash: 100000 } },
+          lose: { at: { stress: 4, happiness: -2 } },
+          winText: '他留下了，上线按期完成。',
+          loseText: '他拿了股份还是走了，股份也没退。'
+        }
+      }, N(1)),
+      O('放人，自己顶上写代码', '代价：四个月每天睡五小时', {
+        at: { health: -6, stress: 7 }, rep: { industry: 3 }, set: { c_hero: true }
+      }, G(2, 'c_hero')),
+      O('启动竞业协议，起诉', '代价：官司打一年，行业里都知道了', {
+        money: { cash: -20000 }, at: { stress: 5 }, set: { c_lawsuit: true }
+      }, N(-1))
+    ]
+  });
+
+  E({
+    path: 'startup', n: 14, kind: '突发', ageMin: 48,
+    title: '最大客户的终止函',
+    text: '占营收四成的客户发来终止函，理由是“内部采购调整”。下个月的工资、服务器账单和房租，都在同一张表上等着。',
+    opts: [
+      O('亲自飞过去谈，降到成本价', '代价：这单不赚钱，还得赔笑脸', {
+        money: { cash: -30000 }, at: { stress: 6, health: -2 }, gamble: {
+          p: 0.55,
+          win: { money: { cash: 80000 }, rep: { industry: 2 } },
+          lose: { money: { cash: -20000 } },
+          winText: '客户续了半年，缓过来了。',
+          loseText: '对方采购已经换了人，谈不动。'
+        }
+      }, G(1, 'c_clean')),
+      O('立刻裁掉三分之一，保住现金流', '代价：项目断档，口碑受损', {
+        money: { cash: -40000 }, at: { stress: 6, happiness: -3 }, rep: { industry: -2 }
+      }, N(0)),
+      O('抵押房子补现金流', '代价：亏了连住的地方都没有', {
+        money: { cash: 300000 }, at: { stress: 7 }, set: { c_debt: true }
+      }, B(1, 'c_debt'))
+    ]
+  });
+
+  E({
+    path: 'startup', n: 15, kind: '突发', ageMin: 54,
+    title: '上市前夜的举报信',
+    text: '券商进场尽调的第二周，一封匿名信到了监管邮箱：说你三年前那笔关联交易没有披露。上市窗口只剩一个月，全公司都在等。',
+    opts: [
+      O('主动向券商和监管说明', '代价：上市推迟，先交一笔罚款', {
+        money: { cash: -50000 }, at: { stress: 6 }, rep: { industry: 4 }, set: { c_clean: true }
+      }, G(3, 'c_clean')),
+      O('找人把信压下去', '代价：压得住一时，压不住一辈子', {
+        money: { cash: -100000 }, at: { stress: 7 }, set: { c_bribe: true }, gamble: {
+          p: 0.35,
+          win: { money: { cash: 500000 } },
+          lose: { money: { cash: -300000 }, set: { c_jail: true } },
+          winText: '信被压了下来，挂牌照常。',
+          loseText: '事情捅到纪委，你被带走谈话。'
+        }
+      }, B(3, 'c_bribe')),
+      O('暂停上市，先把账查清楚', '代价：窗口错过，投资人的耐心也到头', {
+        money: { cash: -20000 }, at: { stress: 5, happiness: -3 }, rep: { industry: 2 }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  /* ---------------- 公务员 civil：n9–n15 ---------------- */
+  E({
+    path: 'civil', n: 9, kind: '道德', ageMin: 24,
+    title: '窗口里的纸条',
+    text: '政务大厅三号窗口，一个中年人递材料时夹了张纸条，上面写着一个名字，让你“先办”。后面排着三十七个号，有人已经等了一个多小时。',
+    opts: [
+      O('先办，把号往前调', '代价：被叫号的人当场吵起来，还有人举手机', {
+        at: { stress: 4, reputation: -3 }, rep: { society: -3 }, npc: { '上司': { favor: 3 } },
+        set: { c_fraud: true }
+      }, B(1, 'c_fraud')),
+      O('按号办，纸条退回', '代价：那位领导以后再不会给你方便', {
+        at: { stress: 3 }, rep: { society: 3 }, npc: { '上司': { favor: -3 } },
+        set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('带他去自助机，教他自己办', '代价：多花二十分钟，队伍更慢', {
+        at: { stress: 2, charm: 1 }, rep: { society: 2 }
+      }, N(1))
+    ]
+  });
+
+  E({
+    path: 'civil', n: 10, kind: '道德', ageMin: 28,
+    title: '检查前的电话',
+    text: '明天去查一家砂石厂，领导在工作群里发了一句“注意方式方法”。同事提醒你，厂长的表哥是区里的人。',
+    opts: [
+      O('提前打个电话，让他们准备', '代价：真查出问题，第一个被追责的是通风的人', {
+        at: { stress: 3 }, npc: { '上司': { favor: 3 } }, set: { c_coverup: true }
+      }, B(2, 'c_coverup')),
+      O('照常突查，该拍的拍该记的记', '代价：厂里当场翻脸，回去还有人打招呼', {
+        at: { stress: 5 }, rep: { society: 3 }, set: { c_clean: true },
+        npc: { '上司': { favor: -3 } }
+      }, G(2, 'c_clean')),
+      O('只查表面几项，报告写“基本合规”', '代价：出了问题，报告上是你的签名', {
+        at: { stress: 2 }, set: { c_coverup: true }
+      }, B(1, 'c_coverup'))
+    ]
+  });
+
+  E({
+    path: 'civil', n: 11, kind: '道德', ageMin: 32,
+    title: '修路账上多出的两万',
+    text: '村里报上来的修路账目多出两万，村支书说是“损耗”。账本上只有一张收据，字迹和另一张一模一样，连笔锋的顿点都对得上。',
+    opts: [
+      O('签字放款，不走这个流程了', '代价：审计倒查时，经办人栏是你的名字', {
+        money: { cash: 1000 }, at: { stress: 4 }, set: { c_fraud: true }
+      }, B(2, 'c_fraud')),
+      O('打回重报，缺的票据补齐', '代价：村里骂你“卡脖子”，工程停半个月', {
+        at: { stress: 4 }, rep: { society: 2 }, set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('直接报审计，把事交上去', '代价：得罪一片人，以后下乡没人接待', {
+        at: { stress: 5 }, rep: { society: 3, industry: 2 }
+      }, G(3, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'civil', n: 12, kind: '冲突', ageMin: 36,
+    title: '一个副科的位置',
+    text: '科室空出一个副科长，你和老周都在名单上。民主测评前一天，意见箱里出现一张纸条，写着你三年前迟到过十一次。',
+    opts: [
+      O('找领导汇报，把话说明白', '代价：显得你在意这个位置，也让领导难做', {
+        at: { stress: 4, charm: 1 }, gamble: {
+          p: 0.5,
+          win: { rep: { industry: 3 }, npc: { '上司': { favor: 3 } } },
+          lose: { at: { stress: 3 }, npc: { '上司': { favor: -2 } } },
+          winText: '领导说你的事他都清楚，位置给了你。',
+          loseText: '领导说“再等等”，位置给了老周。'
+        }
+      }, N(1)),
+      O('不争，把手头的活做好', '代价：位置给老周，你还得配合他', {
+        at: { stress: 2, happiness: -2 }, npc: { '同事': { favor: 2 } }
+      }, G(1, 'c_clean')),
+      O('去查是谁写的纸条', '代价：真查出来，办公室里没人再跟你说实话', {
+        at: { stress: 5, reputation: -2 }, npc: { '同事': { favor: -4 } }
+      }, N(-1))
+    ]
+  });
+
+  E({
+    path: 'civil', n: 13, kind: '冲突', ageMin: 40,
+    title: '情况说明上的签名',
+    text: '项目出了事故，上级要一份情况说明。分管领导把稿子推给你：“你熟悉，签个经办人。”责任认定还没下来，稿子里写着“未发现监管失职”。',
+    opts: [
+      O('签字，按稿子交上去', '代价：责任认定一变，这行字就是证据', {
+        at: { stress: 5 }, npc: { '上司': { favor: 4 } }, set: { c_coverup: true }
+      }, B(2, 'c_coverup')),
+      O('改稿，如实写上监管环节的问题', '代价：领导当场黑脸，年底考核别想好', {
+        at: { stress: 6 }, rep: { industry: 3, society: 3 }, set: { c_clean: true },
+        npc: { '上司': { favor: -4 } }
+      }, G(2, 'c_clean')),
+      O('拖着不签，等责任认定出来', '代价：拖的每一天，领导都在催', {
+        at: { stress: 4 }, npc: { '上司': { favor: -2 } }
+      }, N(0))
+    ]
+  });
+
+  E({
+    path: 'civil', n: 14, kind: '突发', ageMin: 48,
+    title: '台风夜的十二户',
+    text: '凌晨两点，台风红色预警，低洼片区还有十二户没转移，其中一户是卧床的老人。冲锋舟停在楼下，水已经漫到膝盖。',
+    opts: [
+      O('带队进去，一户户敲门', '代价：水里什么都有，脚下一滑就起不来', {
+        at: { health: -5, stress: 7 }, rep: { society: 5 }, set: { c_hero: true }
+      }, G(4, 'c_hero')),
+      O('等消防和救援队到', '代价：水还在涨，晚半小时可能就进不去', {
+        at: { stress: 6, happiness: -3 }, rep: { society: -2 }
+      }, N(0)),
+      O('先联系家属，让他们自己劝', '代价：电话打不通，老人在屋里等', {
+        at: { stress: 5 }, rep: { society: 1 }
+      }, N(0))
+    ]
+  });
+
+  E({
+    path: 'civil', n: 15, kind: '突发', ageMin: 54,
+    title: '巡视组的谈话',
+    text: '巡视组进驻第三天，通知你下午谈话。问的是三年前一笔八万块的接待费，报销单上写“会议用餐”，附件只有一张菜单。那笔单子当初是前任经手的，人已经调走；档案袋里连会议通知都没有。',
+    opts: [
+      O('如实说明当时的情况', '代价：说清楚了，也可能被认定违规', {
+        at: { stress: 6 }, rep: { industry: 3, society: 3 }, set: { c_clean: true }
+      }, G(3, 'c_clean')),
+      O('推给已经调走的前任', '代价：前任还在同一个系统，话一对就穿帮', {
+        at: { stress: 7 }, set: { c_coverup: true }, gamble: {
+          p: 0.4,
+          win: { at: { stress: 2 } },
+          lose: { at: { reputation: -6 }, set: { c_fired: true } },
+          winText: '巡视组没有继续追这条线。',
+          loseText: '前任的谈话记录和你的说法对不上，被立案。'
+        }
+      }, B(3, 'c_coverup')),
+      O('说记不清了，材料以档案为准', '代价：这个回答等于把责任留在自己身上', {
+        at: { stress: 5 }, npc: { '上司': { favor: -2 } }
+      }, N(-1))
+    ]
+  });
+
+  /* ---------------- 混混 gang：n9–n15 ---------------- */
+  E({
+    path: 'gang', n: 9, kind: '道德', ageMin: 19,
+    title: '抱孩子的女人',
+    text: '大哥让你去收一笔赌债，八千。开门的是个抱孩子的女人，她说男人跑了三个月，屋里连灯都没开。楼下车上等你的人在看表。',
+    opts: [
+      O('照收，把钱拿走', '代价：孩子在你身后哭，声音跟了一整条楼道', {
+        money: { cash: 8000 }, at: { stress: 4, happiness: -3 }, set: { c_violence: true }
+      }, B(2, 'c_violence')),
+      O('空手回去，说家里没人', '代价：大哥当着一屋子人扇你一巴掌', {
+        at: { health: -2, reputation: -3 }, npc: { '上司': { favor: -4 } }, set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('自己垫四千，算她还一半', '代价：这钱大概率回不来', {
+        money: { cash: -4000 }, at: { happiness: 1, stress: 2 }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'gang', n: 10, kind: '道德', ageMin: 23,
+    title: '顶罪的车里',
+    text: '小弟在夜市把人捅伤，大哥把你叫到车里：“你还没案底，进去蹲两年，出来给你十万。”你今年二十三，家里以为你在跑业务。',
+    opts: [
+      O('答应顶罪', '代价：案底跟一辈子，出来什么都干不了', {
+        money: { cash: 100000 }, at: { stress: 8 }, set: { c_jail: true }
+      }, B(3, 'c_jail')),
+      O('拒绝，让小弟自己扛', '代价：从此被排挤出核心圈', {
+        at: { stress: 4 }, npc: { '上司': { favor: -5 } }, set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('劝小弟去自首，你陪他去', '代价：大哥会认为你坏了他的事', {
+        at: { stress: 6 }, rep: { society: 4 }, npc: { '上司': { favor: -5 } },
+        set: { c_clean: true }
+      }, G(3, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'gang', n: 11, kind: '道德', ageMin: 27,
+    title: '包间里的未成年',
+    text: '场子里来了几个十六七岁的女孩，大哥说“客人喜欢年轻的”，让你安排在最里面的包间。外面有查夜的，后门只开一条缝。',
+    opts: [
+      O('安排进去，抽成照拿', '代价：查到一次，你就是组织者', {
+        money: { cash: 3000 }, at: { stress: 5 }, set: { c_coverup: true }, gamble: {
+          p: 0.5,
+          win: { money: { cash: 2000 } },
+          lose: { at: { reputation: -8 }, set: { c_jail: true } },
+          winText: '那晚平安过去，钱进了你口袋。',
+          loseText: '查夜的从后门进来，你被带走。'
+        }
+      }, B(3, 'c_coverup')),
+      O('把人都送走，包间空着', '代价：大哥损失一晚上的流水，骂你多事', {
+        money: { cash: -3000 }, at: { stress: 4 }, npc: { '上司': { favor: -4 } },
+        set: { c_clean: true }
+      }, G(3, 'c_clean')),
+      O('只让她们端果盘，不进屋', '代价：客人不满意，投诉到大哥那里', {
+        at: { stress: 3, charm: 1 }, npc: { '上司': { favor: -2 } }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'gang', n: 12, kind: '冲突', ageMin: 31,
+    title: '隔壁镇的十二个人',
+    text: '隔壁镇的一伙人闯进你的场子，说要收“看场费”，一个月两万，不给就砸。你手下只有六个人，对方来了十二个，门口还停着两辆车。',
+    opts: [
+      O('给钱，先把他们打发走', '代价：这个月两万，下个月他们还来', {
+        money: { cash: -20000 }, at: { stress: 4 }, set: { c_debt: true }
+      }, B(1, 'c_debt')),
+      O('抄家伙打回去', '代价：进了医院或进了看守所，都是你', {
+        at: { health: -5, stress: 6 }, gamble: {
+          p: 0.45,
+          win: { rep: { society: 2 }, money: { cash: -3000 } },
+          lose: { at: { health: -8, reputation: -4 }, set: { c_jail: true } },
+          winText: '对面退了，这条街归你。',
+          loseText: '混战里你把人的头开了，警察来了。'
+        }
+      }, B(3, 'c_violence')),
+      O('找大哥出面谈', '代价：欠大哥一个人情，以后他让你干什么都得干', {
+        at: { stress: 3 }, npc: { '上司': { favor: 3 } }
+      }, N(0))
+    ]
+  });
+
+  E({
+    path: 'gang', n: 13, kind: '冲突', ageMin: 35,
+    title: '物流公司的入股',
+    text: '一个做物流的老板找你入股，说“以后账走公司，人还是你的人”。入股要三百万，你手上正好有，现金装在三个纸箱里。',
+    opts: [
+      O('全投进去，把身份洗白', '代价：钱进了公司账户，就不完全由你说了算', {
+        money: { cash: -300000 }, at: { stress: 4 }, gamble: {
+          p: 0.5,
+          win: { money: { cash: 500000 }, rep: { industry: 3 }, set: { c_master: true } },
+          lose: { money: { cash: -200000 }, set: { c_debt: true } },
+          winText: '物流公司跑起来，你有了正经名片。',
+          loseText: '账被查，钱冻结，你又回到原点。'
+        }
+      }, N(1)),
+      O('只投一半，剩下的攥在手里', '代价：人家只让你挂个虚职', {
+        money: { cash: -150000 }, at: { stress: 3 }, rep: { industry: 1 }
+      }, N(0)),
+      O('不投，继续做老本行', '代价：查得越来越紧，老本行也做不长', {
+        at: { stress: 5 }, rep: { society: -1 }
+      }, N(-1))
+    ]
+  });
+
+  E({
+    path: 'gang', n: 14, kind: '突发', ageMin: 43,
+    title: '楼下的两辆警车',
+    text: '凌晨一点，两辆警车停在楼下，没开警灯。场子里还有三十多个客人，后门通向一条巷子，账本在收银台下面。',
+    opts: [
+      O('拿账本从后门走', '代价：跑了就再也回不来，家里人还在城里', {
+        at: { stress: 8, health: -3 }, gamble: {
+          p: 0.55,
+          win: { money: { cash: -20000 } },
+          lose: { at: { reputation: -8 }, set: { c_jail: true } },
+          winText: '你在外地躲了半年，事情慢慢平了。',
+          loseText: '巷子口也有人，你被堵在里面。'
+        }
+      }, B(2, 'c_jail')),
+      O('留下，把客人先疏散', '代价：查夜的记录里，你的名字排第一', {
+        at: { stress: 7 }, rep: { society: 3 }, set: { c_clean: true }, gamble: {
+          p: 0.4,
+          win: { at: { stress: 2 } },
+          lose: { set: { c_jail: true }, money: { cash: -30000 } },
+          winText: '只是例行检查，没查出东西。',
+          loseText: '账本被搜出来，你被带走。'
+        }
+      }, G(1, 'c_clean')),
+      O('让小弟顶上去', '代价：他进去了，出来会怎么对你', {
+        at: { stress: 4, happiness: -3 }, npc: { '下属': { favor: -5 } },
+        set: { c_coverup: true }
+      }, B(2, 'c_coverup'))
+    ]
+  });
+
+  E({
+    path: 'gang', n: 15, kind: '突发', ageMin: 48,
+    title: '出狱的小弟',
+    text: '当年替你顶罪的小弟出来了，找到你家楼下，说要二十万“安家”，不然就去把当年的事说清楚。他瘦了很多，手上有茧。',
+    opts: [
+      O('给他二十万，把事了了', '代价：他尝到甜头，明年还会来', {
+        money: { cash: -200000 }, at: { stress: 4, happiness: -2 }
+      }, N(0)),
+      O('叫人来，把他吓回去', '代价：他真去说了，你这些年全白干', {
+        at: { stress: 6, reputation: -3 }, set: { c_violence: true }, gamble: {
+          p: 0.5,
+          win: { at: { stress: 2 } },
+          lose: { set: { c_jail: true }, money: { cash: -100000 } },
+          winText: '他没敢再来。',
+          loseText: '他把当年的笔录翻了出来，你被立案。'
+        }
+      }, B(3, 'c_violence')),
+      O('带他去派出所，把当年的事说清', '代价：你要进去，但至少不用再怕他', {
+        at: { stress: 7 }, rep: { society: 3 }, set: { c_jail: true }
+      }, G(2, 'c_clean'))
+    ]
+  });
+
+  /* ---------------- 技工 mechanic：n9–n15 ---------------- */
+  E({
+    path: 'mechanic', n: 9, kind: '道德', ageMin: 20,
+    title: '事故车的气囊',
+    text: '一辆撞过的车要换气囊，老板从仓库拿出副厂件，说“装上去谁也看不出来”，差价八百。车主明天来提车，孩子才三岁。',
+    opts: [
+      O('装副厂件，差价进自己口袋', '代价：真撞了不弹开，第一个被查的是经手人', {
+        money: { cash: 800 }, at: { stress: 3 }, rep: { industry: -2 },
+        set: { c_fraud: true }
+      }, B(2, 'c_fraud')),
+      O('坚持用原厂件', '代价：老板骂你多事，工时费扣掉一半', {
+        money: { cash: -400 }, at: { stress: 2 }, rep: { industry: 3 },
+        set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('把差价告诉车主，让他自己选', '代价：老板知道后，这个月的活不给你排', {
+        at: { stress: 3 }, rep: { industry: 1, society: 2 }, npc: { '上司': { favor: -3 } }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'mechanic', n: 10, kind: '道德', ageMin: 24,
+    title: '保养单上加的三项',
+    text: '车主只想换机油，老板在单子上加了清洗节气门、换火花塞、四轮定位，多出一千二。这车只跑了四万公里，火花塞还能用两年。',
+    opts: [
+      O('照单做，提成照拿', '代价：车主早晚会知道，回头客少一个', {
+        money: { cash: 1200 }, at: { stress: 2 }, rep: { society: -2 },
+        set: { c_fraud: true }
+      }, B(1, 'c_fraud')),
+      O('划掉多余的项目', '代价：老板当着车主的面问你“谁让你改的”', {
+        at: { stress: 3 }, rep: { society: 3 }, npc: { '上司': { favor: -3 } },
+        set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('只做一项，另外两项跟车主说明', '代价：提成少了，老板不高兴', {
+        money: { cash: 300 }, at: { stress: 2 }, rep: { society: 1 }
+      }, G(1, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'mechanic', n: 11, kind: '道德', ageMin: 28,
+    title: '徒弟报的工时',
+    text: '你带的小徒弟把三个大修的工时全报在自己名下，月底提成比你高。他红着脸说：“哥，我下个月房租都交不上。”',
+    opts: [
+      O('当没看见，让他多拿一次', '代价：下个月他还这么报，别人也会有样学样', {
+        at: { happiness: 1, stress: 2 }, npc: { '下属': { favor: 3 } }
+      }, N(0)),
+      O('找组长把工时重新分', '代价：徒弟觉得你不近人情，班也不好带了', {
+        money: { cash: 600 }, at: { stress: 3 }, npc: { '下属': { favor: -3 } },
+        rep: { industry: 1 }
+      }, G(1, 'c_clean')),
+      O('把自己的活分给他，教他真本事', '代价：你少赚，他未必领情', {
+        at: { stress: 3, health: -1 }, rep: { industry: 2 }, npc: { '下属': { favor: 2 } }
+      }, G(2, 'c_clean'))
+    ]
+  });
+
+  E({
+    path: 'mechanic', n: 12, kind: '冲突', ageMin: 32,
+    title: '自动线上的名单',
+    text: '新上的自动线能顶六个工位，厂长让你列一份“优化名单”，三个老师傅在上面，其中一个教过你手艺。',
+    opts: [
+      O('按厂长的意思列', '代价：师傅走那天，不会跟你打招呼', {
+        money: { cash: 3000 }, at: { stress: 5, happiness: -3 }, npc: { '上司': { favor: 3 } }
+      }, N(-2)),
+      O('把名单改成轮岗培训方案', '代价：厂长觉得你站错了边', {
+        at: { stress: 5 }, rep: { industry: 3 }, npc: { '上司': { favor: -3 } },
+        set: { c_clean: true }
+      }, G(2, 'c_clean')),
+      O('先跟三个老师傅通气，让他们自己找退路', '代价：消息传出去，厂里说你在串联', {
+        at: { stress: 4, reputation: -2 }, npc: { '同事': { favor: 3 } }
+      }, N(0))
+    ]
+  });
+
+  E({
+    path: 'mechanic', n: 13, kind: '冲突', ageMin: 36,
+    title: '4S 店的 offer',
+    text: '4S 店给你开高四成的工资，只做一个品牌，五险一金齐全。现在的修理厂什么车都修，老板说“你走了这摊就散了”。',
+    opts: [
+      O('走，去 4S 店', '代价：只做一个品牌，手上的杂活手艺会生疏', {
+        money: { cash: 5000 }, at: { stress: 3, health: 1 }, rep: { industry: 1 },
+        npc: { '上司': { favor: -4 } }
+      }, N(1)),
+      O('留下来谈股份', '代价：老板宁可给你涨薪，也不愿给股份', {
+        at: { stress: 3 }, gamble: {
+          p: 0.4,
+          win: { money: { cash: 30000 } },
+          lose: { money: { cash: 2000 }, at: { happiness: -2 } },
+          winText: '老板同意年底分红，你留下了。',
+          loseText: '老板只给涨了五百块，股份没提。'
+        }
+      }, N(0)),
+      O('两边兼职，先跑半年', '代价：一个月休两天，身体先垮', {
+        money: { cash: 8000 }, at: { health: -6, stress: 5 }
+      }, N(-1))
+    ]
+  });
+
+  E({
+    path: 'mechanic', n: 14, kind: '突发', ageMin: 44,
+    title: '举升机上的车',
+    text: '你正在车底换油管，举升机的液压管“砰”地一声裂了，两吨重的车往下沉，保险锁没有卡住。',
+    opts: [
+      O('就地滚出去', '代价：后背擦着水泥地，工具全留在车底', {
+        at: { health: -3, stress: 6 }, rep: { industry: 2, society: 2 }, set: { c_hero: true }
+      }, G(4, 'c_hero')),
+      O('伸手去撑住车', '代价：两吨的重量，手臂接不住', {
+        at: { health: -10, stress: 7 }, set: { c_injury: true }
+      }, B(3, 'c_injury')),
+      O('大喊让旁边的人拉保险锁', '代价：那两秒里，车还在往下掉', {
+        at: { health: -5, stress: 7 }, gamble: {
+          p: 0.6,
+          win: { rep: { industry: 3 } },
+          lose: { at: { health: -6 }, set: { c_injury: true } },
+          winText: '徒弟拉住了锁，车停在半空。',
+          loseText: '锁卡死了，车砸在你腿上。'
+        }
+      }, N(0))
+    ]
+  });
+
+  E({
+    path: 'mechanic', n: 15, kind: '突发', ageMin: 50,
+    title: '崩开的砂轮片',
+    text: '打磨刹车盘时砂轮片突然崩开，碎片擦着护目镜飞过去，右眼一片白。车间的急救箱里只有创可贴和一瓶碘伏。',
+    opts: [
+      O('自己打车去医院', '代价：八百块检查费，医生说得观察三天', {
+        money: { cash: -800 }, at: { health: -4, stress: 4 }, rep: { industry: 2 }
+      }, G(2, 'c_clean')),
+      O('让徒弟送你去，路上先冲水', '代价：眼睛耽误了半小时，视力留下一点模糊', {
+        at: { health: -6, stress: 5 }
+      }, N(0)),
+      O('用水冲一下，接着把那台车做完', '代价：铁屑留在眼里，第二天肿得睁不开', {
+        money: { cash: 300 }, at: { health: -9, stress: 5 }, set: { c_coverup: true }
+      }, B(2, 'c_coverup'))
+    ]
+  });
+
+  /* __CAREER_EXPAND__ */
+
+  /* v3.8：同一路径内按 ageMin 重排 order，保证唯一且按年资递进 */
+  for (var _pi = 0; _pi < C.ORDER.length; _pi++) {
+    var _p = C.PATHS[C.ORDER[_pi]];
+    var _ids = _p.events.slice();
+    _ids.sort(function (a, b) {
+      var _ea = L.EVENT_INDEX[a] || {};
+      var _eb = L.EVENT_INDEX[b] || {};
+      var _la = _ea.ageMin === undefined ? 22 : _ea.ageMin;
+      var _lb = _eb.ageMin === undefined ? 22 : _eb.ageMin;
+      if (_la !== _lb) return _la - _lb;
+      return (_ea.n || 0) - (_eb.n || 0);
+    });
+    _p.events = _ids;
+    for (var _k = 0; _k < _ids.length; _k++) {
+      if (L.EVENT_INDEX[_ids[_k]]) L.EVENT_INDEX[_ids[_k]].order = _k + 1;
+    }
+  }
 
 })();

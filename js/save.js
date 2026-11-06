@@ -192,6 +192,21 @@
       g.eventSeq = maxSeq;
     }
     if (g.eventLog.length === 0 && g.eventLogLegacy === undefined) g.eventLogLegacy = true;
+    /* v3.8：年龄闸门审计与叙事线状态（旧档补空，不补造事件） */
+    if (!Array.isArray(g.ageLeaks)) g.ageLeaks = [];
+    if (!g.lines || typeof g.lines !== 'object') g.lines = {};
+    if (!Array.isArray(g.lineDrops)) g.lineDrops = [];
+    /* v3.9：旧档补骨架与主干线；已有则保留 */
+    if (!g.archetype || !g.activeLines || !g.activeLines.length) {
+      var arch = LS.pickArchetype(g.seed);
+      g.archetype = arch ? arch.id : '';
+      g.archetypeLabel = arch ? arch.label : '';
+      g.archetypeIntro = arch ? arch.intro : '';
+      g.activeLines = LS.archetypeLines(arch);
+      g.bannedLines = (LS.ALL_CHAIN_LINES || []).filter(function (id) {
+        return g.activeLines.indexOf(LS.LINE_ALIAS[id] || id) < 0;
+      });
+    }
     if (!Array.isArray(g.achievementsV3)) g.achievementsV3 = [];
     if (g.lastSummaryAt === undefined || isNaN(g.lastSummaryAt)) g.lastSummaryAt = -99;
     if (!g.stageStart && LS.stageSnapshot) g.stageStart = LS.stageSnapshot(g);

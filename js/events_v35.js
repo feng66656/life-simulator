@@ -296,22 +296,22 @@
     { key: 'visit', tier: 'daily', title: '{{npc}}来串门', text: '{{npc}}拎着一点东西上门，坐下后却没有急着说事。' },
     { key: 'meal', tier: 'daily', title: '和{{npc}}吃顿饭', text: '小馆子里人声嘈杂，{{npc}}把菜单推到你面前。' },
     { key: 'askhelp', tier: 'cross', title: '{{npc}}开口求你', text: '{{npc}}绕了半天，终于说出现在手头紧，想请你搭把手。' },
-    { key: 'goodnews', tier: 'echo', title: '{{npc}}带来好消息', text: '{{npc}}的语气轻快，说最近终于有件顺心的事。' },
-    { key: 'sickness', tier: 'echo', title: '{{npc}}病了一场', text: '电话那头声音很虚，{{npc}}说已经在家躺了几天。' },
-    { key: 'jobloss', tier: 'echo', title: '{{npc}}丢了工作', text: '{{npc}}把工牌放在桌上，说不用再去那个地方了。' },
+    { key: 'goodnews', tier: 'daily', title: '{{npc}}带来好消息', text: '{{npc}}的语气轻快，说最近终于有件顺心的事。' },
+    { key: 'sickness', tier: 'daily', title: '{{npc}}病了一场', text: '电话那头声音很虚，{{npc}}说已经在家躺了几天。' },
+    { key: 'jobloss', tier: 'daily', title: '{{npc}}丢了工作', text: '{{npc}}把工牌放在桌上，说不用再去那个地方了。' },
     { key: 'quarrel', tier: 'cross', title: '和{{npc}}起了争执', text: '一句话没说对，{{npc}}的脸色沉了下来，气氛僵在原地。' },
-    { key: 'reunion', tier: 'echo', title: '与{{npc}}重逢', text: '隔了很多年再见，{{npc}}先认出了你，叫了一声你的名字。' },
+    { key: 'reunion', tier: 'daily', title: '与{{npc}}重逢', text: '隔了很多年再见，{{npc}}先认出了你，叫了一声你的名字。' },
     { key: 'refer', tier: 'cross', title: '{{npc}}递来一个机会', text: '{{npc}}说有个位置空出来，问你要不要试试。' },
-    { key: 'family', tier: 'echo', title: '{{npc}}家里的难处', text: '{{npc}}家里出了点事，话说得很轻，却压得人喘不过气。' },
+    { key: 'family', tier: 'daily', title: '{{npc}}家里的难处', text: '{{npc}}家里出了点事，话说得很轻。茶几上压着一张医院的缴费单，边角被他反复捏得发皱。' },
     { key: 'trip', tier: 'daily', title: '和{{npc}}出趟门', text: '临时起意的一趟短途，{{npc}}在车站等你。' },
     { key: 'startup', tier: 'cross', title: '{{npc}}想拉你入伙', text: '{{npc}}拿出一份写满字的计划，说缺一个信得过的人。' },
-    { key: 'farewell', tier: 'echo', title: '{{npc}}要走了', text: '{{npc}}说这次可能很久不回来，约你见最后一面。' }
+    { key: 'farewell', tier: 'daily', title: '{{npc}}要走了', text: '{{npc}}说这次可能很久不回来，约你见最后一面。' }
   ];
   var NATURE_OPTS = {
     family: [
-      ['耐心听他说完', '', '', [[78, '说开了', '你把话听完，也把自己的难处讲了。', { at: { happiness: 2 }, npc: { intimacy: 5 } }], [22, '还是没说透', '话到嘴边又咽了回去。', { at: { stress: 2 }, npc: { intimacy: 1 } }]]],
-      ['替他分担一些', '', '', [[64, '分担了', '你搭了一把手，事情轻了一点。', { at: { health: -1, happiness: 2 }, money: { cash: -1000 }, npc: { intimacy: 7 }, favor: 1 }], [36, '越帮越乱', '好心没落到点上。', { at: { stress: 3 }, money: { cash: -800 }, npc: { intimacy: -1 } }]]],
-      ['说自己最近也忙', '', '', [[55, '他理解', '他点点头，没再说什么。', { npc: { intimacy: -5 } }], [45, '他记下了', '他没接话，之后很久没联系。', { npc: { intimacy: -8, favor: -1 }, at: { happiness: -1 } }]]]
+      ['把那张缴费单拿过来看', '', '', [[78, '垫上了', '单子上的数字比你想的大，你还是先垫了一半。', { at: { happiness: 2 }, npc: { intimacy: 5 } }], [22, '没敢接', '你的手停在半空，又收了回去。', { at: { stress: 2 }, npc: { intimacy: 1 } }]]],
+      ['先问清楚家里到底谁病了', '', '', [[64, '问明白了', '他说的名字你听过，是你也认识的人。', { at: { health: -1, happiness: 2 }, money: { cash: -1000 }, npc: { intimacy: 7 }, favor: 1 }], [36, '越问越乱', '他讲着讲着，自己也说不清了。', { at: { stress: 3 }, money: { cash: -800 }, npc: { intimacy: -1 } }]]],
+      ['说自己最近也腾不出手', '', '', [[55, '他理解', '他点点头，把缴费单折起来放回口袋。', { npc: { intimacy: -5 } }], [45, '他记下了', '他没接话，之后很久没联系。', { npc: { intimacy: -8, favor: -1 }, at: { happiness: -1 } }]]]
     ],
     friend: [
       ['陪他走一段', '', '', [[72, '走过来了', '你们沿着街走了很久。', { at: { happiness: 3 }, npc: { intimacy: 6 } }], [28, '各有各的心事', '走到路口就散了。', { at: { happiness: 1 }, npc: { intimacy: 2 } }]]],
@@ -329,6 +329,55 @@
       ['把话留到以后', '', '', [[50, '暂时搁下', '你们都当没发生过。', { at: { stress: 2 }, npc: { intimacy: -2 } }], [50, '积成了结', '这件小事后来反复被提起。', { at: { happiness: -2 }, npc: { intimacy: -5 } }]]]
     ]
   };
+  /* v3.10：同一套 family 选项曾被套到「串门/吃饭/生病/丢工作…」所有场景上，
+     选项里永远是一张缴费单，和正文对不上。按场景各写一套，选项回指本节正文里的物件。 */
+  var FAMILY_SCENE_OPTS = {
+    visit: [
+      ['把带来的东西收进厨房', '', '', [[70, '收下了', '东西放进橱柜，他坐得也自在了些。', { at: { happiness: 2 }, npc: { intimacy: 4 } }], [30, '他说不用', '他伸手来拦，东西又拎了回去。', { at: { stress: 1 }, npc: { intimacy: 1 } }]]],
+      ['问他这趟为什么来', '', '', [[62, '问出来了', '他沉默了一会儿，才说是有话想当面讲。', { at: { happiness: 1, stress: 1 }, npc: { intimacy: 5 } }], [38, '他没答', '他把话岔开，只说来看看你。', { npc: { intimacy: 2 } }]]],
+      ['让他把东西带回去', '', '', [[52, '他拗不过', '他拎着东西站在门口，脸色有些下不来。', { npc: { intimacy: -4 }, at: { stress: 2 } }], [48, '他放下了', '东西留在门边，人先走了。', { npc: { intimacy: -1 }, at: { happiness: -1 } }]]]
+    ],
+    meal: [
+      ['把菜单推回去，让他先点', '', '', [[72, '他点了', '他点了两个便宜菜，说这样就好。', { at: { happiness: 3 }, npc: { intimacy: 5 } }], [28, '他没接', '菜单在桌上转了两圈，谁也没动。', { at: { stress: 1 }, npc: { intimacy: 1 } }]]],
+      ['点他常吃的那道菜', '', '', [[66, '他笑了', '他嘴上说浪费，筷子却先伸了过去。', { at: { happiness: 2 }, money: { cash: -120 }, npc: { intimacy: 6 } }], [34, '味道不对', '他说这家做得不如以前。', { npc: { intimacy: 2 }, at: { happiness: -1 } }]]],
+      ['说赶时间，改天再吃', '', '', [[45, '他理解', '他点点头，把菜单合上了。', { npc: { intimacy: -5 } }], [55, '他记下了', '之后很久他都没再约你吃饭。', { npc: { intimacy: -8 }, at: { happiness: -1 } }]]]
+    ],
+    goodnews: [
+      ['问清楚那件顺心事是什么', '', '', [[68, '他讲了很久', '他说到一半，眼圈有点红。', { at: { happiness: 3 }, npc: { intimacy: 6 } }], [32, '他说不细', '他只笑了笑，把话收了回去。', { npc: { intimacy: 2 } }]]],
+      ['陪他把这顿高兴的酒喝完', '', '', [[60, '喝到最后', '他趴在桌上，还在重复那句话。', { at: { health: -1, happiness: 3 }, money: { cash: -200 }, npc: { intimacy: 5 } }], [40, '他先醉了', '你把他扶上车，自己走回去。', { at: { stress: 2 }, npc: { intimacy: 3 } }]]],
+      ['提醒他别高兴太早', '', '', [[48, '他听进去了', '他愣了一下，说你说得对。', { npc: { intimacy: -2 }, at: { happiness: -1 } }], [52, '他扫了兴', '气氛一下子冷了下来。', { npc: { intimacy: -6 }, at: { happiness: -2 } }]]]
+    ],
+    sickness: [
+      ['当天就去他家看看', '', '', [[70, '你到了', '他开门时还穿着睡衣，屋里没开灯。', { at: { health: -1 }, npc: { intimacy: 7 }, money: { cash: -150 } }], [30, '路上耽搁', '你到的时候他已经睡下了。', { at: { stress: 2 }, npc: { intimacy: 2 } }]]],
+      ['在电话里问清楚是哪家医院', '', '', [[64, '问清了', '他把科室和床号说得很慢。', { npc: { intimacy: 5 }, at: { stress: 1 } }], [36, '他说不用来', '他一再重复自己没事。', { npc: { intimacy: 1 } }]]],
+      ['让他先躺着，明天再说', '', '', [[42, '他应了一声', '电话那头安静了很久才挂。', { npc: { intimacy: -4 }, at: { happiness: -1 } }], [58, '拖成了大事', '第二天他被送去急诊。', { npc: { intimacy: -8 }, at: { happiness: -3, stress: 3 } }]]]
+    ],
+    jobloss: [
+      ['把桌上的工牌收进抽屉', '', '', [[68, '你收好了', '工牌放进抽屉最里面，他没说什么。', { at: { happiness: 2 }, npc: { intimacy: 6 } }], [32, '他抢了回去', '他把工牌攥在手里，说不必了。', { npc: { intimacy: 1 } }]]],
+      ['问他那个地方还欠多少工资', '', '', [[66, '问清了账', '他报了个数，比你想的多。', { at: { stress: 2 }, money: { cash: -1500 }, npc: { intimacy: 7 }, favor: 1 }], [34, '他不愿提', '他说算了，不想再扯。', { npc: { intimacy: 2 } }]]],
+      ['什么都不问，先给他倒杯水', '', '', [[58, '他缓过来了', '他捧着杯子，手一直在抖。', { at: { happiness: 1 }, npc: { intimacy: 4 } }], [42, '屋里太静', '水放在桌上，谁都没喝。', { at: { stress: 2 }, npc: { intimacy: -1 } }]]]
+    ],
+    reunion: [
+      ['先叫出他的名字', '', '', [[74, '他笑了', '他说没想到你还记得。', { at: { happiness: 3 }, npc: { intimacy: 7 } }], [26, '你叫错了', '他愣了一下，说没关系。', { npc: { intimacy: -2 }, at: { happiness: -1 } }]]],
+      ['问他这些年去了哪里', '', '', [[62, '他讲了很久', '从车站讲到那间没住满的出租屋。', { at: { happiness: 2 }, npc: { intimacy: 6 } }], [38, '他绕开了', '他只说过得还行。', { npc: { intimacy: 2 } }]]],
+      ['假装没听见那声名字', '', '', [[40, '他没再叫', '他站在原地，看你走远。', { npc: { intimacy: -5 }, at: { happiness: -1 } }], [60, '心里过不去', '那声名字在你耳边响了好几天。', { npc: { intimacy: -3 }, at: { stress: 3 } }]]]
+    ],
+    refer: [
+      ['答应去试那个位置', '', '', [[64, '你去试了', '位置是临时的，但总算有个去处。', { at: { stress: 2 }, npc: { intimacy: 6 }, favor: 1 }], [36, '没被留下', '干了半个月，人家说人手够了。', { at: { stress: 3 }, npc: { intimacy: 1 } }]]],
+      ['先问清楚位置是谁让出来的', '', '', [[60, '问明白了', '那个名字你也认识，心里有了数。', { npc: { intimacy: 4 }, at: { happiness: 1 } }], [40, '问出了尴尬', '他不太愿意提那个人。', { npc: { intimacy: -2 } }]]],
+      ['谢过他，但不去', '', '', [[52, '他没勉强', '他说以后有机会再说。', { npc: { intimacy: -3 } }], [48, '机会给了别人', '后来那个位置换成了一个你不认识的人。', { npc: { intimacy: -1 }, at: { happiness: -2 } }]]]
+    ],
+    trip: [
+      ['去车站接他', '', '', [[70, '接到了', '他拖着箱子站在出口，看见你就挥手。', { at: { happiness: 3 }, npc: { intimacy: 6 } }], [30, '车晚点了', '你在站台上等了两个钟头。', { at: { stress: 2 }, npc: { intimacy: 3 } }]]],
+      ['让他把车次发过来', '', '', [[58, '他发了', '车次后面还跟了一句“别等了”。', { npc: { intimacy: 3 }, at: { happiness: 1 } }], [42, '他没发', '你再打过去，已经关机。', { npc: { intimacy: -4 }, at: { stress: 2 } }]]],
+      ['说这趟不去了', '', '', [[44, '他说没事', '他说本来也就是随便走走。', { npc: { intimacy: -5 } }], [56, '车站空等的那个位置', '后来他再没约你出过门。', { npc: { intimacy: -7 }, at: { happiness: -2 } }]]]
+    ],
+    farewell: [
+      ['去见这最后一面', '', '', [[72, '你去了', '他把一件旧东西塞给你，说留个念想。', { at: { happiness: 2, stress: 1 }, npc: { intimacy: 8 } }], [28, '你到晚了', '车已经开走，站台只剩风。', { at: { happiness: -2 }, npc: { intimacy: 2 } }]]],
+      ['问他什么时候回来', '', '', [[58, '他说说不准', '他把手插回口袋，没有再看你。', { npc: { intimacy: 4 }, at: { happiness: 1 } }], [42, '他说不回了', '这句话说得很轻，你却听清了。', { npc: { intimacy: 6 }, at: { happiness: -2 } }]]],
+      ['托人把东西带给他', '', '', [[52, '东西带到了', '他托人回了一句“收到了”。', { npc: { intimacy: 2 } }], [48, '东西退回来了', '包裹原样送回，没留一个字。', { npc: { intimacy: -6 }, at: { happiness: -2 } }]]]
+    ]
+  };
   function npcOpt(o) {
     var label = o[0], hint = o[1], res = o[3];
     return O(label, hint, '', res.map(function (r) {
@@ -340,6 +389,10 @@
   function roleOpts(role, nature, sceneKey, g) {
     /* 场景微调：求助/入伙/争执用岔路口吻；其余用关系口吻 */
     var base = NATURE_OPTS[nature] || NATURE_OPTS.friend;
+    /* v3.10：家人角色按场景各用一套选项，避免“父亲丢工作”也递来一张缴费单 */
+    if (nature === 'family' && FAMILY_SCENE_OPTS[sceneKey]) {
+      return FAMILY_SCENE_OPTS[sceneKey].map(function (o) { return npcOpt(o); });
+    }
     if (sceneKey === 'askhelp') {
       return [
         O('帮，能帮多少帮多少', '', '', [
@@ -396,6 +449,8 @@
   /* 为每条 NPC 事件补上角色键 */
   CAST.forEach(function (c) {
     c.stages.forEach(function (stage) {
+      /* v3.8：婴幼儿（0–3）不参与 NPC 对话场景——那时主角还不会“听完、商量、答应” */
+      if (stage === '婴幼儿') return;
       SCENES.forEach(function (sc) {
         var id = 'v35_npc_' + c.key + '_' + STAGE_KEY[stage] + '_' + sc.key;
         var title = sc.title.replace(/\{\{npc\}\}/g, c.role);
@@ -470,7 +525,7 @@
     { key: 'partner', stage: '中年', name: '合伙', nodes: [
       ['合伙提议', '老同事说，一起出来做点事。', '他出资源，你出人。', '答应', '再想想'],
       ['第一次分歧', '账目上有一笔说不清的开支。', '他说是应酬。', '查清楚', '睁只眼闭只眼'],
-      ['散伙', '会议室的钥匙被放在桌上。', '谁也没先提分钱的事。', '按合同分', '净身退出']
+      ['散伙', '会议室的钥匙被放在桌上。', '谁也没先提分钱的事，合同还压在抽屉里。', '按合同分', '净身退出']
     ]},
     { key: 'childedu', stage: '中年', name: '子女教育', nodes: [
       ['择校', '两所学校的招生简章摊在餐桌上。', '一所近，一所好。', '选好的', '选近的'],
@@ -478,7 +533,8 @@
       ['升学', '志愿表只有一张。', '孩子看着你，等你点头。', '尊重他', '按你的来']
     ]}
   ];
-  var CHAIN_FLAVOR = ['第一次', '第二次', '这一年', '后来', '很多年后'];
+  /* v3.8：链节点间隔 1–3 年，前缀只写真实跨度，不再用“很多年后”这种模糊值 */
+  var CHAIN_FLAVOR = ['第一次', '第二次', '这一年', '第二年', '第三年'];
   var TAIL_TEXTS = {
     a: ['中途转了弯', '你在半路改了主意，事情没有按原计划走。'],
     b: ['另一条路', '你选择了另一条路，原来的计划停在原地。']
