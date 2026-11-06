@@ -1332,7 +1332,7 @@
       baseChance: 0.00029,
       riskBoost: 0.00040,
       title: '凌晨两点的工位',
-      text: '项目上线前一周，他连续几天睡在工位下面。那天凌晨，他站起来去接咖啡，胸口突然一紧，眼前发黑。',
+      text: '项目上线前一周，他连续几天睡在工位下面。那天凌晨，他站起来去接咖啡，胸口突然一紧，眼前发黑。隔壁工位的同事还盯着屏幕，没人注意到他扶着桌子往下滑。',
       cond: {},
       risk: { riskMin: { lateNight: 50, highStress: 50 }, marksAny: ['v38_overwork'] },
       choices: [

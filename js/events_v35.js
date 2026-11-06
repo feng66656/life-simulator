@@ -293,7 +293,7 @@
     '中年': '日子被工作和家庭填满，', '中老年': '身体开始提醒你慢一点，', '晚年': '时间变得很宽，'
   };
   var SCENES = [
-    { key: 'visit', tier: 'daily', title: '{{npc}}来串门', text: '{{npc}}拎着一点东西上门，坐下后却没有急着说事。' },
+    { key: 'visit', tier: 'daily', title: '{{npc}}来了', text: '{{npc}}来了，手里拎着一点东西，坐下后却没有急着说事。' },
     { key: 'meal', tier: 'daily', title: '和{{npc}}吃顿饭', text: '小馆子里人声嘈杂，{{npc}}把菜单推到你面前。' },
     { key: 'askhelp', tier: 'cross', title: '{{npc}}开口求你', text: '{{npc}}绕了半天，终于说出现在手头紧，想请你搭把手。' },
     { key: 'goodnews', tier: 'daily', title: '{{npc}}带来好消息', text: '{{npc}}的语气轻快，说最近终于有件顺心的事。' },
@@ -378,6 +378,25 @@
       ['托人把东西带给他', '', '', [[52, '东西带到了', '他托人回了一句“收到了”。', { npc: { intimacy: 2 } }], [48, '东西退回来了', '包裹原样送回，没留一个字。', { npc: { intimacy: -6 }, at: { happiness: -2 } }]]]
     ]
   };
+  /* v3.10：成年后父母找上门是合理事件，不能再沿用通用“串门”选项；
+     三种反应指向不同后果：红包（花钱换亲近）/理所应当（无金钱、关系微凉）/
+     听苦（时间与情绪成本、亲近明显上升）。正文必须先出现红包、膏药、厂里的事与“苦”。 */
+  function parentVisitOpts(role) {
+    var pron = role === '母亲' ? '她' : '他';
+    return [
+      O('包个红包给他们', '钱不算多，是个心意', 'switch', [
+        W(64, '收下了', '{{npc}}推了两下，还是把红包收进贴身的口袋，嘴上说“你自己留着”。', { money: { cash: -2000 }, at: { stress: 1, happiness: 2 }, npc: makeNpcFx(role, 8, 2), tag: '给来串门的' + role + '包了红包' }),
+        W(36, '又塞了回来', '红包在茶几上放了一下午，临走时{{npc}}趁你收拾东西，把它塞回了你的外套口袋。', { money: { cash: -2000 }, at: { stress: 1 }, npc: makeNpcFx(role, 4, 1), tag: '给来串门的' + role + '包了红包' })
+      ]),
+      O('觉得理所应当，没什么可谢的', '你照常收拾碗筷，没有多说什么', 'safe', [
+        W(70, '{{npc}}没往心里去', '{{npc}}看你忙，自己起身把碗洗了。夜里你听见客厅的灯亮了很久，第二天谁也没提。', { at: { stress: 1 }, npc: makeNpcFx(role, -2, 0), tag: '觉得' + role + '来这一趟是应该的' }),
+        W(30, '话少了一层', '临走时{{npc}}只说到站给你发消息，没像从前那样反复叮嘱；你送到楼下，彼此都客气了一点。', { at: { happiness: -1 }, npc: makeNpcFx(role, -5, -1), tag: '觉得' + role + '来这一趟是应该的' })
+      ]),
+      O('坐下听' + pron + '把这几年吃的苦说完', '这半天不安排别的事', 'safe', [
+        W(100, '说到了天黑', '{{npc}}从厂里的事讲到手腕的膏药，你没打断；说完{{npc}}长长舒了口气，说好久没人听这些了。', { at: { stress: 3, happiness: 2 }, npc: makeNpcFx(role, 12, 3), tag: '听' + role + '把这几年的苦说完' })
+      ])
+    ];
+  }
   function npcOpt(o) {
     var label = o[0], hint = o[1], res = o[3];
     return O(label, hint, '', res.map(function (r) {
@@ -386,9 +405,15 @@
       return W(r[0], r[1], r[2], f);
     }));
   }
-  function roleOpts(role, nature, sceneKey, g) {
+  function roleOpts(role, nature, sceneKey, g, stage) {
     /* 场景微调：求助/入伙/争执用岔路口吻；其余用关系口吻 */
     var base = NATURE_OPTS[nature] || NATURE_OPTS.friend;
+    /* v3.10：离家后的父母上门，单独一套“红包 / 理所应当 / 听苦”三个选项 */
+    if (nature === 'family' && sceneKey === 'visit' &&
+        (role === '父亲' || role === '母亲') &&
+        /^(青年|中年|中老年|晚年)$/.test(String(stage || ''))) {
+      return parentVisitOpts(role);
+    }
     /* v3.10：家人角色按场景各用一套选项，避免“父亲丢工作”也递来一张缴费单 */
     if (nature === 'family' && FAMILY_SCENE_OPTS[sceneKey]) {
       return FAMILY_SCENE_OPTS[sceneKey].map(function (o) { return npcOpt(o); });
@@ -452,10 +477,31 @@
       /* v3.8：婴幼儿（0–3）不参与 NPC 对话场景——那时主角还不会“听完、商量、答应” */
       if (stage === '婴幼儿') return;
       SCENES.forEach(function (sc) {
+        /* v3.10：婴幼儿/童年/少年仍和家人同住，父亲/母亲不存在“来串门/上门/重逢”的场合；
+           只排掉 family 角色的 visit/reunion，亲戚（舅舅/姑姑等）串门不受影响。 */
+        if (c.nature === 'family' && /^(婴幼儿|童年|少年)$/.test(stage) &&
+            (sc.key === 'visit' || sc.key === 'reunion')) return;
         var id = 'v35_npc_' + c.key + '_' + STAGE_KEY[stage] + '_' + sc.key;
         var title = sc.title.replace(/\{\{npc\}\}/g, c.role);
         var text = (FLAVOR[stage] || '') + sc.text.replace(/\{\{npc\}\}/g, c.role);
-        var opts = roleOpts(c.role, c.nature, sc.key);
+        /* v3.10：离家后家人上门按角色换写法——父母是“坐车找过来、拎着腌菜干豆角”，
+           子女是“自己找过来”；未成年阶段已在上面整条排除，不会出现“孩子来串门”。 */
+        if (sc.key === 'visit' && c.nature === 'family') {
+          var vTitle, vText;
+          if (c.role === '子女') {
+            vTitle = '{{npc}}来了';
+            vText = '孩子自己找了过来，说是周末得空，手里提着一袋水果，坐下后说了说最近的事。';
+          } else {
+            var pron = c.role === '母亲' ? '她' : '他';
+            vTitle = '{{npc}}找到你住的地方';
+            vText = '{{npc}}坐了半天的车，找到你住的地方，手里拎着一袋家里的东西——腌菜和晒好的干豆角。' +
+              '你把刚取的两千块装进红包，放在茶几上，还没想好怎么开口。' +
+              '{{npc}}坐下后卷起袖子，手腕上贴着膏药，说起了厂里的事；那些年吃过的苦，' + pron + '只说了一半。';
+          }
+          title = vTitle.replace(/\{\{npc\}\}/g, c.role);
+          text = (FLAVOR[stage] || '') + vText.replace(/\{\{npc\}\}/g, c.role);
+        }
+        var opts = roleOpts(c.role, c.nature, sc.key, null, stage);
         /* 每条选项补上“在场 NPC”的亲密度变化（若模板没有显式 npc） */
         var evt = {
           id: id, type: 'random', stage: stage, tier: sc.tier === 'cross' ? 'crossroad' : (sc.tier === 'echo' ? 'echo' : 'daily'),

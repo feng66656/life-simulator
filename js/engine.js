@@ -1192,6 +1192,26 @@
   }
 
   /* ---------------- 事件筛选 ---------------- */
+  /* v3.10：在职门禁——只要 g.job.id 非空（未失业/未被辞/未主动跳槽），
+     求职、找工作、去就业一类题目一律不进池、不独占回合；换工作必须先清空 job。 */
+  function jobGateBlocks(g, e) {
+    if (!g || !g.job || !g.job.id || !e || e.ignoreJobGate) return false;
+    var gateId = String(e.id || '');
+    if (/^(v2_exam_path|v37_fork|jobhunt|c_job_hunt|v2_job_path|job_gate)/.test(gateId)) return true;
+    if (e.type === 'career') return false;
+    var jobSig = gateId + ' ' + String(e.title || '');
+    if (/求职|找工作|找份工作|去就业|直接就业|就业方向|招聘会|投简历|校招|宣讲会|应聘|面试|考研|复读|二战|调剂|投档/.test(jobSig)) return true;
+    /* 选项/hint 里明写“去就业、去找工作”的也拦；不把“帮同学递简历”这种友情事件误杀 */
+    var optSig = '';
+    if (e.opts) {
+      for (var oi = 0; oi < e.opts.length; oi++) {
+        var op = e.opts[oi];
+        if (op) optSig += ' ' + String(op.label || '') + ' ' + String(op.hint || '');
+      }
+    }
+    return /去就业|去找工作|找份工作|投简历|招聘会/.test(optSig);
+  }
+
   function condOk(g, e) {
     if (!e) return false;
     /* v3.7：未抽中的隐藏线事件一律不进可选池（含撞车/身世/线索） */
@@ -1210,16 +1230,8 @@
     if (e.cond) {
       try { if (!e.cond(g)) return false; } catch (err) { return false; }
     }
-    /* v3.10：在职禁弹备考/求职类事件。考研/复读/招聘会只能在失业待业的分支里
-       作为并列选项出现（见 buildJobHuntEvent），不许作为独立事件再弹一次。 */
-    if (g.job && g.job.id && e.type !== 'career' && !e.ignoreJobGate) {
-      /* dueFork 跳过后事件仍可能被 forced 槽重新捞起，这里按 id 兜底 */
-      var gateId = String(e.id || '');
-      if (gateId === 'v2_exam_path' || gateId === 'v37_fork_grad' ||
-          gateId === 'v37_fork_postgrad') return false;
-      var jobSig = String(e.id || '') + ' ' + String(e.title || '');
-      if (/考研|复读|二战|招聘会|投简历|校招|宣讲会|调剂|投档/.test(jobSig)) return false;
-    }
+    /* v3.10：在职禁弹备考/求职类事件（见 jobGateBlocks）。 */
+    if (jobGateBlocks(g, e)) return false;
     /* v3.5：亲属状态守卫（父母/配偶/子女/手足/朋友） */
     if (LS.V35 && LS.V35.pass && !LS.V35.pass(g, e)) return false;
     return true;
@@ -1379,6 +1391,8 @@
   }
 
   function buildJobHuntEvent(g) {
+    /* 在岗不应再弹求职岔路：needHunt 之外（读档恢复 / 预览 / 其它入口）也在此兜底 */
+    if (g && g.job && g.job.id) return null;
     var tries = g.job.huntTries || 0;
     var major = g.track && LS.TRACK_LABELS[g.track] ? LS.TRACK_LABELS[g.track]
       : (g.attrs.knowledge >= 60 ? '理工 / 研究型'
@@ -2232,7 +2246,7 @@
     if (g.eraPending && LS.V36 && LS.V36.eraAnchor) {
       g.eraPending = false;
       var holdEra = LS.V36.eraAnchor(g);
-      if (holdEra) return holdEra;
+      if (holdEra && !jobGateBlocks(g, holdEra)) return holdEra;
     }
 
     /* v3.7：抽中的隐藏线节点优先于日常/随机，且迟到最多一年，不被整年挤掉 */
@@ -2266,7 +2280,7 @@
     /* v3.7 P4.0：时代锚点独立成事件；正文本身讲该年的事，绝不做无关事件的背景行 */
     if (LS.V36 && LS.V36.eraAnchor) {
       var eraEv = LS.V36.eraAnchor(g);
-      if (eraEv) return eraEv;
+      if (eraEv && !jobGateBlocks(g, eraEv)) return eraEv;
     }
 
     /* 3e. v3.6 两难层：已并入槽位调度（dilemma 槽），不再在层序里独占回合 */

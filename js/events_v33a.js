@@ -59,7 +59,7 @@
         var id = 'v33_' + prefix + '_' + sc.key + '_' + (i + 1);
         L.EVENTS.push({
           id: id, type: 'random', stage: stage, tier: sc.tier || 'daily',
-          weight: sc.weight || 1.1, family: id, title: v[0], text: v[1] + (sc.tail || ''), opts: sc.opts
+          weight: sc.weight || 1.1, family: id, title: v[0], text: (sc.head || '') + v[1] + (sc.tail || ''), opts: sc.opts
         });
       });
     });
